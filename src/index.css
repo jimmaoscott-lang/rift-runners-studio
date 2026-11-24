@@ -1,0 +1,202 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Lexend';
+  src: url('/assets/fonts/lexend-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lexend';
+  src: url('/assets/fonts/lexend-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lexend';
+  src: url('/assets/fonts/lexend-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/assets/fonts/opendyslexic-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('/assets/fonts/opendyslexic-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --reading-font: 'Lexend', system-ui, -apple-system, sans-serif;
+  --display-font: 'Cinzel', Georgia, serif;
+  --mono-font: 'JetBrains Mono', ui-monospace, monospace;
+  --text-scale: 1;
+}
+
+body {
+  font-family: var(--reading-font);
+  background-color: #0b0e18;
+  color: #f1f5f9;
+  margin: 0;
+  padding: 0;
+}
+
+.font-reading {
+  font-family: var(--reading-font);
+  letter-spacing: 0.015em;
+}
+
+.font-display {
+  font-family: var(--display-font);
+}
+
+.font-tabular {
+  font-family: var(--mono-font);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes kenBurnsZoom {
+  0% {
+    transform: scale(1.02) translate3d(0%, 0%, 0);
+  }
+  100% {
+    transform: scale(1.14) translate3d(-2%, -1.5%, 0);
+  }
+}
+
+@keyframes kenBurnsPan {
+  0% {
+    transform: scale(1.1) translate3d(-2.5%, 0%, 0);
+  }
+  100% {
+    transform: scale(1.04) translate3d(2%, -1%, 0);
+  }
+}
+
+@keyframes kenBurnsLift {
+  0% {
+    transform: scale(1.12) translate3d(0%, 2.5%, 0);
+  }
+  100% {
+    transform: scale(1.03) translate3d(0%, -1.5%, 0);
+  }
+}
+
+@keyframes shakeWrong {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  45% { transform: translateX(6px); }
+  70% { transform: translateX(-4px); }
+  85% { transform: translateX(3px); }
+}
+
+@keyframes waveFlyDissolve {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -26px) scale(0.88);
+    filter: blur(4px);
+  }
+  16% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.03);
+    filter: blur(0px);
+  }
+  24% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(1.06);
+    filter: blur(6px);
+  }
+}
+
+@keyframes tutorialPulseRing {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.75);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0);
+  }
+}
+
+.animate-ken-zoom {
+  animation: kenBurnsZoom 14s ease-out forwards;
+}
+
+.animate-ken-pan {
+  animation: kenBurnsPan 13s ease-in-out forwards;
+}
+
+.animate-ken-lift {
+  animation: kenBurnsLift 13s ease-out forwards;
+}
+
+.animate-shake {
+  animation: shakeWrong 0.32s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.animate-wave-announce {
+  animation: waveFlyDissolve 2.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-tutorial-pulse {
+  animation: tutorialPulseRing 1.5s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-zoom,
+  .animate-ken-pan,
+  .animate-ken-lift,
+  .animate-tutorial-pulse {
+    animation: none !important;
+    transform: scale(1.02) !important;
+  }
+}
+
+.reduced-motion .animate-ken-zoom,
+.reduced-motion .animate-ken-pan,
+.reduced-motion .animate-ken-lift,
+.reduced-motion .animate-tutorial-pulse {
+  animation: none !important;
+  transform: scale(1.02) !important;
+}
+
+/* Custom slim dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}

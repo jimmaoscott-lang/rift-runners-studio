@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Version: Rift Runner",
+  "description": "World 1, Level 1 (Thornwood Edge) of Rift Runners: a 3D dark-fantasy tower defense reading fluency game with opening and closing cutscenes, Rune Forge decoding, and voice verification.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
