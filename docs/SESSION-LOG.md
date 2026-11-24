@@ -16,6 +16,7 @@ Chronological log of major milestones, design decisions, bug fixes, speech calib
   - Converted all 30 cached Leda `.wav` clips in `public/assets/audio/tts-cache/` to 64 kbps mono `.mp3` and updated `server.ts` and `src/lib/audio.ts` to serve `.mp3` first with `.wav` fallback.
   - Web-optimized cutscenes (max `1280px`), battlefield maps (max `1400px`), and sprites (max `512px`, high quality to preserve `#FFFFFF` keying edges).
   - Packed all 116 word and phoneme clips plus used UI audio clips into two Web Audio sprites (`public/assets/audio/words/sprite.mp3` and `public/assets/audio/ui/sprite.mp3`), cutting repository file count from `653` down to `~105` files so AI Studio's GitHub commit push clears cleanly without timing out.
+  - Added GitHub Pages deployment support: `.github/workflows/deploy-pages.yml`, `VITE_BASE_PATH` in `vite.config.ts`, `src/lib/assetUrl.ts` for subfolder-safe image and audio URLs, and automatic direct Cloudflare Azure Speech Worker routing when running on `github.io`.
   - Added a standing rule in `BUILD.md` to remind Mr. Scott to push to GitHub after changes pass his checks.
 - **Multi-Voice Azure Speech Calibration (Option A) and Mic Hardening**:
   - Added instant Web Audio SFX muting via `fxMasterGain` (`duck(2)` in `src/lib/audio.ts`) whenever the mic opens so explosions and chimes cannot leak into recording.
@@ -30,12 +31,12 @@ Chronological log of major milestones, design decisions, bug fixes, speech calib
 ### Decisions Locked
 - Cutscenes must always reference `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` in `ImagePaths` to prevent style drift into comic-book outlines.
 - Sound calibration stays invisible to students who are passing cleanly; an Adaptive Quick Voice Check will only trigger quietly if a student misses the same sound 3 times in a row.
+- Repository stays lean (under 150 files, audio packed into sprites, TTS cached as 64 kbps mono MP3) so AI Studio pushes cleanly to `jimmaoscott-lang/rift-runners-studio` after Mr. Scott's checks pass.
 
 ### Next Up
-1. Push repository cleanly via AI Studio GitHub Sync.
-2. Optionally refresh World 2, Level 1 (`Ashgate Outpost`) cutscenes to match the World 1 painterly Rift Warden style.
-3. Build Adaptive Quick Voice Check (triggered only after 3 consecutive misses on the same sound in Speak Mode).
-4. Build World 2, Level 2: `Smelter Causeway` (`th`/`wh`/`-ck`, Shieldbearer enemy, Rail Turret + Side Loadout Selector).
+1. Optionally refresh World 2, Level 1 (`Ashgate Outpost`) cutscenes to match the World 1 painterly Rift Warden style.
+2. Build Adaptive Quick Voice Check (triggered only after 3 consecutive misses on the same sound in Speak Mode).
+3. Build World 2, Level 2: `Smelter Causeway` (`th`/`wh`/`-ck`, Shieldbearer enemy, Rail Turret + Side Loadout Selector).
 
 ## Prior Shipped Milestones (Summary)
 - **World 2, Level 1 (`Ashgate Outpost`)**: Built volcanic foundry map, Cinder Imp enemy, `sh`/`ch` word and rune banks, Sound Rule direct instruction cards, biome-matched volcanic letterbox `#1c1210`, guarded `nextLevel` against `comingSoon` stages, and playtested through victory on Hard.

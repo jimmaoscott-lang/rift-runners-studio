@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, Film, Gauge, RotateCcw, Settings, Shield, Star, Volume2 } from 'lucide-react';
 import { LevelConfig, LEVELS } from '../data/level1';
 import { sound } from '../lib/audio';
+import { assetUrl } from '../lib/assetUrl';
 import { computeThenAndNow, PatternLockStatus, StoredProgress } from '../lib/metrics';
 import { ForgeStats } from './RuneForgePanel';
 
@@ -64,7 +65,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
       {/* Subtle atmospheric backdrop */}
       <div className="pointer-events-none fixed inset-0">
         <img
-          src={result.win ? victoryImg : '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg'}
+          src={assetUrl(result.win ? victoryImg : '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg')}
           alt={result.win ? `Rift sealed at ${level.name}` : 'Rift Warden defending the line'}
           referrerPolicy="no-referrer"
           className="h-full w-full object-cover opacity-28"

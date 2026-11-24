@@ -1,4 +1,5 @@
 import { LevelId } from '../data/level1';
+import { assetUrl } from '../lib/assetUrl';
 
 export type SpriteKey =
   | 'archer'
@@ -65,7 +66,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = (err) => reject(err);
-    img.src = url;
+    img.src = assetUrl(url);
   });
 }
 

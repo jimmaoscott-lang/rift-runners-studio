@@ -82,9 +82,13 @@ Before marking any new phonics target complete, test spoken words against live A
 - **Sound Rule Narration**: Keep rule scripts focused on the sound and anchor word with zero trailing letter-spelling cues.
 - **Rune TTS Overrides**: Register phonetic TTS overrides in `src/lib/audio.ts` whenever a nonsense rune might be misread by TTS.
 
-## 6. Repository Hygiene
+## 6. Repository Hygiene and GitHub Sync Rules
 
-- Keep `public/assets/aistudio/` ignored in `.gitignore` and clear unused draft images before syncing to GitHub so repository size and file count stay lean (AI Studio's GitHub sync works best under ~150 files).
-- Optimize new images before committing (maps max `1400px` wide, cutscenes max `1280px` wide, sprites max `512px` square) and convert cached `.wav` voice clips to 64 kbps mono `.mp3` so GitHub single-commit syncs stay well under payload limits.
-- Never commit API keys or secrets; reference variables only through `.env.example`.
-- Remind Mr. Scott to push to GitHub after changes pass his checks so every verified milestone has a clean recovery point.
+- **Primary Private Backup Repo**: `jimmaoscott-lang/rift-runners-studio` (`main`).
+- **GitHub Sync File-Count and Size Lock**: Keep total tracked repository files well under `150` files and under `15 MB`. AI Studio's GitHub sync uploads changed files individually over the GitHub API and fails when a commit carries hundreds of tiny files (653 files failed; packing audio into sprites at 106 files and 8.6 MB pushed cleanly).
+- **Audio Sprite Packing Rule**: Pack word clips, pure phonemes, and UI cues into the two Web Audio sprites (`public/assets/audio/words/sprite.mp3` and `public/assets/audio/ui/sprite.mp3`) using `[startSec, durationSec]` entries in their `manifest.json` files instead of adding dozens of loose individual MP3 files.
+- **Image and Voice Compression Rule**: Optimize new images before pushing (maps max `1400px` wide, cutscenes max `1280px` wide, sprites max `512px` square) and convert cached `.wav` narrations in `public/assets/audio/tts-cache/` to 64 kbps mono `.mp3`.
+- **Screenshot Cleanup**: Keep `public/assets/aistudio/` in `.gitignore` and delete temporary chat screenshots before pushing.
+- **Secrets Rule**: Never commit API keys or secrets; reference variables only through `.env.example`.
+- **Push Reminder Rule**: Remind Mr. Scott to push to GitHub after changes pass his checks so every verified milestone has a clean recovery point.
+

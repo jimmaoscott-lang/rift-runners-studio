@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FastForward, Play, RotateCcw, Upload, Volume2 } from 'lucide-react';
 import { CutsceneId, CutsceneScript } from '../data/level1';
 import { sound } from '../lib/audio';
+import { assetUrl } from '../lib/assetUrl';
 
 interface CutscenePlayerProps {
   script: CutsceneScript;
@@ -286,7 +287,7 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
               {!imgError ? (
                 <img
                   key={beat.id}
-                  src={beat.image}
+                  src={assetUrl(beat.image)}
                   alt={beat.voiceText}
                   referrerPolicy="no-referrer"
                   onError={() => setImgError(true)}

@@ -1,4 +1,7 @@
 import { SPEECH_SCORE_CONFIG, WordEntry } from '../data/level1';
+import { isStaticHosting } from './assetUrl';
+
+const DIRECT_SPEECH_WORKER_URL = 'https://rift-runners-speech.jimmaoscott.workers.dev';
 
 export type SpeechEngineMode = 'azure' | 'chrome' | 'off';
 
@@ -358,6 +361,7 @@ class SpeechVerifier {
   private activeSubmitNow: (() => void) | null = null;
   private azureFailures = 0;
   private azureCooldownUntil = 0;
+  private speechApiBase = isStaticHosting() ? DIRECT_SPEECH_WORKER_URL : '/api/speech';
 
   // Persistent warm mic + AudioContext + 240ms in-memory pre-roll ring buffer
   // so clicking SAY IT never clips initial consonants (/p/, /m/, /h/) and zero audio is ever stored.
@@ -524,21 +528,31 @@ class SpeechVerifier {
       this.azureChecked = true;
       return false;
     }
-    try {
-      const res = await fetch('/api/speech/health', {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(4000),
-      });
-      const data = await res.json().catch(() => ({ ok: false }));
-      this.azureOnline = Boolean(res.ok && data.ok);
-      this.azureRegion = data.region || '';
-      this.azureChecked = true;
-      return this.azureOnline;
-    } catch {
-      this.azureOnline = false;
-      this.azureChecked = true;
-      return false;
+    const candidates = isStaticHosting()
+      ? [DIRECT_SPEECH_WORKER_URL]
+      : ['/api/speech', DIRECT_SPEECH_WORKER_URL];
+
+    for (const base of candidates) {
+      try {
+        const res = await fetch(`${base}/health`, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(4000),
+        });
+        const data = await res.json().catch(() => ({ ok: false }));
+        if (res.ok && data.ok) {
+          this.speechApiBase = base;
+          this.azureOnline = true;
+          this.azureRegion = data.region || '';
+          this.azureChecked = true;
+          return true;
+        }
+      } catch {
+        // try next endpoint
+      }
     }
+    this.azureOnline = false;
+    this.azureChecked = true;
+    return false;
   }
 
   engine(): SpeechEngineMode {
@@ -761,9 +775,14 @@ class SpeechVerifier {
         const azureRefWord = (word.azureRef || word.w).toLowerCase();
 
         try {
-          const res = await fetch(`/api/speech/check?ref=${encodeURIComponent(azureRefWord)}`, {
+          const isDirectWorker = this.speechApiBase.startsWith('http');
+          const res = await fetch(`${this.speechApiBase}/check?ref=${encodeURIComponent(azureRefWord)}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
+            headers: {
+              'Content-Type': isDirectWorker
+                ? 'audio/wav; codecs=audio/pcm; samplerate=16000'
+                : 'application/octet-stream',
+            },
             body: wav,
             signal: AbortSignal.timeout(SPEECH_SCORE_CONFIG.checkTimeoutMs),
           });

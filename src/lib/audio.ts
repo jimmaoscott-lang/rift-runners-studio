@@ -1,3 +1,5 @@
+import { assetUrl, isStaticHosting } from './assetUrl';
+
 type ManifestEntry = string | [number, number];
 
 interface Manifest {
@@ -41,8 +43,8 @@ class SoundManager {
     this.loaded = true;
     try {
       const [wm, um] = await Promise.all([
-        fetch('/assets/audio/words/manifest.json').then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
-        fetch('/assets/audio/ui/manifest.json').then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
+        fetch(assetUrl('/assets/audio/words/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
+        fetch(assetUrl('/assets/audio/ui/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
       ]);
       this.wordManifest = wm;
       this.uiManifest = um;
@@ -158,7 +160,7 @@ class SoundManager {
       try {
         const ctx = this.getCtx();
         if (!ctx) return null;
-        const res = await fetch(spriteUrl);
+        const res = await fetch(assetUrl(spriteUrl));
         if (!res.ok) return null;
         const arr = await res.arrayBuffer();
         return await ctx.decodeAudioData(arr);
@@ -233,7 +235,7 @@ class SoundManager {
         resolve(true);
         return;
       }
-      const el = new Audio(url);
+      const el = new Audio(assetUrl(url));
       el.volume = vol;
       this.activeVoice = el;
       let finished = false;
@@ -539,7 +541,7 @@ class SoundManager {
 
   private async checkStaticTtsCache(id: string, voiceName: string): Promise<string | null> {
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
-    const base = `/assets/audio/tts-cache/${encodeURIComponent(voiceName)}_${encodeURIComponent(safeId)}`;
+    const base = assetUrl(`/assets/audio/tts-cache/${encodeURIComponent(voiceName)}_${encodeURIComponent(safeId)}`);
     for (const ext of ['mp3', 'wav']) {
       const staticPath = `${base}.${ext}`;
       try {
@@ -576,7 +578,12 @@ class SoundManager {
         return { url: staticUrl, quotaExceeded: false };
       }
 
-      // 2. Respect active quota cooldown so we never spam the endpoint
+      // 2. On static hosting (GitHub Pages), skip server-only /api/tts route cleanly
+      if (isStaticHosting()) {
+        return { url: null, quotaExceeded: false };
+      }
+
+      // 3. Respect active quota cooldown so we never spam the endpoint
       if (Date.now() < this.ttsQuotaUntil) {
         return { url: null, quotaExceeded: true };
       }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Film, Lock, Play, Settings, Shield, Star, Volume2 } from 'lucide-react';
+import { assetUrl } from '../lib/assetUrl';
 import {
   CutsceneId,
   DIFFICULTIES,
@@ -56,7 +57,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       <div className="pointer-events-none fixed inset-0">
         <img
           key={activeLevel.backdropImage}
-          src={activeLevel.backdropImage}
+          src={assetUrl(activeLevel.backdropImage)}
           alt={`${activeLevel.name} battlefield illustration`}
           referrerPolicy="no-referrer"
           className="h-full w-full object-cover object-center opacity-55 transition-opacity duration-300"
