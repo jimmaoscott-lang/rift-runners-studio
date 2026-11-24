@@ -194,12 +194,33 @@ export function scoreAzureWord(
     const isFinalCons = ci === consPh.length - 1;
 
     if (cp.p === 'ʃ' || cp.p === 'tʃ') {
-      digraphDetail = `, ${cp.p} ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      const swappedWithNeighbor =
-        (cp.p === 'ʃ' && (topC === 'tʃ' || topC === 's' || topC === 'ʒ')) ||
-        (cp.p === 'tʃ' && (topC === 'ʃ' || topC === 's' || topC === 't' || topC === 'dʒ'));
-      if (sc < 70 || (swappedWithNeighbor && sc < 82)) {
-        digraphSwapMiss = true;
+      // Azure's lexicon treats some ch- runes (e.g. "chott") as French /ʃ/ instead of English /tʃ/.
+      // Grade against the phonics target spelled in the word rather than Azure's loanword guess.
+      const wantsCh =
+        (!isFinalCons && targetLower.startsWith('ch')) ||
+        (isFinalCons && targetLower.endsWith('ch'));
+      const wantsSh =
+        (!isFinalCons && targetLower.startsWith('sh')) ||
+        (isFinalCons && targetLower.endsWith('sh'));
+      const expected = wantsCh ? 'tʃ' : wantsSh ? 'ʃ' : cp.p;
+      const azureDictMismatch = expected !== cp.p;
+
+      digraphDetail = `, ${expected} ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      if (azureDictMismatch) {
+        const secondC = Array.isArray(cp.best) ? cp.best[1] : null;
+        const heardExpected =
+          topC === expected ||
+          Boolean(secondC && secondC.p === expected && (secondC.score || 0) >= 55 && topC !== cp.p);
+        if (!heardExpected) {
+          digraphSwapMiss = true;
+        }
+      } else {
+        const swappedWithNeighbor =
+          (expected === 'ʃ' && (topC === 'tʃ' || topC === 's' || topC === 'ʒ')) ||
+          (expected === 'tʃ' && (topC === 'ʃ' || topC === 's' || topC === 't' || topC === 'dʒ'));
+        if (sc < 70 || (swappedWithNeighbor && sc < 82)) {
+          digraphSwapMiss = true;
+        }
       }
     } else if (cp.p === 'θ') {
       digraphDetail = `, θ ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;

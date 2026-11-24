@@ -389,7 +389,7 @@ export const LEVEL2_REAL_WORDS: WordEntry[] = [
   { w: 'cob', kind: 'real', options: ['cab', 'cub'], es: 'mazorca' },
   { w: 'pod', kind: 'real', options: ['pad', 'pid'], es: 'vaina' },
   { w: 'box', kind: 'real', options: ['bax', 'bux'], es: 'caja' },
-  { w: 'fog', kind: 'real', options: ['fag', 'fug'], es: 'niebla' },
+  { w: 'fog', kind: 'real', options: ['fig', 'fug'], es: 'niebla' },
   { w: 'hot', kind: 'real', options: ['hat', 'hut'], es: 'caliente' },
   { w: 'job', kind: 'real', options: ['jab', 'jub'], es: 'trabajo' },
   { w: 'log', kind: 'real', options: ['lag', 'lug'], es: 'tronco' },
@@ -1550,7 +1550,7 @@ export const LEVEL4_REAL_WORDS: WordEntry[] = [
   { w: 'cob', kind: 'real', options: ['cab', 'cub'], es: 'mazorca' },
   { w: 'pod', kind: 'real', options: ['pad', 'pid'], es: 'vaina' },
   { w: 'box', kind: 'real', options: ['bax', 'bix'], es: 'caja' },
-  { w: 'fog', kind: 'real', options: ['fig', 'fag'], es: 'niebla' },
+  { w: 'fog', kind: 'real', options: ['fig', 'fug'], es: 'niebla' },
   { w: 'hot', kind: 'real', options: ['hat', 'hit'], es: 'caliente' },
   // Short u
   { w: 'sun', kind: 'real', options: ['sin', 'son'], es: 'sol' },
