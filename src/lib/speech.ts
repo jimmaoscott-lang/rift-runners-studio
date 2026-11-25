@@ -256,6 +256,50 @@ export function matchesWordVoiceOverride(
   return null;
 }
 
+const SPANISH_L1_STORAGE_KEY = 'rift_runners_spanish_l1_v1';
+let spanishL1Cache: boolean | null = null;
+
+export function getSpanishL1Mode(): boolean {
+  if (spanishL1Cache !== null) return spanishL1Cache;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      spanishL1Cache = window.localStorage.getItem(SPANISH_L1_STORAGE_KEY) === '1';
+      return spanishL1Cache;
+    }
+  } catch {
+    // ignore
+  }
+  spanishL1Cache = false;
+  return false;
+}
+
+export function setSpanishL1Mode(enabled: boolean): void {
+  spanishL1Cache = Boolean(enabled);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(SPANISH_L1_STORAGE_KEY, enabled ? '1' : '0');
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function matchesSpanishSBlendEpenthesis(target: string, heardTexts: string[]): string | null {
+  const t = String(target || '').trim().toLowerCase();
+  if (!/^s[ptkclmnw]/.test(t)) return null;
+  const epenthetic = `e${t}`;
+  for (const tx of heardTexts) {
+    const toks = normTokens(tx);
+    for (let i = 0; i < toks.length; i++) {
+      if (toks[i] === epenthetic) return toks[i];
+      if ((toks[i] === 'e' || toks[i] === 'eh') && toks[i + 1] === t) {
+        return `${toks[i]} ${toks[i + 1]}`;
+      }
+    }
+  }
+  return null;
+}
+
 export function getVoiceProfile(pattern: string): PatternVoiceProfile | null {
   const key = normalizePatternKey(pattern);
   if (!key) return null;
@@ -599,7 +643,12 @@ export function scoreAzureWord(
   res: any,
   target: string,
   isRune = false,
-  opts?: { pattern?: string; grace?: boolean; profile?: PatternVoiceProfile | null }
+  opts?: {
+    pattern?: string;
+    grace?: boolean;
+    profile?: PatternVoiceProfile | null;
+    spanishL1?: boolean;
+  }
 ): {
   outcome: 'match' | 'miss' | 'nothing';
   note: string;
@@ -687,9 +736,16 @@ export function scoreAzureWord(
   if (nasal && (want === 'ɪ' || want === 'ɛ')) {
     ok = ok.concat(['ɪ', 'ɛ', 'i']);
   }
+  const spanishL1 = typeof opts?.spanishL1 === 'boolean' ? opts.spanishL1 : getSpanishL1Mode();
+  let usedSpanishL1 = false;
+
   if (nasal && want === 'æ') {
     // Nasalized short a before m/n (e.g., fan) can raise slightly in Azure NBest
     ok = ok.concat(['ɛ']);
+  }
+  if (spanishL1 && want === 'ɪ') {
+    // Spanish L1 has one /i/ vowel; short i ("ship", "sit") often realizes as tense /i/
+    ok = ok.concat(['i']);
   }
   if (profileForVowel?.allowedHeard?.length) {
     ok = ok.concat(profileForVowel.allowedHeard);
@@ -700,6 +756,13 @@ export function scoreAzureWord(
   const second = bestList[1] || null;
   const topOK = Boolean(top && ok.includes(top));
   const topOther = Boolean(top && !topOK && VOWELS.includes(top));
+  const spanishShortIOK =
+    spanishL1 &&
+    want === 'ɪ' &&
+    (top === 'i' || Boolean(second && second.p === 'i' && (second.score || 0) >= 48));
+  if (spanishShortIOK) {
+    usedSpanishL1 = true;
+  }
 
   // For nonsense runes where Azure's dictionary guesses the wrong reference vowel,
   // also accept if our intended short vowel is a strong #2 candidate and #1 is NOT the opposite Level 1 vowel.
@@ -720,8 +783,9 @@ export function scoreAzureWord(
 
   const vs = v.score || 0;
   const vowelPass = offGuess
-    ? topOK || runeSecondOK
-    : (topOK && vs >= 10) ||
+    ? topOK || runeSecondOK || spanishShortIOK
+    : spanishShortIOK ||
+      (topOK && vs >= 10) ||
       relaxedShortIOK ||
       (vs >= vowelMin && !(topOther && vs < vowelClearMiss));
 
@@ -779,7 +843,9 @@ export function scoreAzureWord(
       if (azureDictMismatch) {
         const secondC = Array.isArray(cp.best) ? cp.best[1] : null;
         const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
-        const accommodated = Boolean(dgProfile?.allowContrastOverlap && allowedSig);
+        const spanishChSh =
+          spanishL1 && ((expected === 'tʃ' && topC === 'ʃ') || (expected === 'ʃ' && topC === 'tʃ'));
+        const accommodated = Boolean((dgProfile?.allowContrastOverlap && allowedSig) || spanishChSh);
         const heardExpected =
           accommodated ||
           topC === expected ||
@@ -791,6 +857,7 @@ export function scoreAzureWord(
           );
         if (accommodated) {
           usedAccommodation = true;
+          if (spanishChSh) usedSpanishL1 = true;
           effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
         }
         if (!heardExpected) {
@@ -801,9 +868,14 @@ export function scoreAzureWord(
         }
       } else {
         const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
-        const accommodatedOverlap = Boolean(dgProfile?.allowContrastOverlap && allowedSig);
+        const spanishChSh =
+          spanishL1 && ((expected === 'tʃ' && topC === 'ʃ') || (expected === 'ʃ' && topC === 'tʃ'));
+        const accommodatedOverlap = Boolean(
+          (dgProfile?.allowContrastOverlap && allowedSig) || spanishChSh
+        );
         if (accommodatedOverlap) {
           usedAccommodation = true;
+          if (spanishChSh) usedSpanishL1 = true;
           effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
         } else {
           const directOpposite =
@@ -835,8 +907,10 @@ export function scoreAzureWord(
       };
       digraphDetail = `, θ ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
       const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
-      if (dgProfile?.allowContrastOverlap && allowedSig) {
+      const spanishUnvoicedTh = spanishL1 && Boolean(topC && ['t', 's', 'f'].includes(topC));
+      if ((dgProfile?.allowContrastOverlap && allowedSig) || spanishUnvoicedTh) {
         usedAccommodation = true;
+        if (spanishUnvoicedTh) usedSpanishL1 = true;
         effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
       } else {
         const swapped = topC === 't';
@@ -861,8 +935,10 @@ export function scoreAzureWord(
       };
       digraphDetail = `, ð ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
       const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
-      if (dgProfile?.allowContrastOverlap && allowedSig) {
+      const spanishVoicedTh = spanishL1 && Boolean(topC && ['d', 'z', 't'].includes(topC));
+      if ((dgProfile?.allowContrastOverlap && allowedSig) || spanishVoicedTh) {
         usedAccommodation = true;
+        if (spanishVoicedTh) usedSpanishL1 = true;
         effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
       } else {
         const swappedVoicedTh =
@@ -930,6 +1006,21 @@ export function scoreAzureWord(
           digraphScore = Math.round(sc);
         }
       }
+    } else if (spanishL1 && (cp.p === 'v' || cp.p === 'b')) {
+      const vbSwap =
+        (cp.p === 'v' && (topC === 'b' || topC === 'β')) ||
+        (cp.p === 'b' && (topC === 'v' || topC === 'β'));
+      if (vbSwap) {
+        usedSpanishL1 = true;
+        usedAccommodation = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+      }
+    } else if (spanishL1 && ci === 0 && cp.p === 's' && /^s[ptkclmnw]/.test(targetLower)) {
+      const secondC = Array.isArray(cp.best) ? cp.best[1] : null;
+      if ((topC === 's' || secondC?.p === 's') && sc >= 24 && sc < 72) {
+        usedSpanishL1 = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 72);
+      }
     }
   }
 
@@ -962,6 +1053,7 @@ export function scoreAzureWord(
 
   const consPass = avg >= consAvgMin && consEachOK && !digraphSwapMiss;
   const wordPass =
+    usedSpanishL1 ||
     usedAccommodation ||
     topOK ||
     runeSecondOK ||
@@ -1001,7 +1093,7 @@ export function scoreAzureWord(
       kind: 'pass',
       score: Math.round(w.accuracy || 0),
       usedGrace: graceActive,
-      usedProfile: Boolean(activeProfile),
+      usedProfile: Boolean(activeProfile || usedSpanishL1),
       observed: primaryObserved,
     };
   } else if (digraphSwapMiss) {
@@ -1011,7 +1103,7 @@ export function scoreAzureWord(
       heard: digraphHeard,
       score: digraphScore,
       usedGrace: graceActive,
-      usedProfile: Boolean(activeProfile),
+      usedProfile: Boolean(activeProfile || usedSpanishL1),
       observed: primaryObserved,
     };
   } else if (!vowelPass) {
@@ -1022,7 +1114,7 @@ export function scoreAzureWord(
       heard: ipaToPlainSound(top),
       score: Math.round(vs),
       usedGrace: graceActive,
-      usedProfile: Boolean(activeProfile),
+      usedProfile: Boolean(activeProfile || usedSpanishL1),
       observed: primaryObserved,
     };
   } else if (!consPass) {
@@ -1030,7 +1122,7 @@ export function scoreAzureWord(
       kind: avg >= 24 ? 'borderline' : 'consonant',
       score: Math.round(avg),
       usedGrace: graceActive,
-      usedProfile: Boolean(activeProfile),
+      usedProfile: Boolean(activeProfile || usedSpanishL1),
       observed: primaryObserved,
     };
   } else {
@@ -1038,13 +1130,15 @@ export function scoreAzureWord(
       kind: (w.accuracy || 0) >= 28 ? 'borderline' : 'unclear',
       score: Math.round(w.accuracy || 0),
       usedGrace: graceActive,
-      usedProfile: Boolean(activeProfile),
+      usedProfile: Boolean(activeProfile || usedSpanishL1),
       observed: primaryObserved,
     };
   }
 
   const consSummary = cons.map((c) => Math.round(c)).join('/');
-  const tag = usedAccommodation
+  const tag = usedSpanishL1
+    ? ' [Spanish L1 fit]'
+    : usedAccommodation
     ? ' [voice fit]'
     : activeProfile
     ? ' [adapted]'
@@ -1447,6 +1541,14 @@ class SpeechVerifier {
     clearAllWordVoiceOverrides();
   }
 
+  getSpanishL1Mode(): boolean {
+    return getSpanishL1Mode();
+  }
+
+  setSpanishL1Mode(enabled: boolean): void {
+    setSpanishL1Mode(enabled);
+  }
+
   calibratePattern(
     pattern: string,
     targetWord: string,
@@ -1570,7 +1672,11 @@ class SpeechVerifier {
             if (tx && !heard.includes(tx)) heard.push(tx);
           }
         }
-        if (matchesChromeTranscript(word.w, heard, word.sayAlso) || matchesWordVoiceOverride(word.w, heard)) {
+        if (
+          matchesChromeTranscript(word.w, heard, word.sayAlso) ||
+          matchesWordVoiceOverride(word.w, heard) ||
+          (getSpanishL1Mode() && matchesSpanishSBlendEpenthesis(word.w, heard))
+        ) {
           finish('matched', true);
           return;
         }
@@ -1708,6 +1814,9 @@ class SpeechVerifier {
             [json.heard || '', ...chromeHeard],
             scored.diagnostic?.observed?.heardIpa
           );
+          const spanishSBlendMatch = getSpanishL1Mode()
+            ? matchesSpanishSBlendEpenthesis(word.w, [json.heard || '', ...chromeHeard])
+            : null;
           if (scored.outcome === 'match') {
             this.azureFailures = 0;
             finish({
@@ -1724,6 +1833,15 @@ class SpeechVerifier {
               engine: 'azure',
               heard: heardText,
               note: `matched saved "${learnedWordMatch}" [word voice fit] (${scored.note})`,
+              diagnostic: { ...scored.diagnostic, kind: 'pass', usedProfile: true },
+            });
+          } else if (spanishSBlendMatch) {
+            this.azureFailures = 0;
+            finish({
+              outcome: 'match',
+              engine: 'azure',
+              heard: heardText,
+              note: `matched s-blend "${spanishSBlendMatch}" [Spanish L1 fit] (${scored.note})`,
               diagnostic: { ...scored.diagnostic, kind: 'pass', usedProfile: true },
             });
           } else if (scored.outcome === 'nothing') {

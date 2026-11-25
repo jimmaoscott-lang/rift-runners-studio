@@ -2,6 +2,44 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-25 (Part 2): ELL Batch 2 (Bilingual Sound Rules, Tap-for-Meaning Glosses, and Dual-Language Captions)
+
+### Completed
+- **Centralized Spanish Bilingual Data (`src/data/ellSpanish.ts`)**:
+  - Placed every Spanish sound rule tip, real-word gloss, defender name and specialty description, hero power description, walkthrough step, and cutscene subtitle in a single file so a native Spanish-speaking colleague can review or refine all text in one place.
+  - Covered 100% of shipped real words across World 1 (Levels 1 to 5) and World 2 Level 1 (74 words), all 10 phonics patterns (`a`, `e`, `i`, `o`, `u`, `sh`, `ch`, `th`, `wh`, `ck`), all 6 defenders and 12 specialties, all 3 hero powers, all 7 walkthrough steps, and all 31 shipped cutscene beats.
+- **Bilingual Sound Rule Tips (`src/components/SoundRuleModal.tsx`)**:
+  - Added a `Puente en español` panel inside Sound Rule modals when `settings.spanishRules` is enabled, giving mouth/tongue placement cues, an English-to-Spanish sound bridge, and an `Escuchar` Spanish audio button.
+- **Tap-for-Meaning Glosses & Nonsense Rune Tag (`src/components/RuneForgePanel.tsx`)**:
+  - Upgraded the Rune Forge word card when `settings.spanish` is enabled: tapping the Spanish word under any real word speaks it in Spanish and reveals a compact plain-English meaning gloss, while nonsense runes display `Runa mágica · palabra inventada` so ELL readers distinguish invented runes from real vocabulary.
+- **Dual-Language Captions (`src/components/CutscenePlayer.tsx`, `src/components/BattleHUD.tsx`, `src/App.tsx`)**:
+  - Added Spanish subtitles beneath English lines in all cutscenes (plus a quick `Español` button in the cutscene header), Level 1 walkthrough steps (with Spanish audio playback), bottom defender cards, defender upgrade and Level 3 specialty popovers, hero power tooltips, placement guidance, last-word warnings, and the Victory Milestone card.
+- **Full 5-Switch `Español / ELL Support` Menu (`src/components/EllSupportModal.tsx`)**:
+  - Activated all 5 switches (`spanishL1Voice`, `slowBlendAudio`, `spanish`, `spanishRules`, `spanishCaptions`) under the `Full Spanish ELL Support` master preset.
+
+### Next Up
+1. Playtest ELL Batch 2 (Sound Rule Spanish bridge, Rune Forge tap-for-meaning glosses, and dual-language captions) and push to GitHub once verified.
+2. Build ELL Batch 3: Accommodation Snapshot in the End-of-Battle and Teacher Progress summary for IEP/ELL notes.
+
+## 2026-11-25: Español / ELL Support Menu and Batch 1 (Spanish L1 Voice Fit + Slow Blend Audio)
+
+### Completed
+- **Dedicated `Español / ELL Support` Modal (`src/components/EllSupportModal.tsx`)**:
+  - Added a compact **`Español`** button directly beside `RUNE FORGE` in the battle sidebar header (pausing the wave cleanly when opened), in the Title screen top bar (before cutscenes start), and as a single clean launcher row inside `SettingsModal` to reduce Settings clutter.
+  - Included a one-tap **Full Spanish ELL Support** preset (`Soporte completo en español`) alongside individual toggles and a clean preview of upcoming Batch 2 features (Bilingual Sound Rule Tips and Spanish Captions).
+- **One-Click Spanish L1 Voice Fit (`src/lib/speech.ts`)**:
+  - Added persisted `spanishL1Voice` mode synced with `speech.setSpanishL1Mode(...)`.
+  - Adapts five predictable Spanish-to-English sound transfers while continuing to grade every other vowel and consonant strictly: `ch`/`sh` overlap, short `i` stretching toward `/i/` (`ee`), `v`/`b` overlap, `th` (`t`/`s`/`f` for `/θ/`, `d`/`z`/`t` for `/ð/`), and opening `s`-blend epenthesis (`estop` for `stop`).
+  - Tags matched reads with `[Spanish L1 fit]` in the live score line and displays `Spanish L1 fit` in the Rune Forge voice bar.
+- **Slow Blend Audio Playback (`src/lib/audio.ts`, `src/components/RuneForgePanel.tsx`)**:
+  - Added `sound.speakWordSlow(word, tiles, onTileIdx)` using the existing pure human phoneme clips (`snd:*`) packed in `words/sprite.mp3`, playing each sound clearly with steady spacing and live cyan tile highlighting before blending into the full word.
+  - Placed the compact `Slow` button neatly beside the word speaker inside the Rune Forge target word card whenever `slowBlendAudio` is active.
+
+### Next Up
+1. Playtest the `Español` button, Spanish L1 Voice Fit, and Slow Blend Audio, then push this verified checkpoint to GitHub.
+2. Build ELL Batch 2: Bilingual Sound Rule Tips (Spanish mouth placement + audio), Tap-for-Meaning Glosses on real words, and Dual-Language Captions for cutscenes, walkthrough tips, and tower cards.
+3. Build ELL Batch 3: Accommodation Snapshot in the End-of-Battle and Teacher Progress summary.
+
 ## 2026-11-24 (Part 2): Adaptive Quick Voice Check, Personal Voice Profiles, and Leda Voice Lock
 
 ### Completed

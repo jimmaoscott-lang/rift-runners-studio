@@ -6,6 +6,10 @@ export interface GameSettings {
   font: 'lexend' | 'dyslexic';
   textSize: 'normal' | 'large' | 'xlarge';
   spanish: boolean;
+  spanishL1Voice: boolean;
+  slowBlendAudio: boolean;
+  spanishRules: boolean;
+  spanishCaptions: boolean;
   difficulty: DifficultyId;
   focusMode: boolean;
   speakFirst: number; // 0..3
@@ -53,6 +57,10 @@ export const DEFAULT_SETTINGS: GameSettings = {
   font: 'lexend',
   textSize: 'normal',
   spanish: false,
+  spanishL1Voice: false,
+  slowBlendAudio: false,
+  spanishRules: false,
+  spanishCaptions: false,
   difficulty: 'normal',
   focusMode: false,
   speakFirst: 0,
@@ -63,6 +71,16 @@ export const DEFAULT_SETTINGS: GameSettings = {
   effectsVol: 8,
   wardenVoice: 'Leda',
 };
+
+export function countActiveEllSupports(s: GameSettings): number {
+  let count = 0;
+  if (s.spanish) count += 1;
+  if (s.spanishL1Voice) count += 1;
+  if (s.slowBlendAudio) count += 1;
+  if (s.spanishRules) count += 1;
+  if (s.spanishCaptions) count += 1;
+  return count;
+}
 
 const BASE_PATTERNS: PatternKey[] = ['a', 'e', 'i', 'o', 'u'];
 

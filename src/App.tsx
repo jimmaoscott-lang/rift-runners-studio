@@ -13,6 +13,7 @@ import {
   LEVELS,
   PatternKey,
 } from './data/level1';
+import { SPANISH_DEFENDERS } from './data/ellSpanish';
 import { BattleEngine, BattleSnapshot } from './game/CanvasBattleEngine';
 import { loadGameSprites } from './game/sprites';
 import { sound } from './lib/audio';
@@ -28,6 +29,7 @@ import {
 import { speech } from './lib/speech';
 import { BattleHUD, WalkthroughInfo, WaveBannerInfo } from './components/BattleHUD';
 import { CutscenePlayer } from './components/CutscenePlayer';
+import { EllSupportModal } from './components/EllSupportModal';
 import { BattleEndData, ResultsScreen } from './components/ResultsScreen';
 import { ForgeStats, RuneForgePanel, SimRoundResult } from './components/RuneForgePanel';
 import { SettingsModal } from './components/SettingsModal';
@@ -243,6 +245,7 @@ export default function App() {
   const [forgedCount, setForgedCount] = useState(0);
   const [waveBanner, setWaveBanner] = useState<WaveBannerInfo | null>(null);
   const [showHalfSpeedTip, setShowHalfSpeedTip] = useState(false);
+  const [ellOpen, setEllOpen] = useState(false);
 
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
@@ -255,6 +258,25 @@ export default function App() {
   progressRef.current = progress;
 
   const settings = progress.settings;
+
+  useEffect(() => {
+    speech.setSpanishL1Mode(Boolean(settings.spanishL1Voice));
+  }, [settings.spanishL1Voice]);
+
+  const openEllModal = useCallback(() => {
+    if (state.scene === 'battle') {
+      engineRef.current?.setExternalHold(true);
+    }
+    setEllOpen(true);
+  }, [state.scene]);
+
+  const closeEllModal = useCallback(() => {
+    setEllOpen(false);
+    if (state.scene === 'battle' && !state.settingsOpen) {
+      engineRef.current?.setExternalHold(false);
+    }
+  }, [state.scene, state.settingsOpen]);
+
   const locks = getPatternLocks(
     progress,
     activeLevel.vowels,
@@ -698,6 +720,7 @@ export default function App() {
           onStartDirect={() => dispatch({ type: 'START_DIRECT_BATTLE' })}
           onOpenCutscene={(id) => dispatch({ type: 'PREVIEW_CUTSCENE', id, returnTo: 'title' })}
           onOpenSettings={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
+          onOpenEll={openEllModal}
           onClearLocks={(pattern) => handleClearLocks(false, pattern)}
         />
       )}
@@ -708,8 +731,10 @@ export default function App() {
           wardenVoice={settings.wardenVoice}
           customVideoUrl={customVideos[`${activeLevel.id}:${state.activeCutscene}`] || null}
           reducedMotion={settings.reducedMotion}
+          spanishCaptions={settings.spanishCaptions}
           onComplete={() => dispatch({ type: 'CUTSCENE_DONE' })}
           onOpenVoicePicker={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
+          onOpenEll={openEllModal}
           onUploadCustomVideo={handleUploadCustomVideo}
         />
       )}
@@ -731,6 +756,7 @@ export default function App() {
                 toast={toast}
                 waveBanner={waveBanner}
                 walkthrough={activeWalkthrough}
+                spanishCaptions={settings.spanishCaptions}
                 onClearLocks={(pattern) => handleClearLocks(false, pattern)}
                 onWalkthroughNext={() => {
                   sound.sfx('tap');
@@ -787,6 +813,7 @@ export default function App() {
               onMegaForge={handleMegaForge}
               onSimulateRound={handleSimulateRound}
               onRuleHold={handleRuleHold}
+              onOpenEll={openEllModal}
             />
           </div>
 
@@ -814,7 +841,11 @@ export default function App() {
                       key={id}
                       type="button"
                       onClick={() => engineRef.current?.selectBuild(id)}
-                      title={`${def.name}: ${def.desc}`}
+                      title={
+                        settings.spanishCaptions
+                          ? `${def.name}: ${def.desc} | ${SPANISH_DEFENDERS[id].nameEs}: ${SPANISH_DEFENDERS[id].descEs}`
+                          : `${def.name}: ${def.desc}`
+                      }
                       className={`group flex shrink-0 items-center gap-2 rounded-xl border-2 px-2.5 py-1 transition-all cursor-pointer ${
                         active
                           ? 'border-cyan-300 bg-[#2a2060] shadow-[0_0_14px_rgba(56,224,255,0.45)]'
@@ -840,6 +871,11 @@ export default function App() {
                         <span className="text-xs font-bold text-white whitespace-nowrap">
                           {def.name}
                         </span>
+                        {settings.spanishCaptions && (
+                          <span className="text-[10px] font-medium text-cyan-200/85 whitespace-nowrap">
+                            {SPANISH_DEFENDERS[id].nameEs}
+                          </span>
+                        )}
                         <span className="mt-0.5 inline-flex items-center gap-1 font-tabular text-[11px] font-extrabold text-cyan-300">
                           <Gem className="h-3 w-3 text-cyan-300 fill-cyan-300/30" />
                           {def.cost}
@@ -868,6 +904,17 @@ export default function App() {
                     ? 'The wave launches right after your next word guess'
                     : 'Tap any placed defender to upgrade or sell'}
                 </span>
+                {settings.spanishCaptions && (
+                  <span className="text-[10px] font-medium text-cyan-200/90">
+                    {snap.buildSel
+                      ? DEFENDERS[snap.buildSel].kind === 'tower'
+                        ? `Colocando ${SPANISH_DEFENDERS[snap.buildSel].nameEs} en una base de piedra`
+                        : `Colocando ${SPANISH_DEFENDERS[snap.buildSel].nameEs} sobre el sendero`
+                      : isLastWordBeforeWave
+                      ? 'La oleada inicia con la siguiente palabra'
+                      : 'Toca un defensor para colocarlo o mejorarlo'}
+                  </span>
+                )}
               </div>
             </div>
           </footer>
@@ -922,12 +969,21 @@ export default function App() {
           onChange={handleSettingsChange}
           onClearActiveLocks={() => handleClearLocks(false)}
           onClearAllLocks={() => handleClearLocks(true)}
+          onOpenEll={openEllModal}
           onClose={() => {
             dispatch({ type: 'SET_SETTINGS_OPEN', open: false });
-            if (state.scene === 'battle') {
+            if (state.scene === 'battle' && !ellOpen) {
               engineRef.current?.setExternalHold(false);
             }
           }}
+        />
+      )}
+
+      {ellOpen && (
+        <EllSupportModal
+          settings={settings}
+          onChange={handleSettingsChange}
+          onClose={closeEllModal}
         />
       )}
     </div>

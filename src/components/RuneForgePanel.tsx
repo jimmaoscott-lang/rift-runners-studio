@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Flame, FlaskConical, Mic, SlidersHorizontal, Sparkles, Volume2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  AudioLines,
+  Flame,
+  FlaskConical,
+  Languages,
+  Mic,
+  SlidersHorizontal,
+  Sparkles,
+  Volume2,
+} from 'lucide-react';
 import {
   FORGE_CONFIG,
   getPatternRule,
@@ -7,8 +17,9 @@ import {
   PatternKey,
   WordEntry,
 } from '../data/level1';
+import { getWordGloss } from '../data/ellSpanish';
 import { sound } from '../lib/audio';
-import { GameSettings } from '../lib/metrics';
+import { countActiveEllSupports, GameSettings } from '../lib/metrics';
 import { speech } from '../lib/speech';
 import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 import { SoundRuleModal } from './SoundRuleModal';
@@ -63,6 +74,7 @@ interface RuneForgePanelProps {
   onMegaForge: () => void;
   onSimulateRound: (result: SimRoundResult, stats: ForgeStats) => void;
   onRuleHold: (hold: boolean) => void;
+  onOpenEll: () => void;
 }
 
 function computeSimRound(
@@ -184,6 +196,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   onMegaForge,
   onSimulateRound,
   onRuleHold,
+  onOpenEll,
 }) => {
   const [cur, setCur] = useState<WordEntry>(() => level.realWords[0]);
   const [choices, setChoices] = useState<string[]>([]);
@@ -195,6 +208,8 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   const [usedHelp, setUsedHelp] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [showTiles, setShowTiles] = useState(false);
+  const [showMeaning, setShowMeaning] = useState(false);
+  const [blendTileIdx, setBlendTileIdx] = useState<number | null>(null);
   const [listening, setListening] = useState(false);
   const [micReady, setMicReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
@@ -279,6 +294,8 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     setUsedHelp(false);
     setRevealed(false);
     setShowTiles(false);
+    setShowMeaning(false);
+    setBlendTileIdx(null);
     shownAtRef.current = performance.now();
   }, [level]);
 
@@ -485,8 +502,17 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   const handleHearWord = () => {
     if (disabled || listening) return;
     setUsedHelp(true);
+    setBlendTileIdx(null);
     sound.sfx('tap');
     sound.speakWord(cur.w);
+  };
+
+  const handleHearWordSlow = () => {
+    if (disabled || listening) return;
+    setUsedHelp(true);
+    setShowTiles(true);
+    sound.sfx('tap');
+    void sound.speakWordSlow(cur.w, cur.tiles, setBlendTileIdx);
   };
 
   const handlePickSound = (idx: number) => {
@@ -699,25 +725,51 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
             : 'border-purple-500/60'
         }`}
       >
-        {/* Header & Streak */}
-        <div className="flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2">
+        {/* Header, Español Button & Streak */}
+        <div className="flex items-center justify-between gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               type="button"
               onClick={() => sound.speakUI('forge.title', 'Rune Forge')}
               aria-label="Hear Rune Forge"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-purple-400/60 bg-[#251d4d] text-cyan-300 hover:border-cyan-300 cursor-pointer"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-purple-400/60 bg-[#251d4d] text-cyan-300 hover:border-cyan-300 cursor-pointer"
             >
               <Volume2 className="h-3.5 w-3.5" />
             </button>
-            <h2 className="font-display text-sm font-extrabold tracking-wider text-purple-100 uppercase">
+            <h2 className="font-display text-sm font-extrabold tracking-wider text-purple-100 uppercase truncate">
               Rune Forge
             </h2>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-amber-400/70 bg-[#271b48] px-2 py-0.5 font-tabular text-xs font-extrabold text-amber-300">
-            <Flame className="h-3.5 w-3.5 text-amber-400 fill-amber-400/40" />
-            <span>x{streak}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {(() => {
+              const ellCount = countActiveEllSupports(settings);
+              return (
+                <button
+                  type="button"
+                  disabled={listening}
+                  onClick={() => {
+                    sound.stopSpeaking();
+                    sound.sfx('tap');
+                    onOpenEll();
+                  }}
+                  title="Español / ELL Accommodations"
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+                    ellCount > 0
+                      ? 'border-emerald-400/75 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+                      : 'border-cyan-400/50 bg-[#231b4a] text-cyan-200 hover:border-cyan-300 hover:text-white'
+                  }`}
+                >
+                  <Languages className="h-3 w-3 shrink-0" />
+                  <span>Español</span>
+                </button>
+              );
+            })()}
+
+            <div className="flex items-center gap-1 rounded-full border border-amber-400/70 bg-[#271b48] px-2 py-0.5 font-tabular text-xs font-extrabold text-amber-300">
+              <Flame className="h-3.5 w-3.5 text-amber-400 fill-amber-400/40" />
+              <span>x{streak}</span>
+            </div>
           </div>
         </div>
 
@@ -756,6 +808,11 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
               <div className="mt-0.5 text-[11px] text-amber-100/90">
                 {lastWordWarning.body}
               </div>
+              {settings.spanishCaptions && (
+                <div className="mt-0.5 text-[10px] font-medium text-cyan-200/95">
+                  Construye o mejora torres antes de la siguiente palabra.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -767,26 +824,48 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
               ? `Rune (+${FORGE_CONFIG.rune})`
               : getPatternRule(getWordPattern(cur, level.vowels[0])).label}
           </div>
-          <button
-            type="button"
-            onClick={handleHearWord}
-            title="Hear the word. You still get crystals."
-            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl border border-purple-400/60 bg-[#2a2159] text-cyan-300 hover:border-cyan-300 hover:text-white cursor-pointer"
-          >
-            <Volume2 className="h-4 w-4" />
-          </button>
+          <div className="absolute right-2 top-2 flex items-center gap-1">
+            {settings.slowBlendAudio && (
+              <button
+                type="button"
+                onClick={handleHearWordSlow}
+                title="Slow Blend: hear each sound clearly, then the whole word."
+                aria-label="Hear slow sound blend"
+                className={`flex h-8 items-center justify-center gap-1 rounded-xl border px-2 text-[10px] font-bold transition-colors cursor-pointer ${
+                  blendTileIdx !== null
+                    ? 'border-cyan-300 bg-cyan-500/30 text-white'
+                    : 'border-emerald-400/60 bg-emerald-950/55 text-emerald-200 hover:border-cyan-300 hover:text-white'
+                }`}
+              >
+                <AudioLines className="h-3.5 w-3.5" />
+                <span>Slow</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleHearWord}
+              title="Hear the word. You still get crystals."
+              aria-label="Hear the word"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-400/60 bg-[#2a2159] text-cyan-300 hover:border-cyan-300 hover:text-white cursor-pointer"
+            >
+              <Volume2 className="h-4 w-4" />
+            </button>
+          </div>
 
           {showTiles ? (
             <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
               {(cur.tiles || cur.w.split('')).map((tile, idx) => {
                 const isTarget = idx === (cur.targetTileIdx ?? 1);
+                const isBlendingNow = blendTileIdx === idx;
                 return (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => sound.speakPhoneme(tile)}
-                    className={`flex h-12 min-w-12 px-2 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold cursor-pointer ${
-                      isTarget
+                    className={`flex h-12 min-w-12 px-2 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold transition-transform cursor-pointer ${
+                      isBlendingNow
+                        ? 'scale-105 border-cyan-300 bg-cyan-400/30 text-white shadow-[0_0_12px_rgba(34,211,238,0.55)]'
+                        : isTarget
                         ? 'border-amber-400 bg-amber-500/20 text-amber-200'
                         : 'border-purple-400/60 bg-[#130e2b] text-white'
                     }`}
@@ -802,18 +881,47 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
             </div>
           )}
 
-          {/* Optional Spanish Support */}
-          {settings.spanish && cur.es && (
-            <button
-              type="button"
-              onClick={() => sound.speakWord(cur.es!, 'es')}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs text-cyan-200 hover:text-white cursor-pointer"
-            >
-              <Volume2 className="h-3.5 w-3.5 text-cyan-400" />
-              <span>{cur.es}</span>
-              {cur.cognate && <span className="text-[11px] text-amber-300">(cognate)</span>}
-            </button>
+          {/* Optional Spanish Support & Tap-for-Meaning Gloss */}
+          {settings.spanish && cur.kind === 'rune' && (
+            <div className="mt-2 text-[11px] font-medium text-cyan-200/85">
+              Runa mágica · palabra inventada
+            </div>
           )}
+          {settings.spanish && cur.kind !== 'rune' && (() => {
+            const gloss = getWordGloss(cur.w, cur.es, cur.cognate);
+            if (!gloss) return null;
+            return (
+              <div className="mt-2 flex w-full flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.speakWord(gloss.es, 'es');
+                    if (gloss.enDef) setShowMeaning((prev) => !prev);
+                  }}
+                  title={
+                    gloss.enDef
+                      ? 'Tap to hear in Spanish and show plain-English meaning'
+                      : 'Tap to hear in Spanish'
+                  }
+                  className="inline-flex flex-wrap items-center justify-center gap-1.5 rounded-lg px-2 py-0.5 text-xs text-cyan-200 hover:bg-cyan-500/10 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                  <span className="font-semibold">{gloss.es}</span>
+                  {gloss.cognate && <span className="text-[11px] text-amber-300">(cognate)</span>}
+                  {gloss.enDef && (
+                    <span className="text-[10px] font-semibold text-cyan-300/85 underline decoration-cyan-400/50 underline-offset-2">
+                      {showMeaning ? 'Hide' : 'Meaning'}
+                    </span>
+                  )}
+                </button>
+                {showMeaning && gloss.enDef && (
+                  <div className="mt-1.5 w-full rounded-lg border border-cyan-400/35 bg-[#120e2c]/95 px-2.5 py-1.5 text-center text-[11px] leading-snug text-cyan-100">
+                    {gloss.enDef}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Speak Mode Button with Live Mic Level Meter */}
@@ -874,6 +982,16 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 : activeVoiceProfile
                 ? 'Voice adapted'
                 : 'Mic grace on'}
+            </button>
+          ) : canUseMic && settings.spanishL1Voice ? (
+            <button
+              type="button"
+              disabled={disabled || listening}
+              onClick={onOpenEll}
+              className="text-emerald-300 hover:text-emerald-200 font-semibold cursor-pointer disabled:opacity-50"
+              title="Spanish L1 Voice Fit is active. Click to adjust."
+            >
+              Spanish L1 fit
             </button>
           ) : hideTapChoices ? (
             <span className="text-cyan-300">
@@ -1066,6 +1184,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
           tiles={ruleModal.tiles}
           targetTileIdx={ruleModal.targetTileIdx}
           fullRule={ruleModal.full}
+          showSpanishRule={settings.spanishRules}
           onExpandFull={() => setRuleModal((prev) => (prev ? { ...prev, full: true } : null))}
           onClose={() => {
             setRuleModal(null);

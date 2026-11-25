@@ -21,6 +21,11 @@ import {
   X,
 } from 'lucide-react';
 import {
+  SPANISH_DEFENDERS,
+  SPANISH_HERO_POWERS,
+  SPANISH_WALKTHROUGH_STEPS,
+} from '../data/ellSpanish';
+import {
   DEFENDERS,
   DIFFICULTIES,
   getPatternRule,
@@ -58,6 +63,7 @@ interface BattleHUDProps {
   toast: string;
   waveBanner: WaveBannerInfo | null;
   walkthrough: WalkthroughInfo | null;
+  spanishCaptions?: boolean;
   onWalkthroughNext: () => void;
   onWalkthroughSkip: () => void;
   onToggleWalkthrough: () => void;
@@ -125,6 +131,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
   toast,
   waveBanner,
   walkthrough,
+  spanishCaptions = false,
   onWalkthroughNext,
   onWalkthroughSkip,
   onToggleWalkthrough,
@@ -197,7 +204,11 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                   type="button"
                   disabled={!ready}
                   onClick={() => onCastPower(pid)}
-                  title={`${p.name}: ${p.desc} (${cur}/${p.charge})`}
+                  title={
+                    spanishCaptions
+                      ? `${p.name}: ${p.desc} (${cur}/${p.charge}) | ${SPANISH_HERO_POWERS[pid].nameEs}: ${SPANISH_HERO_POWERS[pid].descEs}`
+                      : `${p.name}: ${p.desc} (${cur}/${p.charge})`
+                  }
                   className={`flex h-8 flex-col justify-center rounded-xl border-2 px-1.5 transition-all shadow-md shrink-0 ${
                     ready
                       ? `${borderCol} bg-[#2b1d5e]/96 text-white hover:brightness-115 cursor-pointer ring-2 ring-amber-300/70`
@@ -445,6 +456,27 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                 </span>
               </div>
               <p className="mt-0.5 text-xs font-medium text-purple-100">{walkthrough.body}</p>
+              {spanishCaptions && SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1] && (() => {
+                const esStep = SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1];
+                return (
+                  <div className="mt-1 flex items-start gap-1.5 border-t border-amber-300/25 pt-1 text-[11px] font-medium text-cyan-200/95">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        sound.speakFallback(`${esStep.titleEs}. ${esStep.bodyEs}`, 'es-MX')
+                      }
+                      title="Escuchar este paso en español"
+                      aria-label="Escuchar este paso en español"
+                      className="mt-0.5 text-cyan-300 hover:text-white cursor-pointer shrink-0"
+                    >
+                      <Volume2 className="h-3.5 w-3.5" />
+                    </button>
+                    <span>
+                      <strong className="text-cyan-100">{esStep.titleEs}:</strong> {esStep.bodyEs}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -649,6 +681,20 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               <div className="text-xs font-semibold text-cyan-300">
                 {snap.selectedDef.spec ? 'Specialty Mastered' : `Level ${snap.selectedDef.level} of 3`}
               </div>
+              {spanishCaptions && (() => {
+                const esDef = SPANISH_DEFENDERS[snap.selectedDef.type];
+                const esTitle = snap.selectedDef.spec
+                  ? esDef.spec[snap.selectedDef.spec].nameEs
+                  : esDef.nameEs;
+                const esDesc = snap.selectedDef.spec
+                  ? esDef.spec[snap.selectedDef.spec].descEs
+                  : esDef.descEs;
+                return (
+                  <div className="mt-1 text-[11px] leading-snug text-cyan-200/90">
+                    <span className="font-bold text-cyan-100">{esTitle}:</span> {esDesc}
+                  </div>
+                );
+              })()}
             </div>
             <button
               type="button"
@@ -702,6 +748,14 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                         <span className="font-tabular text-amber-300">{sp.cost}</span>
                       </div>
                       <p className="mt-0.5 text-[11px] text-slate-300 leading-snug">{sp.desc}</p>
+                      {spanishCaptions && (
+                        <p className="mt-0.5 text-[10px] text-cyan-200/90 leading-snug">
+                          <span className="font-semibold text-cyan-100">
+                            {SPANISH_DEFENDERS[snap.selectedDef!.type].spec[spKey].nameEs}:
+                          </span>{' '}
+                          {SPANISH_DEFENDERS[snap.selectedDef!.type].spec[spKey].descEs}
+                        </p>
+                      )}
                     </button>
                   );
                 })}
@@ -751,6 +805,12 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               Your win and stars are locked in. Seal the Rift to finish now, or test your towers
               against {snap.bonusTotal} tougher bonus waves for extra reading practice.
             </p>
+            {spanishCaptions && (
+              <p className="mt-1.5 font-reading text-xs text-cyan-200/95 leading-relaxed">
+                Tu victoria y tus estrellas ya están guardadas. Sella la grieta para terminar o
+                prueba {snap.bonusTotal} oleadas extra para seguir practicando.
+              </p>
+            )}
 
             <div className="mt-5 flex flex-col gap-2.5">
               <button

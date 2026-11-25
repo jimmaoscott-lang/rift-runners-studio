@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Check,
+  Languages,
   Mic,
   Play,
   RotateCcw,
@@ -23,7 +24,7 @@ import {
   WardenVoiceId,
 } from '../data/level1';
 import { sound } from '../lib/audio';
-import { GameSettings, PatternLockStatus } from '../lib/metrics';
+import { countActiveEllSupports, GameSettings, PatternLockStatus } from '../lib/metrics';
 import { PatternVoiceProfile, speech, WordVoiceOverride } from '../lib/speech';
 import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 
@@ -35,6 +36,7 @@ interface SettingsModalProps {
   onChange: (next: GameSettings) => void;
   onClearActiveLocks: () => void;
   onClearAllLocks: () => void;
+  onOpenEll: () => void;
   onClose: () => void;
 }
 
@@ -46,8 +48,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChange,
   onClearActiveLocks,
   onClearAllLocks,
+  onOpenEll,
   onClose,
 }) => {
+  const ellActiveCount = countActiveEllSupports(settings);
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micTestWord, setMicTestWord] = useState<string>(() => level.runes[0]?.w || 'sun');
@@ -391,19 +395,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-medium text-white">Spanish Support</div>
-                <div className="text-xs text-slate-400">Shows tappable Spanish meanings and cognates.</div>
+                <div className="text-sm font-medium text-white">Español / ELL Support</div>
+                <div className="text-xs text-slate-400">
+                  Spanish L1 voice fit, slow blend audio, word meanings, bilingual sound rules, and dual-language captions.
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => update('spanish', !settings.spanish)}
-                className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                  settings.spanish
-                    ? 'bg-cyan-500 text-slate-950'
-                    : 'border border-slate-700 bg-slate-900 text-slate-300'
+                onClick={() => {
+                  sound.sfx('tap');
+                  onOpenEll();
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  ellActiveCount > 0
+                    ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+                    : 'border-cyan-400/60 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25'
                 }`}
               >
-                {settings.spanish ? 'On' : 'Off'}
+                <Languages className="h-3.5 w-3.5" />
+                <span>
+                  {ellActiveCount > 0 ? `Español (${ellActiveCount} active)` : 'Open Español Menu'}
+                </span>
               </button>
             </div>
 

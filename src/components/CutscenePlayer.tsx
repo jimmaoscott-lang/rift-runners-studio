@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FastForward, Play, RotateCcw, Upload, Volume2 } from 'lucide-react';
+import { FastForward, Languages, Play, RotateCcw, Upload, Volume2 } from 'lucide-react';
+import { getCutsceneSpanishCaption } from '../data/ellSpanish';
 import { CutsceneId, CutsceneScript } from '../data/level1';
 import { sound } from '../lib/audio';
 import { assetUrl } from '../lib/assetUrl';
@@ -9,8 +10,10 @@ interface CutscenePlayerProps {
   wardenVoice: string;
   customVideoUrl?: string | null;
   reducedMotion?: boolean;
+  spanishCaptions?: boolean;
   onComplete: () => void;
   onOpenVoicePicker?: () => void;
+  onOpenEll?: () => void;
   onUploadCustomVideo?: (id: CutsceneId, url: string) => void;
 }
 
@@ -19,8 +22,10 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
   wardenVoice,
   customVideoUrl,
   reducedMotion = false,
+  spanishCaptions = false,
   onComplete,
   onOpenVoicePicker,
+  onOpenEll,
   onUploadCustomVideo,
 }) => {
   const cutsceneId = script.id;
@@ -223,6 +228,25 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {onOpenEll && (
+            <button
+              type="button"
+              onClick={() => {
+                sound.stopSpeaking();
+                sound.sfx('tap');
+                onOpenEll();
+              }}
+              title="Español / ELL Support"
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                spanishCaptions
+                  ? 'border-emerald-400/75 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+                  : 'border-cyan-500/50 bg-slate-900 text-cyan-200 hover:border-cyan-300 hover:text-white'
+              }`}
+            >
+              <Languages className="h-3.5 w-3.5" />
+              <span>Español</span>
+            </button>
+          )}
           {onOpenVoicePicker && (
             <button
               type="button"
@@ -344,6 +368,15 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
               <p className="font-reading text-sm md:text-base font-semibold text-white leading-snug group-hover:text-cyan-200 transition-colors">
                 {beat.captions[captionIndex] || beat.voiceText}
               </p>
+              {spanishCaptions && (() => {
+                const esLine = getCutsceneSpanishCaption(beat.id, captionIndex);
+                if (!esLine) return null;
+                return (
+                  <p className="mt-1 font-reading text-xs md:text-sm font-medium text-cyan-200/95 leading-snug">
+                    {esLine}
+                  </p>
+                );
+              })()}
             </button>
 
             <div className="flex items-center gap-2 shrink-0">

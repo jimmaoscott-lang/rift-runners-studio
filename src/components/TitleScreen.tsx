@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Lock, Play, Settings, Shield, Star, Volume2 } from 'lucide-react';
+import { Film, Languages, Lock, Play, Settings, Shield, Star, Volume2 } from 'lucide-react';
 import { assetUrl } from '../lib/assetUrl';
 import {
   CutsceneId,
@@ -14,7 +14,7 @@ import {
   WORLDS,
 } from '../data/level1';
 import { sound } from '../lib/audio';
-import { PatternLockStatus, StoredProgress } from '../lib/metrics';
+import { countActiveEllSupports, PatternLockStatus, StoredProgress } from '../lib/metrics';
 
 interface TitleScreenProps {
   activeLevel: LevelConfig;
@@ -27,6 +27,7 @@ interface TitleScreenProps {
   onStartDirect: () => void;
   onOpenCutscene: (id: CutsceneId) => void;
   onOpenSettings: () => void;
+  onOpenEll: () => void;
   onClearLocks: (pattern?: PatternKey) => void;
 }
 
@@ -41,8 +42,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onStartDirect,
   onOpenCutscene,
   onOpenSettings,
+  onOpenEll,
   onClearLocks,
 }) => {
+  const ellActiveCount = countActiveEllSupports(progress.settings);
   const activeDiff = DIFFICULTIES[progress.settings.difficulty] || DIFFICULTIES.normal;
   const activeBestStars = progress.levelStars?.[activeLevel.id] ?? (activeLevel.id === 'w1-l1' ? progress.bestStars : 0);
   const activeWorld = WORLDS[activeLevel.worldId] || WORLDS.w1;
@@ -97,6 +100,21 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              sound.sfx('tap');
+              onOpenEll();
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              ellActiveCount > 0
+                ? 'border-emerald-400/75 bg-emerald-950/75 text-emerald-100 hover:border-cyan-300 hover:text-white'
+                : 'border-cyan-400/60 bg-slate-900/90 text-cyan-200 hover:border-cyan-300 hover:text-white'
+            }`}
+          >
+            <Languages className="h-3.5 w-3.5" />
+            <span>Español{ellActiveCount > 0 ? ` (${ellActiveCount})` : ''}</span>
+          </button>
           <button
             type="button"
             onClick={() => {

@@ -372,6 +372,85 @@ class SoundManager {
     }
   }
 
+  private splitBlendTiles(word: string, tiles?: string[]): string[] {
+    if (tiles && tiles.length > 0) return tiles;
+    const lower = word.toLowerCase();
+    const out: string[] = [];
+    const digraphs = ['sh', 'ch', 'th', 'wh', 'ck', 'ng', 'nk', 'ph', 'qu'];
+    let i = 0;
+    while (i < lower.length) {
+      const pair = lower.slice(i, i + 2);
+      if (digraphs.includes(pair)) {
+        out.push(pair);
+        i += 2;
+      } else {
+        out.push(lower[i]);
+        i += 1;
+      }
+    }
+    return out;
+  }
+
+  async speakWordSlow(
+    word: string,
+    tiles?: string[],
+    onTileIdx?: (idx: number | null) => void
+  ): Promise<void> {
+    await this.init();
+    this.stopSpeaking();
+    const myToken = this.seqToken;
+    const parts = this.splitBlendTiles(word, tiles);
+
+    try {
+      for (let i = 0; i < parts.length; i++) {
+        if (myToken !== this.seqToken) return;
+        onTileIdx?.(i);
+        const key = parts[i].toLowerCase();
+        const rel = this.wordManifest.en[`snd:${key}`];
+        if (rel) {
+          await this.playManifestEntry(this.wordManifest, '/assets/audio/words', rel);
+        } else {
+          const spoken = this.phonemeFallbackText(key);
+          const cacheId = `snd-${key.replace(/[^a-z0-9_-]/g, '-')}`;
+          await this.playNeuralOrFallback(
+            cacheId,
+            spoken,
+            'Phonics teacher pronouncing only one isolated English speech sound clearly and crisply, with no extra words.',
+            myToken
+          );
+        }
+        if (myToken !== this.seqToken) return;
+        if (i < parts.length - 1) {
+          await new Promise((r) => setTimeout(r, 175));
+        }
+      }
+
+      if (myToken !== this.seqToken) return;
+      onTileIdx?.(null);
+      await new Promise((r) => setTimeout(r, 240));
+      if (myToken !== this.seqToken) return;
+
+      const wordKey = word.toLowerCase();
+      const wordRel = this.wordManifest.en[wordKey] || this.wordManifest.en[word];
+      if (wordRel) {
+        await this.playManifestEntry(this.wordManifest, '/assets/audio/words', wordRel);
+      } else {
+        const spoken = this.wordFallbackText(word);
+        const cacheId = `word-${wordKey.replace(/[^a-z0-9_-]/g, '-')}`;
+        await this.playNeuralOrFallback(
+          cacheId,
+          spoken,
+          'Clear, natural American English reading teacher pronouncing one single word cleanly with a crisp short vowel and clear consonants.',
+          myToken
+        );
+      }
+    } finally {
+      if (myToken === this.seqToken) {
+        onTileIdx?.(null);
+      }
+    }
+  }
+
   private phonemeFallbackText(key: string): string {
     const fallbackMap: Record<string, string> = {
       sh: 'shhh',

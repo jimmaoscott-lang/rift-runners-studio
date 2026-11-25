@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Volume2 } from 'lucide-react';
+import { Languages, Volume2 } from 'lucide-react';
+import { getSpanishRuleTip } from '../data/ellSpanish';
 import { getPatternRule, PatternKey } from '../data/level1';
 import { sound } from '../lib/audio';
 
@@ -9,6 +10,7 @@ interface SoundRuleModalProps {
   tiles?: string[];
   targetTileIdx?: number;
   fullRule: boolean;
+  showSpanishRule?: boolean;
   onExpandFull: () => void;
   onClose: () => void;
 }
@@ -19,10 +21,12 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
   tiles,
   targetTileIdx,
   fullRule,
+  showSpanishRule = false,
   onExpandFull,
   onClose,
 }) => {
   const rule = getPatternRule(pattern);
+  const spanishTip = showSpanishRule ? getSpanishRuleTip(pattern) : null;
   const soundTiles = tiles && tiles.length > 0 ? tiles : word.split('');
   const highlightIdx = targetTileIdx ?? 1;
   const patternDisplay = rule.shortLabel || pattern;
@@ -181,6 +185,32 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                 </span>
               </button>
             </div>
+          </div>
+        )}
+
+        {spanishTip && (
+          <div className="mt-4 rounded-xl border border-emerald-400/45 bg-emerald-950/25 px-4 py-3 text-left">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-200">
+                <Languages className="h-3.5 w-3.5 text-emerald-300 shrink-0" />
+                <span>Puente en español: {spanishTip.labelEs}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  sound.stopSpeaking();
+                  void sound.speakFallback(`${spanishTip.tipEs} ${spanishTip.bridgeEs}`, 'es-MX');
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/25 cursor-pointer shrink-0"
+              >
+                <Volume2 className="h-3 w-3" />
+                <span>Escuchar</span>
+              </button>
+            </div>
+            <p className="mt-1.5 font-reading text-xs sm:text-sm text-emerald-50 leading-relaxed">
+              {spanishTip.tipEs}
+            </p>
+            <p className="mt-1 text-xs text-cyan-200/90 leading-snug">{spanishTip.bridgeEs}</p>
           </div>
         )}
 
