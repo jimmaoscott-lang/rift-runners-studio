@@ -293,6 +293,18 @@ class SoundManager {
       chib: 'chibb',
       chot: 'chaht',
       chup: 'chupp',
+      thab: 'thabb',
+      thip: 'thipp',
+      thog: 'thahg',
+      whep: 'whepp',
+      whib: 'whibb',
+      whum: 'whumm',
+      teck: 'teck',
+      bick: 'bick',
+      zock: 'zahck',
+      teg: 'tegg',
+      zod: 'zahd',
+      zot: 'zaht',
     };
     return runeSpellings[key] || word;
   }
@@ -784,6 +796,7 @@ class SoundManager {
       | 'spike'
       | 'cannon'
       | 'zap'
+      | 'rail'
       | 'waveStart'
       | 'waveClear'
       | 'anchorHit'
@@ -872,6 +885,11 @@ class SoundManager {
       case 'zap':
         tone(1280, 340, 0.09, 'sawtooth', 0.12);
         tone(920, 190, 0.12, 'square', 0.08, 0.025);
+        break;
+      case 'rail':
+        tone(1680, 220, 0.16, 'sawtooth', 0.15);
+        tone(240, 68, 0.22, 'triangle', 0.18, 0.015);
+        tone(1120, 620, 0.09, 'sine', 0.11, 0.02);
         break;
       case 'build':
         tone(220, 330, 0.12, 'triangle', 0.2);

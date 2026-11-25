@@ -8,6 +8,7 @@ export type SpriteKey =
   | 'frost'
   | 'ember'
   | 'tesla'
+  | 'rail'
   | 'thornback'
   | 'wisp'
   | 'bramble'
@@ -16,6 +17,7 @@ export type SpriteKey =
   | 'brute'
   | 'thornking'
   | 'cinderimp'
+  | 'shieldbearer'
   | 'warden';
 
 export interface SpriteAsset {
@@ -40,6 +42,7 @@ export const MAP_URLS: Record<LevelId, string> = {
   'w1-l4': '/src/assets/images/map_sunless_ruins_1795470434690.jpg',
   'w1-l5': '/src/assets/images/map_thornking_heart_1795470435461.jpg',
   'w2-l1': '/src/assets/images/map_w2_l1_ashgate_1795525102099.jpg',
+  'w2-l2': '/src/assets/images/map_w2_l2_smelter_causeway_1795606908338.jpg',
 };
 
 export const SPRITE_URLS: Record<SpriteKey, string> = {
@@ -49,6 +52,7 @@ export const SPRITE_URLS: Record<SpriteKey, string> = {
   frost: '/src/assets/images/sprite_frost_totem_1795459978997.jpg',
   ember: '/src/assets/images/sprite_ember_cannon_1795467448994.jpg',
   tesla: '/src/assets/images/sprite_tesla_spire_1795474930821.jpg',
+  rail: '/src/assets/images/sprite_rail_turret_1795606909483.jpg',
   thornback: '/src/assets/images/sprite_thornback_1795459978268.jpg',
   wisp: '/src/assets/images/sprite_rift_wisp_1795459979373.jpg',
   bramble: '/src/assets/images/sprite_bramble_stalker_1795467449198.jpg',
@@ -57,6 +61,7 @@ export const SPRITE_URLS: Record<SpriteKey, string> = {
   brute: '/src/assets/images/sprite_ironbark_brute_1795470435150.jpg',
   thornking: '/src/assets/images/sprite_thornking_boss_1795470435149.jpg',
   cinderimp: '/src/assets/images/sprite_cinder_imp_1795525101831.jpg',
+  shieldbearer: '/src/assets/images/sprite_shieldbearer_1795606908368.jpg',
   warden: '/src/assets/images/sprite_rift_warden_1795459980237.jpg',
 };
 

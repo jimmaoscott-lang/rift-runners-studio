@@ -82,6 +82,9 @@ export interface DefenderLevelStats {
   chain?: number;
   chainRange?: number;
   beamRamp?: number;
+  armorPierce?: boolean;
+  pierceCount?: number;
+  armorShred?: number;
 }
 
 export interface DefenderSpec {
@@ -92,7 +95,7 @@ export interface DefenderSpec {
   stats: DefenderLevelStats;
 }
 
-export type DefenderType = 'archer' | 'spike' | 'golem' | 'frost' | 'ember' | 'tesla';
+export type DefenderType = 'archer' | 'spike' | 'golem' | 'frost' | 'ember' | 'tesla' | 'rail';
 
 export interface DefenderDef {
   id: DefenderType;
@@ -119,7 +122,8 @@ export type CreatureType =
   | 'splitter'
   | 'brute'
   | 'thornking'
-  | 'cinderimp';
+  | 'cinderimp'
+  | 'shieldbearer';
 
 export interface CreatureDef {
   id: CreatureType;
@@ -133,6 +137,7 @@ export interface CreatureDef {
   flying?: boolean;
   isBoss?: boolean;
   slowResist?: number;
+  armor?: number;
   splitsInto?: { type: CreatureType; count: number };
 }
 
@@ -600,6 +605,36 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
       },
     },
   },
+  rail: {
+    id: 'rail',
+    name: 'Rail Turret',
+    shortName: 'Rail',
+    desc: 'Electromagnetic railgun that punches straight through heavy enemy armor on ground and air.',
+    kind: 'tower',
+    cost: 135,
+    up: [100, 145],
+    levels: [
+      { dmg: 34, range: 8.6, rate: 0.72, armorPierce: true },
+      { dmg: 50, range: 9.6, rate: 0.8, armorPierce: true },
+      { dmg: 70, range: 10.6, rate: 0.88, armorPierce: true },
+    ],
+    spec: {
+      a: {
+        id: 'a',
+        name: 'Piercing Rail',
+        desc: 'Fires a hyper-velocity cyan rail beam that punches through up to 4 enemies in a line.',
+        cost: 200,
+        stats: { dmg: 92, range: 11.8, rate: 0.92, armorPierce: true, pierceCount: 4 },
+      },
+      b: {
+        id: 'b',
+        name: 'Shatter Coil',
+        desc: 'Massive armor-piercing round that cracks enemy armor for 5 seconds so every tower hits at full power.',
+        cost: 200,
+        stats: { dmg: 122, range: 11.0, rate: 0.82, armorPierce: true, armorShred: 5.0 },
+      },
+    },
+  },
 };
 
 export const DEFENDER_ORDER: DefenderType[] = ['archer', 'spike', 'golem', 'frost'];
@@ -610,6 +645,7 @@ export const ALL_DEFENDER_ORDER: DefenderType[] = [
   'frost',
   'ember',
   'tesla',
+  'rail',
 ];
 
 export const CREATURES: Record<CreatureType, CreatureDef> = {
@@ -696,6 +732,17 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     hit: 10,
     size: 0.96,
     slowResist: 0.5,
+  },
+  shieldbearer: {
+    id: 'shieldbearer',
+    name: 'Shieldbearer',
+    hp: 165,
+    speed: 1.55,
+    anchor: 3,
+    shards: 7,
+    hit: 24,
+    size: 1.18,
+    armor: 0.45,
   },
 };
 
@@ -2211,6 +2258,7 @@ export const W2_LEVEL1: LevelConfig = {
   enemiesSummary: 'Cinder Imps, Rift Bats, and Bramble Stalkers',
   wordsSummary: 'sh and ch digraphs, plus runes',
   rewardSummary: 'Smelter Causeway road opens ahead',
+  nextLevelId: 'w2-l2',
   vowels: ['sh', 'ch'],
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla'],
   runeRate: 0.28,
@@ -2324,22 +2372,281 @@ export const W2_LEVEL1: LevelConfig = {
   cutscenes: W2_L1_CUTSCENES,
 };
 
-// World 2 Roadmap Preview Nodes (Levels 2-5 visible on World 2 map, unlocked as built)
+// ---------------------------------------------------------------------------
+// World 2 · Level 2: Smelter Causeway (th, wh, -ck Digraphs + Shieldbearer + Rail Turret)
+// ---------------------------------------------------------------------------
+export const W2_L2_REAL_WORDS: WordEntry[] = [
+  // th digraph (unvoiced & voiced, initial & final)
+  { w: 'thin', kind: 'real', pattern: 'th', tiles: ['th', 'i', 'n'], targetTileIdx: 0, options: ['tin', 'fin'], es: 'delgado' },
+  { w: 'path', kind: 'real', pattern: 'th', tiles: ['p', 'a', 'th'], targetTileIdx: 2, options: ['pat', 'pan'], es: 'sendero' },
+  { w: 'bath', kind: 'real', pattern: 'th', tiles: ['b', 'a', 'th'], targetTileIdx: 2, options: ['bat', 'bag'], es: 'baño' },
+  { w: 'math', kind: 'real', pattern: 'th', tiles: ['m', 'a', 'th'], targetTileIdx: 2, options: ['mat', 'map'], es: 'matemáticas' },
+  { w: 'moth', kind: 'real', pattern: 'th', tiles: ['m', 'o', 'th'], targetTileIdx: 2, options: ['mop', 'lot'], es: 'polilla' },
+  { w: 'with', kind: 'real', pattern: 'th', tiles: ['w', 'i', 'th'], targetTileIdx: 2, options: ['win', 'wig'], es: 'con' },
+  { w: 'that', kind: 'real', pattern: 'th', tiles: ['th', 'a', 't'], targetTileIdx: 0, options: ['hat', 'cat'], es: 'ese' },
+  { w: 'then', kind: 'real', pattern: 'th', tiles: ['th', 'e', 'n'], targetTileIdx: 0, options: ['ten', 'den'], es: 'entonces' },
+  // wh digraph
+  { w: 'whip', kind: 'real', pattern: 'wh', tiles: ['wh', 'i', 'p'], targetTileIdx: 0, options: ['rip', 'tip'], es: 'látigo' },
+  { w: 'when', kind: 'real', pattern: 'wh', tiles: ['wh', 'e', 'n'], targetTileIdx: 0, options: ['hen', 'pen'], es: 'cuándo' },
+  { w: 'whiz', kind: 'real', pattern: 'wh', tiles: ['wh', 'i', 'z'], targetTileIdx: 0, options: ['zip', 'win'], es: 'genio' },
+  { w: 'whim', kind: 'real', pattern: 'wh', tiles: ['wh', 'i', 'm'], targetTileIdx: 0, options: ['rim', 'him'], es: 'capricho' },
+  { w: 'wham', kind: 'real', pattern: 'wh', tiles: ['wh', 'a', 'm'], targetTileIdx: 0, options: ['jam', 'ram'], es: 'golpe fuerte' },
+  { w: 'which', kind: 'real', pattern: 'wh', tiles: ['wh', 'i', 'ch'], targetTileIdx: 0, options: ['rich', 'wish'], es: 'cuál' },
+  // -ck digraph
+  { w: 'lock', kind: 'real', pattern: 'ck', tiles: ['l', 'o', 'ck'], targetTileIdx: 2, options: ['log', 'lot'], es: 'cerradura' },
+  { w: 'rock', kind: 'real', pattern: 'ck', tiles: ['r', 'o', 'ck'], targetTileIdx: 2, options: ['rod', 'rot'], es: 'roca', cognate: true },
+  { w: 'dock', kind: 'real', pattern: 'ck', tiles: ['d', 'o', 'ck'], targetTileIdx: 2, options: ['dot', 'dog'], es: 'muelle' },
+  { w: 'back', kind: 'real', pattern: 'ck', tiles: ['b', 'a', 'ck'], targetTileIdx: 2, options: ['bag', 'bat'], es: 'espalda' },
+  { w: 'deck', kind: 'real', pattern: 'ck', tiles: ['d', 'e', 'ck'], targetTileIdx: 2, options: ['den', 'red'], es: 'cubierta' },
+  { w: 'kick', kind: 'real', pattern: 'ck', tiles: ['k', 'i', 'ck'], targetTileIdx: 2, options: ['kid', 'kit'], es: 'patear' },
+  { w: 'luck', kind: 'real', pattern: 'ck', tiles: ['l', 'u', 'ck'], targetTileIdx: 2, options: ['lug', 'rug'], es: 'suerte' },
+  { w: 'pack', kind: 'real', pattern: 'ck', tiles: ['p', 'a', 'ck'], targetTileIdx: 2, options: ['pan', 'pad'], es: 'paquete', cognate: true },
+];
+
+export const W2_L2_RUNES: WordEntry[] = [
+  { w: 'thab', kind: 'rune', pattern: 'th', tiles: ['th', 'a', 'b'], targetTileIdx: 0, options: ['tab', 'cab'], azureRef: 'thabb' },
+  { w: 'thip', kind: 'rune', pattern: 'th', tiles: ['th', 'i', 'p'], targetTileIdx: 0, options: ['tip', 'ship'], azureRef: 'thipp' },
+  { w: 'thog', kind: 'rune', pattern: 'th', tiles: ['th', 'o', 'g'], targetTileIdx: 0, options: ['fog', 'log'], azureRef: 'thogg' },
+  { w: 'whep', kind: 'rune', pattern: 'wh', tiles: ['wh', 'e', 'p'], targetTileIdx: 0, options: ['bep', 'web'], azureRef: 'whepp' },
+  { w: 'whib', kind: 'rune', pattern: 'wh', tiles: ['wh', 'i', 'b'], targetTileIdx: 0, options: ['kib', 'rib'], azureRef: 'whibb' },
+  { w: 'whum', kind: 'rune', pattern: 'wh', tiles: ['wh', 'u', 'm'], targetTileIdx: 0, options: ['hum', 'sum'], azureRef: 'whumm' },
+  { w: 'teck', kind: 'rune', pattern: 'ck', tiles: ['t', 'e', 'ck'], targetTileIdx: 2, options: ['ten', 'teg'], azureRef: 'teck' },
+  { w: 'bick', kind: 'rune', pattern: 'ck', tiles: ['b', 'i', 'ck'], targetTileIdx: 2, options: ['big', 'bit'], azureRef: 'bick' },
+  { w: 'zock', kind: 'rune', pattern: 'ck', tiles: ['z', 'o', 'ck'], targetTileIdx: 2, options: ['zot', 'zod'], azureRef: 'zock' },
+];
+
+export const W2_L2_CUTSCENES: Record<CutsceneId, CutsceneScript> = {
+  opening: {
+    id: 'opening',
+    title: 'World 2, Level 2: Smelter Causeway',
+    subtitle: 'Opening Cutscene',
+    beats: [
+      {
+        id: 'w2-l02-open-v1-1',
+        image: '/src/assets/images/cutscene_w2_l2_opening_1795606912950.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Welcome to Smelter Causeway, Runner. Heavily armored Shieldbearers are marching across the iron viaduct, and their forged shields block almost half of normal damage.',
+        captions: [
+          'Armored Shieldbearers are marching across Smelter Causeway.',
+          'Their forged iron shields block nearly half of standard tower hits.',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Steady, focused veteran guardian briefing a teenage partner above a volcanic iron bridge.',
+      },
+      {
+        id: 'w2-l02-open-v1-2',
+        image: '/src/assets/images/cutscene_w2_l2_opening_1795606912950.jpg',
+        motion: 'pan',
+        durationMs: 11000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Our foundry engineers finished the Rail Turret just in time. Its electromagnetic rounds punch straight through heavy armor. Use the Loadout button below to pick your six active defenders, and lock th, wh, and ck in the Forge.',
+        captions: [
+          'New tower unlocked: Rail Turret pierces heavy enemy armor on ground and air.',
+          'Use the Loadout picker below to customize 6 active towers, and seal th, wh, and -ck.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Confident, tactical mentor giving clear, direct battlefield guidance.',
+      },
+    ],
+  },
+  victory: {
+    id: 'victory',
+    title: 'Smelter Causeway: Rift Sealed',
+    subtitle: 'Victory Cutscene',
+    beats: [
+      {
+        id: 'w2-l02-vic-v1-1',
+        image: '/src/assets/images/cutscene_w2_l2_victory_1795606914624.jpg',
+        motion: 'lift',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Smelter Causeway is clear! Your Rail Turrets punched straight through the Shieldbearer column, and your clean th, wh, and ck reads locked the viaduct breach down tight.',
+        captions: [
+          'Smelter Causeway is clear! The armored Shieldbearer column is broken.',
+          'Your sharp th, wh, and -ck reads sealed the viaduct Rift.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Warm, proud veteran guardian celebrating a strong victory on the lava viaduct.',
+      },
+      {
+        id: 'w2-l02-vic-v1-2',
+        image: '/src/assets/images/cutscene_w2_l2_victory_1795606914624.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Look past the smokestacks ahead. The high iron bridges of Ironrift Crossing are swarming with armored flying Shriekers. Keep those Rail Turrets and Tesla Spires tuned up for the skies.',
+        captions: [
+          'Ahead rise the high foundry bridges of Ironrift Crossing.',
+          'Next stage ahead: Ironrift Crossing (armored Rift Shriekers + L and R blends).',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Steady, watchful guardian looking ahead toward the towering foundry stacks.',
+      },
+    ],
+  },
+  defeat: {
+    id: 'defeat',
+    title: 'Causeway Breached',
+    subtitle: 'Defeat Cutscene',
+    beats: [
+      {
+        id: 'w2-l02-def-v1-1',
+        image: '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg',
+        motion: 'zoom',
+        durationMs: 9500,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The Shieldbearers shrugged off light fire and pushed through to the Anchor. Shake it off, Runner. Place a Rail Turret inside the center viaduct bend and upgrade it to Piercing Rail or Shatter Coil next run.',
+        captions: [
+          'The armored Shieldbearers broke through to the Anchor.',
+          'Tip: place a Rail Turret inside the center bend to punch through armor, then try again.',
+        ],
+        accent: 'crimson',
+        voiceStyle:
+          'Calm, encouraging mentor offering a clear tactical tip with zero blame.',
+      },
+    ],
+  },
+};
+
 export const W2_LEVEL2: LevelConfig = {
-  ...W2_LEVEL1,
   id: 'w2-l2',
   num: 2,
+  worldId: 'w2',
+  worldName: 'World 2: The Sunken Foundry',
   name: 'Smelter Causeway',
   headline: 'Break the Armor at Smelter Causeway',
   description:
-    'Heavily armored Shieldbearers march across the iron viaduct while shrugging off light rapid fire. Unlock the new electromagnetic Rail Turret and the side Loadout picker while mastering th, wh, and -ck digraphs.',
+    'Heavily armored Shieldbearers march across the iron viaduct while blocking nearly half of normal tower damage. Deploy the new electromagnetic Rail Turret and customize your 6-tower Loadout while mastering th, wh, and -ck digraphs.',
   enemiesSummary: 'Shieldbearers, Cinder Imps, and Bramble Stalkers',
-  wordsSummary: 'th, wh, and -ck digraphs + runes',
-  rewardSummary: 'Rail Turret + Side Loadout Selector',
+  wordsSummary: 'th, wh, and -ck digraphs, plus runes',
+  rewardSummary: 'Rail Turret + Side Loadout Selector unlocked',
+  nextLevelId: 'w2-l3',
   vowels: ['th', 'wh', 'ck'],
-  comingSoon: true,
-  backdropImage: '/src/assets/images/cutscene_w2_l1_victory_1795525102801.jpg',
+  defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail'],
+  runeRate: 0.28,
+  startCrystals: 245,
+  waveEvery: 10,
+  anchor: 20,
+  minWaves: 2,
+  bonusSurgeWaves: 3,
+  mastery: {
+    window: 8,
+    need: 7,
+  },
+  endless: {
+    hpStep: 0.15,
+    countStep: 0.14,
+  },
+  finalBoost: 1.25,
+  hasWalkthrough: false,
+  backdropImage: '/src/assets/images/cutscene_w2_l2_opening_1795606912950.jpg',
+  pathUv: [
+    [0.215, 0.270],
+    [0.285, 0.335],
+    [0.385, 0.340],
+    [0.495, 0.275],
+    [0.585, 0.245],
+    [0.665, 0.275],
+    [0.700, 0.350],
+    [0.660, 0.425],
+    [0.560, 0.480],
+    [0.440, 0.525],
+    [0.345, 0.575],
+    [0.310, 0.655],
+    [0.350, 0.740],
+    [0.440, 0.785],
+    [0.545, 0.760],
+    [0.640, 0.715],
+    [0.730, 0.720],
+    [0.810, 0.765],
+  ],
+  riverUv: [
+    [0.73, 0.13],
+    [0.85, 0.22],
+    [0.91, 0.36],
+    [0.91, 0.50],
+    [0.81, 0.59],
+    [0.66, 0.88],
+  ],
+  riftUv: [0.205, 0.235],
+  campUv: [0.900, 0.785],
+  wardenUv: [0.805, 0.785],
+  pads: [
+    { id: 'sc_t1', kind: 'tower', u: 0.495, v: 0.190 },
+    { id: 'sc_t2', kind: 'tower', u: 0.628, v: 0.180 },
+    { id: 'sc_t3', kind: 'tower', u: 0.728, v: 0.230 },
+    { id: 'sc_t4', kind: 'tower', u: 0.758, v: 0.418 },
+    { id: 'sc_t5', kind: 'tower', u: 0.287, v: 0.520 },
+    { id: 'sc_t6', kind: 'tower', u: 0.223, v: 0.663 },
+    { id: 'sc_t7', kind: 'tower', u: 0.398, v: 0.655 },
+    { id: 'sc_t8', kind: 'tower', u: 0.256, v: 0.805 },
+    { id: 'sc_t9', kind: 'tower', u: 0.366, v: 0.875 },
+    { id: 'sc_t10', kind: 'tower', u: 0.515, v: 0.883 },
+    { id: 'sc_r1', kind: 'trail', u: 0.495, v: 0.275 },
+    { id: 'sc_r2', kind: 'trail', u: 0.560, v: 0.480 },
+    { id: 'sc_r3', kind: 'trail', u: 0.310, v: 0.655 },
+    { id: 'sc_r4', kind: 'trail', u: 0.640, v: 0.715 },
+  ],
+  waves: [
+    {
+      hp: 1.0,
+      groups: [
+        { type: 'shieldbearer', count: 4, gap: 3.4 },
+        { type: 'cinderimp', count: 8, gap: 0.9, delay: 5.5 },
+      ],
+    },
+    {
+      hp: 1.18,
+      groups: [
+        { type: 'shieldbearer', count: 6, gap: 2.9 },
+        { type: 'cinderimp', count: 12, gap: 0.72, delay: 4.5 },
+        { type: 'bat', count: 8, gap: 1.0, delay: 10 },
+      ],
+    },
+    {
+      hp: 1.4,
+      groups: [
+        { type: 'shieldbearer', count: 8, gap: 2.5 },
+        { type: 'bramble', count: 5, gap: 2.6, delay: 5 },
+        { type: 'cinderimp', count: 14, gap: 0.62, delay: 10.5 },
+      ],
+    },
+    {
+      hp: 1.66,
+      groups: [
+        { type: 'shieldbearer', count: 10, gap: 2.2 },
+        { type: 'splitter', count: 4, gap: 2.8, delay: 4.5 },
+        { type: 'bat', count: 12, gap: 0.82, delay: 9.5 },
+        { type: 'cinderimp', count: 16, gap: 0.55, delay: 14 },
+      ],
+    },
+    {
+      hp: 1.96,
+      groups: [
+        { type: 'shieldbearer', count: 12, gap: 1.95 },
+        { type: 'brute', count: 3, gap: 3.3, delay: 4 },
+        { type: 'cinderimp', count: 20, gap: 0.5, delay: 8.5 },
+        { type: 'splitter', count: 5, gap: 2.4, delay: 13.5 },
+      ],
+    },
+  ],
+  realWords: W2_L2_REAL_WORDS,
+  runes: W2_L2_RUNES,
+  cutscenes: W2_L2_CUTSCENES,
 };
+
+// World 2 Roadmap Preview Nodes (Levels 3-5 visible on World 2 map, unlocked as built)
 
 export const W2_LEVEL3: LevelConfig = {
   ...W2_LEVEL1,

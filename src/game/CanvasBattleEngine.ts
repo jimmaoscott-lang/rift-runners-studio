@@ -143,6 +143,7 @@ interface CreatureRuntime {
   slowMult: number;
   slowTimer: number;
   freezeTimer: number;
+  armorShredTimer: number;
   heldBy: DefenderRuntime | null;
   attackCd: number;
   hitFlash: number;
@@ -581,7 +582,9 @@ export class BattleEngine {
       }
       this.placeDefender(pad, this.buildSel);
     } else {
-      const towerHint = this.level.defenders.includes('tesla')
+      const towerHint = this.level.defenders.includes('rail')
+        ? 'Pick Archer, Frost, Ember, Tesla, or Rail Turret below to build on this stone pad.'
+        : this.level.defenders.includes('tesla')
         ? 'Pick Archer, Frost, Ember Cannon, or Tesla Spire below to build on this stone pad.'
         : this.level.defenders.includes('ember')
         ? 'Pick Archer Tower, Frost Totem, or Ember Cannon below to build on this stone pad.'
@@ -774,7 +777,7 @@ export class BattleEngine {
 
     for (const cr of this.creatures) {
       if (!cr.alive) continue;
-      this.damageCreature(cr, FORGE_CONFIG.megaBlast);
+      this.damageCreature(cr, FORGE_CONFIG.megaBlast, { armorPierce: true });
     }
     sound.sfx('mega');
     this.emitSnapshot();
@@ -1103,6 +1106,7 @@ export class BattleEngine {
       slowMult: 1,
       slowTimer: 0,
       freezeTimer: 0,
+      armorShredTimer: 0,
       heldBy: null,
       attackCd: 0.8,
       hitFlash: 0,
@@ -1114,24 +1118,48 @@ export class BattleEngine {
     }
   }
 
-  private damageCreature(cr: CreatureRuntime, dmg: number) {
+  private damageCreature(
+    cr: CreatureRuntime,
+    dmg: number,
+    opts?: { armorPierce?: boolean; armorShred?: number }
+  ) {
     if (!cr.alive) return;
-    const rounded = Math.max(1, Math.round(dmg));
+    const cfg = CREATURES[cr.type];
+    const baseArmor = cfg.armor || 0;
+    const armorActive = baseArmor > 0 && cr.armorShredTimer <= 0;
+    const mitigated = armorActive && !opts?.armorPierce ? dmg * (1 - baseArmor) : dmg;
+    const rounded = Math.max(1, Math.round(mitigated));
     cr.hp -= rounded;
     cr.hitFlash = 0.14;
 
+    if (opts?.armorShred && opts.armorShred > 0) {
+      const wasIntact = cr.armorShredTimer <= 0 && baseArmor > 0;
+      cr.armorShredTimer = Math.max(cr.armorShredTimer, opts.armorShred);
+      if (wasIntact) {
+        this.spawnFloatingText(cr.x, cr.y - 68, 'ARMOR CRACKED!', '#38e0ff', 1.05);
+      }
+    }
+
+    if (armorActive && !opts?.armorPierce && dmg >= 8 && Math.random() < 0.32) {
+      this.spawnBurst(cr.x, cr.y - 26, '#fbbf24', 3);
+    }
+
     if (rounded >= 4 || Math.random() < 0.35) {
+      const dmgColor = opts?.armorPierce && baseArmor > 0
+        ? '#38e0ff'
+        : armorActive && !opts?.armorPierce
+        ? '#cbd5e1'
+        : '#fbbf24';
       this.spawnFloatingText(
         cr.x + (Math.random() - 0.5) * 18,
         cr.y - 38,
         `-${rounded}`,
-        '#fbbf24',
+        dmgColor,
         rounded >= 25 ? 1.2 : 0.95
       );
     }
 
     if (cr.hp <= 0) {
-      const cfg = CREATURES[cr.type];
       cr.alive = false;
       if (cr.heldBy) {
         cr.heldBy.holding = cr.heldBy.holding.filter((c) => c !== cr);
@@ -1146,6 +1174,8 @@ export class BattleEngine {
           ? '#f0abfc'
           : cr.type === 'cinderimp'
           ? '#fb923c'
+          : cr.type === 'shieldbearer'
+          ? '#f59e0b'
           : cr.type === 'splitter'
           ? '#38e0ff'
           : cr.type === 'thornking'
@@ -1280,6 +1310,9 @@ export class BattleEngine {
       if (cr.slowTimer > 0) {
         cr.slowTimer -= dt;
         if (cr.slowTimer <= 0) cr.slowMult = 1;
+      }
+      if (cr.armorShredTimer > 0) {
+        cr.armorShredTimer = Math.max(0, cr.armorShredTimer - dt);
       }
 
       if (cr.freezeTimer > 0) {
@@ -1600,6 +1633,116 @@ export class BattleEngine {
             }
           }
         }
+      } else if (def.type === 'rail') {
+        def.cd -= dt * rateBoost;
+        if (def.cd <= 0) {
+          const rangePx = (st.range || 8.6) * this.RANGE_UNIT_PX;
+          // Prioritize armored enemies & bosses in range, then furthest along the path
+          let primary: CreatureRuntime | null = null;
+          let bestScore = -1;
+          for (const cr of this.creatures) {
+            if (!cr.alive) continue;
+            if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
+              const cfg = CREATURES[cr.type];
+              const armorBonus = (cfg.armor || 0) > 0 && cr.armorShredTimer <= 0 ? 500 : 0;
+              const bossBonus = cfg.isBoss ? 1200 : 0;
+              const score = bossBonus + armorBonus + cr.s * 300;
+              if (score > bestScore) {
+                bestScore = score;
+                primary = cr;
+              }
+            }
+          }
+          if (primary) {
+            def.cd = 1 / (st.rate || 0.72);
+            def.recoil = 0.72;
+            def.facingLeft = primary.x < def.pad.x;
+            const muzzleX = def.pad.x + (def.facingLeft ? -26 : 26);
+            const muzzleY = def.pad.y - 62;
+            const ty = primary.y - (CREATURES[primary.type].flying ? 34 : 24);
+            const dx = primary.x - muzzleX;
+            const dy = ty - muzzleY;
+            const dist = Math.max(1, Math.hypot(dx, dy));
+            const ux = dx / dist;
+            const uy = dy / dist;
+
+            const pierceMax = st.pierceCount || 1;
+            const hitTargets: CreatureRuntime[] = [primary];
+
+            if (pierceMax > 1) {
+              const beamLen = Math.min(rangePx * 1.15, dist + 240);
+              const extras: Array<{ cr: CreatureRuntime; proj: number }> = [];
+              for (const cand of this.creatures) {
+                if (!cand.alive || cand === primary) continue;
+                const cy = cand.y - (CREATURES[cand.type].flying ? 34 : 24);
+                const rx = cand.x - muzzleX;
+                const ry = cy - muzzleY;
+                const proj = rx * ux + ry * uy;
+                if (proj < 16 || proj > beamLen) continue;
+                const perp = Math.abs(rx * -uy + ry * ux);
+                if (perp <= 38) {
+                  extras.push({ cr: cand, proj });
+                }
+              }
+              extras.sort((a, b) => a.proj - b.proj);
+              for (const ex of extras) {
+                if (hitTargets.length >= pierceMax) break;
+                hitTargets.push(ex.cr);
+              }
+            }
+
+            const endDist =
+              pierceMax > 1 ? Math.min(rangePx * 1.12, Math.max(dist + 95, 220)) : dist;
+            const endX = muzzleX + ux * endDist;
+            const endY = muzzleY + uy * endDist;
+
+            this.lightningArcs.push({
+              points: [
+                { x: muzzleX, y: muzzleY },
+                { x: endX, y: endY },
+              ],
+              color: def.spec === 'b' ? '#f59e0b' : '#22d3ee',
+              coreColor: '#ffffff',
+              width: def.spec ? 5.2 : 4.2,
+              age: 0,
+              life: 0.24,
+            });
+            this.rings.push({
+              x: muzzleX,
+              y: muzzleY,
+              r0: 6,
+              r1: 28,
+              color: '#38e0ff',
+              lineWidth: 3,
+              age: 0,
+              life: 0.22,
+            });
+
+            const baseDmg = st.dmg || 34;
+            hitTargets.forEach((cr, idx) => {
+              const cy = cr.y - (CREATURES[cr.type].flying ? 34 : 24);
+              const hitDmg = idx === 0 ? baseDmg : Math.round(baseDmg * 0.85);
+              this.spawnBurst(cr.x, cy, def.spec === 'b' ? '#fbbf24' : '#38e0ff', idx === 0 ? 10 : 6);
+              if (def.spec === 'b') {
+                this.rings.push({
+                  x: cr.x,
+                  y: cy,
+                  r0: 10,
+                  r1: 52,
+                  color: '#fbbf24',
+                  lineWidth: 3.5,
+                  age: 0,
+                  life: 0.34,
+                });
+              }
+              this.damageCreature(cr, hitDmg, {
+                armorPierce: Boolean(st.armorPierce),
+                armorShred: st.armorShred,
+              });
+            });
+            sound.sfx('rail');
+          }
+        }
       } else if (def.type === 'spike') {
         const rangePx = (st.radius || st.range || 2.2) * this.RANGE_UNIT_PX;
         let hitAny = false;
@@ -1884,7 +2027,7 @@ export class BattleEngine {
         this.spawnBurst(m.tx, m.ty, '#fb7185', 14);
         for (const cr of this.creatures) {
           if (cr.alive && Math.hypot(cr.x - m.tx, cr.y - m.ty) <= 190) {
-            this.damageCreature(cr, HERO_POWERS.meteor.dmg || 80);
+            this.damageCreature(cr, HERO_POWERS.meteor.dmg || 80, { armorPierce: true });
           }
         }
         this.meteors.splice(i, 1);
@@ -2373,6 +2516,8 @@ export class BattleEngine {
     const targetH =
       def.type === 'archer'
         ? 106
+        : def.type === 'rail'
+        ? 104
         : def.type === 'tesla'
         ? 108
         : def.type === 'ember'
@@ -2390,7 +2535,7 @@ export class BattleEngine {
 
       ctx.save();
       ctx.translate(0, def.type === 'spike' ? 14 : 6 + idleBob);
-      if (def.facingLeft && def.type === 'golem') {
+      if (def.facingLeft && (def.type === 'golem' || def.type === 'rail')) {
         ctx.scale(-recoilSquash, recoilStretch);
       } else {
         ctx.scale(recoilSquash, recoilStretch);
@@ -2497,6 +2642,8 @@ export class BattleEngine {
         ? 44
         : cr.type === 'brute'
         ? 36
+        : cr.type === 'shieldbearer'
+        ? 34
         : cr.type === 'bramble'
         ? 31
         : cr.type === 'splitter'
@@ -2545,8 +2692,8 @@ export class BattleEngine {
       ? -4 + Math.sin(cr.animPhase * 1.1) * 4
       : cr.type === 'thornking'
       ? -Math.abs(Math.sin(cr.animPhase * 0.65)) * 5
-      : cr.type === 'brute'
-      ? -Math.abs(Math.sin(cr.animPhase * 0.75)) * 6
+      : cr.type === 'brute' || cr.type === 'shieldbearer'
+      ? -Math.abs(Math.sin(cr.animPhase * 0.72)) * 5
       : -Math.abs(Math.sin(cr.animPhase)) * 7;
 
     const tilt = isFrozen
@@ -2557,7 +2704,7 @@ export class BattleEngine {
       ? Math.sin(cr.animPhase * 0.6) * 0.08
       : cr.type === 'cinderimp'
       ? Math.sin(cr.animPhase) * 0.11
-      : cr.type === 'thornking'
+      : cr.type === 'thornking' || cr.type === 'shieldbearer'
       ? Math.sin(cr.animPhase * 0.65) * 0.04
       : Math.sin(cr.animPhase) * 0.07;
 
@@ -2566,6 +2713,8 @@ export class BattleEngine {
         ? 124
         : cr.type === 'brute'
         ? 98
+        : cr.type === 'shieldbearer'
+        ? 90
         : cr.type === 'splitter'
         ? 84
         : cr.type === 'bramble'
@@ -2600,7 +2749,13 @@ export class BattleEngine {
       ctx.restore();
     } else {
       ctx.fillStyle =
-        cr.type === 'cinderimp' ? '#fb923c' : cr.type === 'wisp' || cr.type === 'bat' ? '#e879f9' : '#4d7c0f';
+        cr.type === 'cinderimp'
+          ? '#fb923c'
+          : cr.type === 'shieldbearer'
+          ? '#f59e0b'
+          : cr.type === 'wisp' || cr.type === 'bat'
+          ? '#e879f9'
+          : '#4d7c0f';
       ctx.beginPath();
       ctx.arc(0, -24 + bobY, cfg.isBoss ? 32 : 20, 0, Math.PI * 2);
       ctx.fill();
@@ -2624,7 +2779,13 @@ export class BattleEngine {
     }
 
     // Crisp HP bar (elevated for flying bats, wider & golden-rimmed for Thornking boss)
-    const barW = cfg.isBoss ? 78 : cr.type === 'brute' ? 60 : cr.type === 'wisp' || cr.type === 'bat' ? 44 : 52;
+    const barW = cfg.isBoss
+      ? 78
+      : cr.type === 'brute' || cr.type === 'shieldbearer'
+      ? 60
+      : cr.type === 'wisp' || cr.type === 'bat'
+      ? 44
+      : 52;
     const barH = cfg.isBoss ? 8 : 6;
     const barY =
       -drawH -
@@ -2657,6 +2818,37 @@ export class BattleEngine {
     if (ratio > 0) {
       this.roundRect(ctx, -barW / 2, barY, Math.max(4, barW * ratio), barH, 3);
       ctx.fill();
+    }
+
+    // Armored shield emblem beside HP bar (glows amber while armored, cyan cracked when shredded)
+    if ((cfg.armor || 0) > 0) {
+      const sx = -barW / 2 - 11;
+      const sy = barY + barH / 2;
+      const shredded = cr.armorShredTimer > 0;
+      ctx.save();
+      ctx.fillStyle = shredded ? '#22d3ee' : '#f59e0b';
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - 6);
+      ctx.lineTo(sx + 5.5, sy - 3.5);
+      ctx.lineTo(sx + 4.5, sy + 2.5);
+      ctx.lineTo(sx, sy + 6);
+      ctx.lineTo(sx - 4.5, sy + 2.5);
+      ctx.lineTo(sx - 5.5, sy - 3.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      if (shredded) {
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2, sy - 3.5);
+        ctx.lineTo(sx + 1, sy);
+        ctx.lineTo(sx - 1, sy + 3.5);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     ctx.restore();

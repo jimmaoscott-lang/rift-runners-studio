@@ -42,10 +42,10 @@ This document holds the core game design, pedagogical rules, economy numbers, to
 4. **Frost Totem** (`Glacier Totem` / `Blizzard Totem`)
 5. **Ember Cannon** (`Inferno Mortar` / `Cinder Repeater`, unlocked after World 1, Level 1)
 6. **Tesla Spire** (`Storm Conduit` / `Overcharge Beam`, unlocked after World 1, Level 4)
+7. **Rail Turret** (`Piercing Rail` / `Shatter Coil`, armor-piercing electromagnetic turret + 6-slot Side Loadout Selector, unlocked in World 2, Level 2)
 
 ### Planned World 2 Defenders
 
-- **Rail Turret** (armor-piercing electromagnetic turret + Side Loadout Selector, unlocking in World 2, Level 2)
 - **Gravity Snare** (crowd-control foundry trap, unlocking in World 2, Level 4 / Level 5)
 
 ### Hero Powers
@@ -68,12 +68,12 @@ Status: **Complete (Levels 1 to 5 Shipped)**
 
 ## 6. World 2: The Sunken Foundry (Digraphs and Blends)
 
-Status: **Level 1 Shipped; Levels 2 to 5 Planned**
+Status: **Levels 1 and 2 Shipped; Levels 3 to 5 Planned**
 
 | Level | ID | Name | Status | Phonics Focus | Enemies | Unlocks / Notes |
 | :---: | :--- | :--- | :---: | :--- | :--- | :--- |
 | 1 | `w2-l1` | Ashgate Outpost | **Shipped** | `sh`, `ch` digraphs + runes | Cinder Imps, Rift Bats, Bramble Stalkers | Playtested and cleared on Hard. Pure Leda `snd:sh` and `snd:ch` phoneme clips shipped; multi-voice Azure calibrated. |
-| 2 | `w2-l2` | Smelter Causeway | Planned | `th` (unvoiced + voiced), `wh`, `-ck` digraphs + runes | Shieldbearers (armored), Cinder Imps, Bramble Stalkers | Unlocks Rail Turret + Side Loadout Selector. Azure cutoffs and `snd:th`, `snd:wh`, `snd:ck` manifest entries already prepared. |
+| 2 | `w2-l2` | Smelter Causeway | **Shipped** | `th` (unvoiced + voiced), `wh`, `-ck` digraphs + runes | Shieldbearers (armored), Cinder Imps, Bramble Stalkers | Unlocks Rail Turret + 6-slot Side Loadout Selector. Leda audio, Spanish ELL support, and multi-voice Azure cutoffs active. |
 | 3 | `w2-l3` | Ironrift Crossing | Planned | Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`) + runes | Rift Shriekers (armored flyers), Shieldbearers, Cinder Imps | Anti-air + armor challenge. Needs blend Azure calibration before ship. |
 | 4 | `w2-l4` | Crucible Bastion | Planned | Initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) + runes | Forge Weavers (healers/shielders), Rift Shriekers, Shieldbearers | Unlocks Furnace Core boss stage + Gravity Snare. Needs S-blend/final-blend Azure calibration. |
 | 5 | `w2-l5` | The Furnace Core | Planned | Boss Finale: all World 2 digraphs and blends | The Iron Warden (Boss), Forge Weavers, Shieldbearers | Full World 2 toolkit finale. |

@@ -2,6 +2,26 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-25 (Part 4): World 2, Level 2 (`Smelter Causeway`), Shieldbearers, Rail Turret, and Loadout Selector
+
+### Completed
+- **World 2, Level 2: `Smelter Causeway` (`src/data/level1.ts`, `src/game/sprites.ts`, `src/components/BattleHUD.tsx`)**:
+  - Shipped playable `w2-l2` teaching `th` (unvoiced and voiced), `wh`, and `-ck` digraphs with 22 real words, 9 classroom-safe nonsense runes (`thab`, `thip`, `thog`, `whep`, `whib`, `whum`, `teck`, `bick`, `zock`), 5 tuned waves, 10 hand-measured stone build pads, and 4 viaduct trail spots.
+  - Generated and compressed the custom 2.5D hand-inked Smelter Causeway viaduct map plus painterly cast-locked opening and victory cutscenes anchored to the World 1 Rift Warden reference.
+- **Armored Enemy: Shieldbearer (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Added the armored `shieldbearer` enemy (`45%` damage reduction against standard non-piercing hits, with amber shield-deflect sparks and a live shield icon beside its HP bar that cracks cyan when shredded).
+  - Updated Meteor and Mega Forge shockwaves to pierce armor cleanly alongside Rail Turret shots.
+- **New Defender: Rail Turret + 6-Slot Battle Loadout Selector (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`, `src/App.tsx`, `src/lib/audio.ts`)**:
+  - Added the electromagnetic `rail` defender prioritizing armored enemies and bosses, with Level 3 specialties **Piercing Rail** (line-piercing beam hitting up to 4 foes) and **Shatter Coil** (heavy armor-cracking round that shreds shields for 5 seconds).
+  - Added a clean `Loadout` button and 6-slot selector modal whenever more than 6 defenders are unlocked so the bottom defender bar stays uncluttered on 15-inch Chromebooks as World 2 adds more towers.
+- **Audio and Bilingual Spanish ELL Coverage (`src/data/ellSpanish.ts`, `public/assets/audio/`)**:
+  - Generated Leda Sound Rule clips (`th`, `wh`, `ck`) and all 5 `w2-l2` cutscene narrations as compact 64 kbps mono `.mp3` files, and packed `w2-l2` words and runes into `public/assets/audio/words/sprite.mp3`.
+  - Added Spanish glosses for all 22 `w2-l2` real words, bilingual Rail Turret and specialty descriptions, and Spanish captions for all 5 `w2-l2` cutscene beats.
+
+### Next Up
+1. Playtest World 2, Level 2 (`Smelter Causeway`), Rail Turret upgrades, and the 6-slot Loadout picker, then push to GitHub once verified.
+2. Build World 2, Level 3: `Ironrift Crossing` (L-blends and R-blends `bl`, `cl`, `fr`, `gr`, armored flying Rift Shriekers, and multi-voice Azure blend calibration).
+
 ## 2026-11-25 (Part 3): ELL Batch 3 (Accommodation Snapshot) and 15-Inch Chromebook Layout Polish
 
 ### Completed

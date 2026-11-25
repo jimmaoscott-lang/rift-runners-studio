@@ -13,7 +13,7 @@ Students play a dark-fantasy tower-defense adventure where decoding words powers
 
 Play: [https://jimmaoscott-lang.github.io/rift-runners-studio/](https://jimmaoscott-lang.github.io/rift-runners-studio/)
 
-Hold the Rift is a 2.5D illustrated tower defense powered by the Rune Forge. World 1 (The Thornwood, Levels 1 to 5) and World 2 Level 1 (Ashgate Outpost) are playable, with live Azure Speak Mode, four difficulty tiers, six defenders, and Leda voice narration.
+Hold the Rift is a 2.5D illustrated tower defense powered by the Rune Forge. World 1 (The Thornwood, Levels 1 to 5) and World 2 Levels 1 and 2 (Ashgate Outpost and Smelter Causeway) are playable, with live Azure Speak Mode, four difficulty tiers, seven defenders with a 6-slot Loadout selector, Spanish ELL accommodations, and Leda voice narration.
 
 ## Voice Verification Requirements
 

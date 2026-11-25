@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Gem } from 'lucide-react';
+import { Check, Gem, SlidersHorizontal, X } from 'lucide-react';
 import {
   CutsceneId,
   DEFENDERS,
@@ -250,6 +250,8 @@ export default function App() {
   const [waveBanner, setWaveBanner] = useState<WaveBannerInfo | null>(null);
   const [showHalfSpeedTip, setShowHalfSpeedTip] = useState(false);
   const [ellOpen, setEllOpen] = useState(false);
+  const [loadoutOpen, setLoadoutOpen] = useState(false);
+  const [activeLoadout, setActiveLoadout] = useState<DefenderType[]>([]);
 
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
@@ -276,10 +278,83 @@ export default function App() {
 
   const closeEllModal = useCallback(() => {
     setEllOpen(false);
-    if (state.scene === 'battle' && !state.settingsOpen) {
+    if (state.scene === 'battle' && !state.settingsOpen && !loadoutOpen) {
       engineRef.current?.setExternalHold(false);
     }
-  }, [state.scene, state.settingsOpen]);
+  }, [state.scene, state.settingsOpen, loadoutOpen]);
+
+  const openLoadoutModal = useCallback(() => {
+    sound.sfx('tap');
+    if (state.scene === 'battle') {
+      engineRef.current?.setExternalHold(true);
+    }
+    setLoadoutOpen(true);
+  }, [state.scene]);
+
+  const closeLoadoutModal = useCallback(() => {
+    setLoadoutOpen(false);
+    if (state.scene === 'battle' && !state.settingsOpen && !ellOpen) {
+      engineRef.current?.setExternalHold(false);
+    }
+  }, [state.scene, state.settingsOpen, ellOpen]);
+
+  // Keep a default 6-slot loadout whenever a level unlocks more than 6 defenders
+  // (prioritizes the newest unlocked tower at the right end of the bar so it is immediately ready)
+  useEffect(() => {
+    const unlocked = activeLevel.defenders;
+    if (unlocked.length <= 6) {
+      setActiveLoadout(unlocked);
+      return;
+    }
+    setActiveLoadout((prev) => {
+      const validPrev = prev.filter((id) => unlocked.includes(id));
+      const newest = unlocked[unlocked.length - 1];
+      if (validPrev.length === 6 && validPrev.includes(newest)) {
+        return validPrev;
+      }
+      // Smart default: keep archer, spike, frost, ember, tesla + newest unlocked tower(s)
+      const preferred: DefenderType[] = ['archer', 'spike', 'frost', 'ember', 'tesla', newest];
+      const next: DefenderType[] = [];
+      for (const id of preferred) {
+        if (unlocked.includes(id) && !next.includes(id) && next.length < 6) {
+          next.push(id);
+        }
+      }
+      for (const id of unlocked) {
+        if (!next.includes(id) && next.length < 6) {
+          next.push(id);
+        }
+      }
+      return next;
+    });
+  }, [activeLevel]);
+
+  const toggleLoadoutDefender = useCallback(
+    (id: DefenderType) => {
+      sound.sfx('tap');
+      setActiveLoadout((prev) => {
+        if (prev.includes(id)) {
+          if (prev.length <= 1) return prev;
+          if (snap.buildSel === id) {
+            engineRef.current?.selectBuild(null);
+          }
+          return prev.filter((d) => d !== id);
+        }
+        if (prev.length >= 6) {
+          return prev;
+        }
+        const combined = [...prev, id];
+        // Keep canonical level order so positions stay predictable
+        return activeLevel.defenders.filter((d) => combined.includes(d));
+      });
+    },
+    [activeLevel.defenders, snap.buildSel]
+  );
+
+  const visibleDefenders =
+    activeLevel.defenders.length > 6 && activeLoadout.length > 0
+      ? activeLoadout
+      : activeLevel.defenders;
 
   const locks = getPatternLocks(
     progress,
@@ -338,6 +413,7 @@ export default function App() {
           frost: bank.sprites.frost.dataUrl,
           ember: bank.sprites.ember.dataUrl,
           tesla: bank.sprites.tesla.dataUrl,
+          rail: bank.sprites.rail.dataUrl,
         });
       })
       .catch(() => {
@@ -842,7 +918,7 @@ export default function App() {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 overflow-x-auto">
-                {activeLevel.defenders.map((id) => {
+                {visibleDefenders.map((id) => {
                   const def = DEFENDERS[id];
                   const active = snap.buildSel === id;
                   const canAfford = snap.crystals >= def.cost;
@@ -899,6 +975,22 @@ export default function App() {
                     </button>
                   );
                 })}
+                {activeLevel.defenders.length > 6 && (
+                  <button
+                    type="button"
+                    onClick={openLoadoutModal}
+                    title="Swap which 6 defenders appear on your battle bar"
+                    className="flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-amber-400/75 bg-amber-950/55 px-2.5 py-1.5 text-amber-200 hover:border-amber-300 hover:bg-amber-500/25 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <SlidersHorizontal className="h-4 w-4 text-amber-300" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap leading-none">
+                      Loadout
+                    </span>
+                    <span className="font-tabular text-[10px] font-bold text-amber-300/90 leading-none">
+                      {visibleDefenders.length}/{activeLevel.defenders.length}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Clean placement guidance on the right side of the bottom bar */}
@@ -988,7 +1080,7 @@ export default function App() {
           onOpenEll={openEllModal}
           onClose={() => {
             dispatch({ type: 'SET_SETTINGS_OPEN', open: false });
-            if (state.scene === 'battle' && !ellOpen) {
+            if (state.scene === 'battle' && !ellOpen && !loadoutOpen) {
               engineRef.current?.setExternalHold(false);
             }
           }}
@@ -1001,6 +1093,134 @@ export default function App() {
           onChange={handleSettingsChange}
           onClose={closeEllModal}
         />
+      )}
+
+      {loadoutOpen && activeLevel.defenders.length > 6 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+          onClick={closeLoadoutModal}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-2xl border-2 border-amber-400/75 bg-[#151030] p-5 text-slate-100 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                  Battle Loadout ({visibleDefenders.length} / 6 Active)
+                </div>
+                <h2 className="mt-0.5 font-display text-xl font-extrabold text-white">
+                  Choose Your 6 Active Defenders
+                </h2>
+                <p className="mt-1 text-xs text-slate-300">
+                  Tap any defender to bench or activate it. Battle pauses automatically while you swap.
+                </p>
+                {settings.spanishCaptions && (
+                  <p className="mt-0.5 text-xs text-cyan-200/90">
+                    Toca cualquier defensor para activarlo o guardarlo. La batalla se pausa mientras eliges tus 6 defensores.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={closeLoadoutModal}
+                aria-label="Close Loadout"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {activeLevel.defenders.map((id) => {
+                const def = DEFENDERS[id];
+                const esDef = SPANISH_DEFENDERS[id];
+                const isSelected = visibleDefenders.includes(id);
+                const fullAndBench = !isSelected && visibleDefenders.length >= 6;
+                const thumb = defenderThumbs[id];
+
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={fullAndBench}
+                    onClick={() => toggleLoadoutDefender(id)}
+                    className={`flex items-start gap-3 rounded-xl border-2 p-2.5 text-left transition-all ${
+                      isSelected
+                        ? 'border-cyan-400/85 bg-[#1e1a4a] text-white cursor-pointer hover:brightness-110'
+                        : fullAndBench
+                        ? 'border-slate-800 bg-slate-900/55 text-slate-500 cursor-not-allowed opacity-70'
+                        : 'border-purple-500/45 bg-[#110d27] text-slate-200 cursor-pointer hover:border-amber-300/75 hover:bg-[#1a153a]'
+                    }`}
+                  >
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#0c091d] border border-purple-500/30">
+                      {thumb ? (
+                        <img src={thumb} alt={def.name} className="h-10 w-10 object-contain" />
+                      ) : (
+                        <div className="h-8 w-8 rounded bg-purple-900/60" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-extrabold text-white truncate">
+                          {def.name}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
+                            isSelected
+                              ? 'bg-cyan-400 text-slate-950'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <>
+                              <Check className="h-3 w-3" />
+                              Active
+                            </>
+                          ) : (
+                            'Benched'
+                          )}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] font-bold">
+                        <span className="inline-flex items-center gap-0.5 font-tabular text-cyan-300">
+                          <Gem className="h-3 w-3 fill-cyan-300/30" />
+                          {def.cost}
+                        </span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-purple-200/85">
+                          {def.kind === 'tower' ? 'Stone pad' : 'Trail spot'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-snug text-slate-300">{def.desc}</p>
+                      {settings.spanishCaptions && esDef && (
+                        <p className="mt-0.5 text-[10px] leading-snug text-cyan-200/90">
+                          <span className="font-bold text-cyan-100">{esDef.nameEs}:</span>{' '}
+                          {esDef.descEs}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-purple-500/30 pt-3">
+              <span className="text-xs text-slate-400">
+                {visibleDefenders.length >= 6
+                  ? 'All 6 slots filled. Tap an active defender first to swap another in.'
+                  : `Pick ${6 - visibleDefenders.length} more defender${6 - visibleDefenders.length === 1 ? '' : 's'} to fill your bar.`}
+              </span>
+              <button
+                type="button"
+                onClick={closeLoadoutModal}
+                className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-extrabold text-slate-950 hover:bg-cyan-300 cursor-pointer shrink-0"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

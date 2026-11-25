@@ -118,6 +118,9 @@ const VOWEL_LOCK_STYLES: Record<string, { icon: string; filled: string; btn: str
   u: LOCK_STYLE_PALETTE[4],
   sh: LOCK_STYLE_PALETTE[3],
   ch: LOCK_STYLE_PALETTE[4],
+  th: LOCK_STYLE_PALETTE[0],
+  wh: LOCK_STYLE_PALETTE[4],
+  ck: LOCK_STYLE_PALETTE[2],
 };
 
 function getLockStyle(pattern: PatternKey, index: number) {
