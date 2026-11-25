@@ -121,6 +121,10 @@ const VOWEL_LOCK_STYLES: Record<string, { icon: string; filled: string; btn: str
   th: LOCK_STYLE_PALETTE[0],
   wh: LOCK_STYLE_PALETTE[4],
   ck: LOCK_STYLE_PALETTE[2],
+  bl: LOCK_STYLE_PALETTE[4],
+  cl: LOCK_STYLE_PALETTE[0],
+  fr: LOCK_STYLE_PALETTE[3],
+  gr: LOCK_STYLE_PALETTE[1],
 };
 
 function getLockStyle(pattern: PatternKey, index: number) {
@@ -659,20 +663,32 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
         </button>
       </div>
 
-      {/* Placed Defender Upgrade / Specialty / Sell Popover (auto-flips below upper towers so never clipped) */}
+      {/* Placed Defender Upgrade / Specialty / Sell Popover (kept safely inside battlefield viewport) */}
       {snap.selectedDef && selectedDefCfg && (() => {
-        const placeBelow = snap.selectedDef.screenY < 290;
-        return (
-          <div
-            style={{
+        const isSpecialtyPicker = snap.selectedDef.level === 3 && !snap.selectedDef.spec;
+        const placeBelow = snap.selectedDef.screenY < 260;
+        const sideRight = snap.selectedDef.screenX < 380;
+        const popoverStyle: React.CSSProperties = isSpecialtyPicker
+          ? {
+              left: `clamp(152px, ${Math.round(
+                snap.selectedDef.screenX + (sideRight ? 175 : -175)
+              )}px, calc(100% - 152px))`,
+              top: '50%',
+            }
+          : {
               left: `clamp(142px, ${Math.round(snap.selectedDef.screenX)}px, calc(100% - 142px))`,
               top: placeBelow
-                ? `clamp(52px, ${Math.round(snap.selectedDef.screenY + 26)}px, calc(100% - 260px))`
-                : `clamp(260px, ${Math.round(snap.selectedDef.screenY - 22)}px, calc(100% - 16px))`,
-            }}
-            className={`pointer-events-auto absolute z-40 w-64 -translate-x-1/2 ${
-              placeBelow ? '' : '-translate-y-full'
-            } max-h-[calc(100%-64px)] overflow-y-auto rounded-2xl border-2 border-cyan-400/85 bg-[#151030]/98 p-3 shadow-2xl text-slate-100`}
+                ? `clamp(52px, ${Math.round(snap.selectedDef.screenY + 26)}px, calc(100% - 220px))`
+                : `clamp(220px, ${Math.round(snap.selectedDef.screenY - 22)}px, calc(100% - 14px))`,
+            };
+        return (
+          <div
+            style={popoverStyle}
+            className={`pointer-events-auto absolute z-40 ${
+              isSpecialtyPicker ? 'w-72 -translate-y-1/2 max-h-[calc(100%-84px)]' : 'w-64 max-h-[calc(100%-64px)]'
+            } -translate-x-1/2 ${
+              !isSpecialtyPicker && !placeBelow ? '-translate-y-full' : ''
+            } overflow-y-auto rounded-2xl border-2 border-cyan-400/85 bg-[#151030]/98 p-2.5 shadow-2xl text-slate-100`}
           >
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -693,7 +709,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                   ? esDef.spec[snap.selectedDef.spec].descEs
                   : esDef.descEs;
                 return (
-                  <div className="mt-1 text-[11px] leading-snug text-cyan-200/90">
+                  <div className="mt-0.5 text-[10px] leading-snug text-cyan-200/90">
                     <span className="font-bold text-cyan-100">{esTitle}:</span> {esDesc}
                   </div>
                 );
@@ -708,7 +724,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
             </button>
           </div>
 
-          <div className="mt-2.5 space-y-2">
+          <div className="mt-2 space-y-1.5">
             {nextUpCost !== null && (
               <button
                 type="button"
@@ -728,7 +744,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               </button>
             )}
 
-            {snap.selectedDef.level === 3 && !snap.selectedDef.spec && (
+            {isSpecialtyPicker && (
               <div className="space-y-1.5">
                 <div className="text-[11px] font-bold text-amber-300">Pick a specialty:</div>
                 {(['a', 'b'] as const).map((spKey) => {

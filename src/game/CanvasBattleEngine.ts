@@ -1066,7 +1066,7 @@ export class BattleEngine {
     if (this.bonusActive) {
       this.callbacks.onToast(
         `Bonus Wave ${this.bonusWave} of ${this.level.bonusSurgeWaves} incoming!`,
-        `battle.waveStart.${this.wave}`
+        `battle.waveStart.${this.bonusWave}`
       );
     } else {
       this.callbacks.onToast(
@@ -1172,6 +1172,8 @@ export class BattleEngine {
       const burstCol =
         cr.type === 'wisp' || cr.type === 'bat'
           ? '#f0abfc'
+          : cr.type === 'shrieker'
+          ? '#fb923c'
           : cr.type === 'cinderimp'
           ? '#fb923c'
           : cr.type === 'shieldbearer'
@@ -1391,16 +1393,17 @@ export class BattleEngine {
         (cr.type === 'wisp' ||
           cr.type === 'cinderimp' ||
           cr.type === 'bat' ||
+          cr.type === 'shrieker' ||
           cr.type === 'bramble' ||
           cr.type === 'splitter' ||
           cr.type === 'thornking') &&
         !this.focusMode &&
         Math.random() <
-          dt * (cr.type === 'wisp' || cr.type === 'cinderimp' || cr.type === 'thornking' ? 10 : 5)
+          dt * (cr.type === 'wisp' || cr.type === 'cinderimp' || cr.type === 'shrieker' || cr.type === 'thornking' ? 9 : 5)
       ) {
         this.particles.push({
           x: cr.x + (Math.random() - 0.5) * (cr.type === 'thornking' ? 32 : 12),
-          y: cr.y - (cr.type === 'bat' ? 42 : cr.type === 'cinderimp' ? 18 : 24),
+          y: cr.y - (cr.type === 'bat' || cr.type === 'shrieker' ? 42 : cr.type === 'cinderimp' ? 18 : 24),
           vx: (Math.random() - 0.5) * 18,
           vy: -12 - Math.random() * 14,
           r: 2.2 + Math.random() * 2.2,
@@ -1409,6 +1412,10 @@ export class BattleEngine {
               ? Math.random() < 0.5
                 ? '#fb923c'
                 : '#fde047'
+              : cr.type === 'shrieker'
+              ? Math.random() < 0.5
+                ? '#fb923c'
+                : '#c084fc'
               : cr.type === 'splitter'
               ? Math.random() < 0.5
                 ? '#38e0ff'
@@ -2644,6 +2651,8 @@ export class BattleEngine {
         ? 36
         : cr.type === 'shieldbearer'
         ? 34
+        : cr.type === 'shrieker'
+        ? 26
         : cr.type === 'bramble'
         ? 31
         : cr.type === 'splitter'
@@ -2666,7 +2675,7 @@ export class BattleEngine {
 
     // Ground contact shadow
     ctx.fillStyle =
-      cr.type === 'bat'
+      cr.type === 'bat' || cr.type === 'shrieker'
         ? 'rgba(35, 18, 60, 0.28)'
         : cr.type === 'wisp'
         ? 'rgba(107, 33, 168, 0.4)'
@@ -2679,11 +2688,13 @@ export class BattleEngine {
 
     // Animated locomotion by archetype
     const bobY = isFrozen
-      ? cr.type === 'bat'
-        ? -20
+      ? cr.type === 'bat' || cr.type === 'shrieker'
+        ? -22
         : 0
       : cr.type === 'bat'
       ? -26 + Math.sin(cr.animPhase * 1.7) * 7
+      : cr.type === 'shrieker'
+      ? -28 + Math.sin(cr.animPhase * 1.35) * 8
       : cr.type === 'wisp'
       ? -12 + Math.sin(cr.animPhase) * 6
       : cr.type === 'cinderimp'
@@ -2698,8 +2709,8 @@ export class BattleEngine {
 
     const tilt = isFrozen
       ? 0
-      : cr.type === 'bat'
-      ? Math.sin(cr.animPhase * 0.9) * 0.1
+      : cr.type === 'bat' || cr.type === 'shrieker'
+      ? Math.sin(cr.animPhase * 0.9) * 0.09
       : cr.type === 'wisp'
       ? Math.sin(cr.animPhase * 0.6) * 0.08
       : cr.type === 'cinderimp'
@@ -2717,6 +2728,8 @@ export class BattleEngine {
         ? 90
         : cr.type === 'splitter'
         ? 84
+        : cr.type === 'shrieker'
+        ? 82
         : cr.type === 'bramble'
         ? 80
         : cr.type === 'thornback'
@@ -2751,7 +2764,7 @@ export class BattleEngine {
       ctx.fillStyle =
         cr.type === 'cinderimp'
           ? '#fb923c'
-          : cr.type === 'shieldbearer'
+          : cr.type === 'shieldbearer' || cr.type === 'shrieker'
           ? '#f59e0b'
           : cr.type === 'wisp' || cr.type === 'bat'
           ? '#e879f9'
@@ -2778,11 +2791,13 @@ export class BattleEngine {
       ctx.stroke();
     }
 
-    // Crisp HP bar (elevated for flying bats, wider & golden-rimmed for Thornking boss)
+    // Crisp HP bar (elevated for flying creatures, wider & golden-rimmed for Thornking boss)
     const barW = cfg.isBoss
       ? 78
       : cr.type === 'brute' || cr.type === 'shieldbearer'
       ? 60
+      : cr.type === 'shrieker'
+      ? 54
       : cr.type === 'wisp' || cr.type === 'bat'
       ? 44
       : 52;
@@ -2790,7 +2805,7 @@ export class BattleEngine {
     const barY =
       -drawH -
       12 +
-      (cr.type === 'bat' ? -22 : cr.type === 'wisp' ? -8 : cfg.isBoss ? -6 : 0);
+      (cr.type === 'bat' || cr.type === 'shrieker' ? -22 : cr.type === 'wisp' ? -8 : cfg.isBoss ? -6 : 0);
     const ratio = Math.max(0, Math.min(1, cr.hp / Math.max(1, cr.maxHp)));
 
     if (cfg.isBoss) {

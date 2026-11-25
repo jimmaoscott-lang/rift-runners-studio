@@ -3,7 +3,11 @@ export function assetUrl(p: string): string {
     return p;
   }
   const base = import.meta.env.BASE_URL || '/';
-  return `${base.replace(/\/$/, '')}/${p.replace(/^\/+/, '')}`;
+  const cleanBase = base.replace(/\/$/, '');
+  if (cleanBase && (p === cleanBase || p.startsWith(`${cleanBase}/`))) {
+    return p;
+  }
+  return `${cleanBase}/${p.replace(/^\/+/, '')}`;
 }
 
 export function isStaticHosting(): boolean {

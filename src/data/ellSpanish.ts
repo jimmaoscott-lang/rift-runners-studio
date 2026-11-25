@@ -73,6 +73,26 @@ export const SPANISH_RULE_TIPS: Record<string, SpanishRuleTip> = {
     tipEs: 'Termina la palabra con un golpe rápido y seco desde la parte trasera de la lengua.',
     bridgeEs: 'Las dos letras juntas hacen un solo sonido /k/, como la "c" fuerte en "casa", al final de "lock".',
   },
+  bl: {
+    labelEs: 'Combinación "bl"',
+    tipEs: 'Junta los labios para la "b" y sube enseguida la punta de la lengua para la "l", sin pausa entre ellas.',
+    bridgeEs: 'Muy parecido a "bl" en español ("blanco", "bloque"). Escucha ambos sonidos juntos en "black" y "block".',
+  },
+  cl: {
+    labelEs: 'Combinación "cl"',
+    tipEs: 'Haz una "c" fuerte y limpia atrás de la boca y deslízala directo hacia la "l".',
+    bridgeEs: 'Igual que "cl" en español ("clase", "claro"). Mantén los dos sonidos unidos en "clap" y "clock".',
+  },
+  fr: {
+    labelEs: 'Combinación "fr"',
+    tipEs: 'Sopla una "f" suave sobre el labio inferior y lleva la lengua un poco hacia atrás para la "r" suave del inglés.',
+    bridgeEs: 'Se parece a "fr" en "frío", pero la "r" del inglés es suave sin vibrar la punta de la lengua, como en "frog" y "fresh".',
+  },
+  gr: {
+    labelEs: 'Combinación "gr"',
+    tipEs: 'Empieza con una "g" firme atrás de la garganta y deslízala hacia la "r" suave del inglés.',
+    bridgeEs: 'Similar a "gr" en "grande", pero con la "r" suave del inglés sin vibración, como en "grab" y "grip".',
+  },
 };
 
 export function getSpanishRuleTip(pattern: string): SpanishRuleTip | null {
@@ -83,6 +103,12 @@ export function getSpanishRuleTip(pattern: string): SpanishRuleTip | null {
 export const WORD_GLOSSES: Record<string, WordGloss> = {
   back: { es: 'espalda / atrás', enDef: 'The rear side of something, or returning where you came from.' },
   bath: { es: 'baño', enDef: 'A wash in a tub of warm water.' },
+  black: { es: 'negro', enDef: 'The darkest color, like coal or night.' },
+  blip: { es: 'punto en el radar / breve señal', enDef: 'A quick small dot on a screen or a brief sudden change.' },
+  blob: { es: 'gota espesa / masa', enDef: 'A soft, thick drop or shapeless lump of something.' },
+  block: { es: 'bloque / bloquear', enDef: 'A solid square piece, or to stop something from getting past.', cognate: true },
+  blot: { es: 'mancha / secar a toques', enDef: 'A dark spot of ink or liquid, or to dab liquid away.' },
+  blush: { es: 'sonrojarse', enDef: 'To turn pink or red in the face from shyness or heat.' },
   box: { es: 'caja', enDef: 'A square container for holding things.' },
   bus: { es: 'autobús', enDef: 'A large vehicle that carries many passengers.', cognate: true },
   cab: { es: 'taxi', enDef: 'A car you pay to drive you somewhere.' },
@@ -94,6 +120,12 @@ export const WORD_GLOSSES: Record<string, WordGloss> = {
   chop: { es: 'cortar / picar', enDef: 'To cut something into pieces with a quick stroke.' },
   chug: { es: 'avanzar fuerte / tragar', enDef: 'To move steadily like an engine, or drink quickly.' },
   chum: { es: 'amigo / compañero', enDef: 'A close friend or buddy.' },
+  clam: { es: 'almeja', enDef: 'A sea creature that lives inside a two-part shell.' },
+  clap: { es: 'aplaudir', enDef: 'To strike your hands together to make a sharp sound.' },
+  clip: { es: 'sujetador / recortar', enDef: 'A small fastener that holds things together, or a short video segment.', cognate: true },
+  clock: { es: 'reloj', enDef: 'A device that shows the time of day.' },
+  clog: { es: 'atascar / tapar', enDef: 'To block a pipe or path so nothing flows through.' },
+  club: { es: 'club / garrote', enDef: 'A group of people who meet for an activity, or a heavy stick.', cognate: true },
   cob: { es: 'mazorca', enDef: 'The center core of an ear of corn.' },
   cub: { es: 'cachorro', enDef: 'A young bear, lion, or wolf.' },
   cut: { es: 'cortar', enDef: 'To slice or divide with a blade or scissors.' },
@@ -109,8 +141,20 @@ export const WORD_GLOSSES: Record<string, WordGloss> = {
   fin: { es: 'aleta', enDef: 'A flat wing-like part on a fish or shark.' },
   fit: { es: 'en forma / quedar bien', enDef: 'Healthy and strong, or the right size.' },
   fog: { es: 'niebla', enDef: 'Thick low clouds near the ground.' },
+  fresh: { es: 'fresco / nuevo', enDef: 'Clean, cool, or newly made.', cognate: true },
+  fret: { es: 'preocuparse / traste', enDef: 'To feel worried and tense, or a metal bar on a guitar neck.' },
+  frill: { es: 'volante / adorno extra', enDef: 'A decorative pleated edge or an unnecessary extra.' },
+  frock: { es: 'túnica / vestido', enDef: 'A long loose robe or dress.' },
+  frog: { es: 'rana', enDef: 'A small jumping creature that lives near water.' },
+  frost: { es: 'escarcha', enDef: 'A thin layer of white ice crystals formed in freezing air.' },
   fun: { es: 'diversión', enDef: 'Something enjoyable or entertaining.' },
   gas: { es: 'gas / gasolina', enDef: 'Air-like matter, or fuel for a car.', cognate: true },
+  grab: { es: 'agarrar', enDef: 'To take hold of something quickly and firmly.' },
+  grid: { es: 'red / cuadrícula', enDef: 'A network of crossing lines or power stations.' },
+  grin: { es: 'sonrisa amplia', enDef: 'A wide, confident smile.' },
+  grip: { es: 'agarre / sujetar firme', enDef: 'A tight hold on something so it does not slip.' },
+  grit: { es: 'determinación / arenilla', enDef: 'Tough courage and persistence, or tiny grains of stone.' },
+  grub: { es: 'larva / comida', enDef: 'A small insect larva, or casual slang for food.' },
   hat: { es: 'sombrero / gorra', enDef: 'Something you wear on your head.' },
   hem: { es: 'dobladillo', enDef: 'The folded and stitched edge of cloth.' },
   hit: { es: 'golpear', enDef: 'To strike something with force.' },
@@ -487,6 +531,26 @@ export const SPANISH_CUTSCENE_CAPTIONS: Record<string, string[]> = {
   'w2-l02-def-v1-1': [
     'Los Portadores de Escudo resistieron el fuego ligero y alcanzaron el Ancla.',
     'Consejo: coloca una Torreta Riel cerca de la curva central para perforar su armadura.',
+  ],
+  'w2-l03-open-v1-1': [
+    'Chilladores de Grieta blindados descienden desde el cielo sobre el Cruce de Hierro.',
+    'Vuelan sobre los Fosos de Púas y Gólems, y sus placas de acero bloquean flechas ligeras.',
+  ],
+  'w2-l03-open-v1-2': [
+    'Combina Torretas Riel y Agujas Tesla en la isla central para despejar los cielos.',
+    'Sella las combinaciones "bl", "cl", "fr" y "gr" en la Forja para abrir la Oleada Final.',
+  ],
+  'w2-l03-vic-v1-1': [
+    '¡Cruce de Hierro asegurado! Los Chilladores blindados huyeron sobre el abismo.',
+    'Tus lecturas limpias de "bl", "cl", "fr" y "gr" mantuvieron firme la defensa aérea.',
+  ],
+  'w2-l03-vic-v1-2': [
+    'Más allá del puente arde el Bastión del Crisol, última barrera antes del núcleo.',
+    'Nivel 3 completado. Próxima etapa: Bastión del Crisol.',
+  ],
+  'w2-l03-def-v1-1': [
+    'Los Chilladores blindados cruzaron el cielo y golpearon el Ancla.',
+    'Consejo: coloca Torretas Riel y Agujas Tesla en el centro con un Tótem de Escarcha para frenarlos.',
   ],
 };
 

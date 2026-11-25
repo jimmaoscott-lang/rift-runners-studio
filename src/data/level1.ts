@@ -123,7 +123,8 @@ export type CreatureType =
   | 'brute'
   | 'thornking'
   | 'cinderimp'
-  | 'shieldbearer';
+  | 'shieldbearer'
+  | 'shrieker';
 
 export interface CreatureDef {
   id: CreatureType;
@@ -345,6 +346,38 @@ export const PATTERN_RULES: Record<string, PatternRule> = {
     word: 'lock',
     ruleAudioId: 'rule.ck.v2',
     ruleLine: 'Right after a short vowel, c and k team up to make one sound.',
+  },
+  bl: {
+    label: 'bl blend',
+    shortLabel: 'bl',
+    show: '/bl/',
+    word: 'black',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  cl: {
+    label: 'cl blend',
+    shortLabel: 'cl',
+    show: '/kl/',
+    word: 'clap',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  fr: {
+    label: 'fr blend',
+    shortLabel: 'fr',
+    show: '/fr/',
+    word: 'frog',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  gr: {
+    label: 'gr blend',
+    shortLabel: 'gr',
+    show: '/gr/',
+    word: 'grab',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
   },
 };
 
@@ -743,6 +776,18 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     hit: 24,
     size: 1.18,
     armor: 0.45,
+  },
+  shrieker: {
+    id: 'shrieker',
+    name: 'Rift Shrieker',
+    hp: 105,
+    speed: 2.35,
+    anchor: 2,
+    shards: 6,
+    hit: 16,
+    size: 1.05,
+    flying: true,
+    armor: 0.4,
   },
 };
 
@@ -2646,23 +2691,273 @@ export const W2_LEVEL2: LevelConfig = {
   cutscenes: W2_L2_CUTSCENES,
 };
 
-// World 2 Roadmap Preview Nodes (Levels 3-5 visible on World 2 map, unlocked as built)
+export const W2_L3_REAL_WORDS: WordEntry[] = [
+  // bl blend (6)
+  { w: 'black', kind: 'real', pattern: 'bl', tiles: ['bl', 'a', 'ck'], targetTileIdx: 0, options: ['back', 'block'], es: 'negro' },
+  { w: 'block', kind: 'real', pattern: 'bl', tiles: ['bl', 'o', 'ck'], targetTileIdx: 0, options: ['lock', 'black'], es: 'bloque', cognate: true },
+  { w: 'blip', kind: 'real', pattern: 'bl', tiles: ['bl', 'i', 'p'], targetTileIdx: 0, options: ['lip', 'blob'], es: 'punto en el radar' },
+  { w: 'blob', kind: 'real', pattern: 'bl', tiles: ['bl', 'o', 'b'], targetTileIdx: 0, options: ['bob', 'blot'], es: 'gota espesa' },
+  { w: 'blot', kind: 'real', pattern: 'bl', tiles: ['bl', 'o', 't'], targetTileIdx: 0, options: ['lot', 'blob'], es: 'mancha' },
+  { w: 'blush', kind: 'real', pattern: 'bl', tiles: ['bl', 'u', 'sh'], targetTileIdx: 0, options: ['gush', 'rush'], es: 'sonrojarse' },
+  // cl blend (6)
+  { w: 'clap', kind: 'real', pattern: 'cl', tiles: ['cl', 'a', 'p'], targetTileIdx: 0, options: ['cap', 'clip'], es: 'aplaudir' },
+  { w: 'clip', kind: 'real', pattern: 'cl', tiles: ['cl', 'i', 'p'], targetTileIdx: 0, options: ['lip', 'clap'], es: 'sujetador', cognate: true },
+  { w: 'clock', kind: 'real', pattern: 'cl', tiles: ['cl', 'o', 'ck'], targetTileIdx: 0, options: ['lock', 'clog'], es: 'reloj' },
+  { w: 'club', kind: 'real', pattern: 'cl', tiles: ['cl', 'u', 'b'], targetTileIdx: 0, options: ['cub', 'clog'], es: 'club', cognate: true },
+  { w: 'clam', kind: 'real', pattern: 'cl', tiles: ['cl', 'a', 'm'], targetTileIdx: 0, options: ['ram', 'clap'], es: 'almeja' },
+  { w: 'clog', kind: 'real', pattern: 'cl', tiles: ['cl', 'o', 'g'], targetTileIdx: 0, options: ['log', 'clock'], es: 'atascar' },
+  // fr blend (6)
+  { w: 'frog', kind: 'real', pattern: 'fr', tiles: ['fr', 'o', 'g'], targetTileIdx: 0, options: ['fog', 'frock'], es: 'rana' },
+  { w: 'fresh', kind: 'real', pattern: 'fr', tiles: ['fr', 'e', 'sh'], targetTileIdx: 0, options: ['mesh', 'fret'], es: 'fresco', cognate: true },
+  { w: 'fret', kind: 'real', pattern: 'fr', tiles: ['fr', 'e', 't'], targetTileIdx: 0, options: ['met', 'frog'], es: 'preocuparse' },
+  { w: 'frock', kind: 'real', pattern: 'fr', tiles: ['fr', 'o', 'ck'], targetTileIdx: 0, options: ['rock', 'frog'], es: 'túnica' },
+  { w: 'frost', kind: 'real', pattern: 'fr', tiles: ['fr', 'o', 's', 't'], targetTileIdx: 0, options: ['rot', 'frog'], es: 'escarcha' },
+  { w: 'frill', kind: 'real', pattern: 'fr', tiles: ['fr', 'i', 'll'], targetTileIdx: 0, options: ['fill', 'frog'], es: 'volante' },
+  // gr blend (6)
+  { w: 'grab', kind: 'real', pattern: 'gr', tiles: ['gr', 'a', 'b'], targetTileIdx: 0, options: ['gab', 'grub'], es: 'agarrar' },
+  { w: 'grin', kind: 'real', pattern: 'gr', tiles: ['gr', 'i', 'n'], targetTileIdx: 0, options: ['fin', 'grip'], es: 'sonrisa amplia' },
+  { w: 'grip', kind: 'real', pattern: 'gr', tiles: ['gr', 'i', 'p'], targetTileIdx: 0, options: ['rip', 'grin'], es: 'agarre' },
+  { w: 'grit', kind: 'real', pattern: 'gr', tiles: ['gr', 'i', 't'], targetTileIdx: 0, options: ['bit', 'grid'], es: 'determinación' },
+  { w: 'grub', kind: 'real', pattern: 'gr', tiles: ['gr', 'u', 'b'], targetTileIdx: 0, options: ['cub', 'grab'], es: 'larva' },
+  { w: 'grid', kind: 'real', pattern: 'gr', tiles: ['gr', 'i', 'd'], targetTileIdx: 0, options: ['rid', 'grit'], es: 'red' },
+];
+
+export const W2_L3_RUNES: WordEntry[] = [
+  { w: 'blap', kind: 'rune', pattern: 'bl', tiles: ['bl', 'a', 'p'], targetTileIdx: 0, options: ['bap', 'blip'], azureRef: 'blapp' },
+  { w: 'bleg', kind: 'rune', pattern: 'bl', tiles: ['bl', 'e', 'g'], targetTileIdx: 0, options: ['beg', 'blug'], azureRef: 'blegg' },
+  { w: 'clep', kind: 'rune', pattern: 'cl', tiles: ['cl', 'e', 'p'], targetTileIdx: 0, options: ['clap', 'clip'], azureRef: 'clepp' },
+  { w: 'clug', kind: 'rune', pattern: 'cl', tiles: ['cl', 'u', 'g'], targetTileIdx: 0, options: ['clog', 'club'], azureRef: 'clugg' },
+  { w: 'frab', kind: 'rune', pattern: 'fr', tiles: ['fr', 'a', 'b'], targetTileIdx: 0, options: ['fab', 'frib'], azureRef: 'frabb' },
+  { w: 'frep', kind: 'rune', pattern: 'fr', tiles: ['fr', 'e', 'p'], targetTileIdx: 0, options: ['fret', 'frop'], azureRef: 'frepp' },
+  { w: 'grem', kind: 'rune', pattern: 'gr', tiles: ['gr', 'e', 'm'], targetTileIdx: 0, options: ['grin', 'grub'], azureRef: 'gremm' },
+  { w: 'grob', kind: 'rune', pattern: 'gr', tiles: ['gr', 'o', 'b'], targetTileIdx: 0, options: ['grab', 'grub'], azureRef: 'grahb' },
+];
+
+export const W2_L3_CUTSCENES: Record<CutsceneId, CutsceneScript> = {
+  opening: {
+    id: 'opening',
+    title: 'WORLD 2 · LEVEL 3 · IRONRIFT CROSSING',
+    subtitle: 'Armored Flyers Above the Molten Gorge',
+    beats: [
+      {
+        id: 'w2-l03-open-v1-1',
+        image: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
+        motion: 'zoom',
+        durationMs: 7400,
+        speaker: 'THE RIFT WARDEN',
+        voiceStyle: 'Focused, urgent, grounded veteran guardian warning a teenage recruit about armored airborne enemies.',
+        voiceText:
+          'Eyes up, Runner! Armored Rift Shriekers are diving straight across Ironrift Crossing. They fly right over Spike Pits and Stone Golems, and their steel plates shrug off light arrows.',
+        captions: [
+          'Armored Rift Shriekers dive straight across Ironrift Crossing.',
+          'They fly over ground traps and deflect light arrows with steel plates.',
+        ],
+        accent: 'violet',
+      },
+      {
+        id: 'w2-l03-open-v1-2',
+        image: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
+        motion: 'pan',
+        durationMs: 7400,
+        speaker: 'THE RIFT WARDEN',
+        voiceStyle: 'Steady, tactical, encouraging mentor preparing a recruit for a combined air and ground defense.',
+        voiceText:
+          'Pair Rail Turrets and Tesla Spires across the central island to lock down the skies. Decode clean b l, c l, f r, and g r blends in the Rune Forge to unlock the Final Wave.',
+        captions: [
+          'Pair Rail Turrets and Tesla Spires on the center island to lock the skies.',
+          'Seal the bl, cl, fr, and gr locks in the Forge to open the Final Wave.',
+        ],
+        accent: 'cyan',
+      },
+    ],
+  },
+  victory: {
+    id: 'victory',
+    title: 'IRONRIFT CROSSING SECURED',
+    subtitle: 'Skies Cleared Across the Foundry Gorge',
+    beats: [
+      {
+        id: 'w2-l03-vic-v1-1',
+        image: '/src/assets/images/cutscene_w2_l3_victory_1795608966935.jpg',
+        motion: 'lift',
+        durationMs: 7200,
+        speaker: 'THE RIFT WARDEN',
+        voiceStyle: 'Warm, proud, grounded mentor celebrating a clean anti-air victory.',
+        voiceText:
+          'Ironrift Crossing is clear! The armored Shrieker flock broke apart over the gorge, and your steady blend reads kept our air grid locked tight.',
+        captions: [
+          'Ironrift Crossing is clear! The armored Shriekers broke above the gorge.',
+          'Your clean bl, cl, fr, and gr reads kept the anti-air grid locked.',
+        ],
+        accent: 'cyan',
+      },
+      {
+        id: 'w2-l03-vic-v1-2',
+        image: '/src/assets/images/cutscene_w2_l3_victory_1795608966935.jpg',
+        motion: 'zoom',
+        durationMs: 7000,
+        speaker: 'THE RIFT WARDEN',
+        voiceStyle: 'Calm, resolute veteran looking across the bridge toward the fortress ahead.',
+        voiceText:
+          'Ahead stands Crucible Bastion, the last fortified gate before the Furnace Core. Catch your breath, Runner. The foundry is throwing everything it has left at us.',
+        captions: [
+          'Ahead burns Crucible Bastion, the final barrier before the Furnace Core.',
+          'Level 3 cleared. Crucible Bastion lies ahead.',
+        ],
+        accent: 'violet',
+      },
+    ],
+  },
+  defeat: {
+    id: 'defeat',
+    title: 'THE SKYBRIDGE FELL',
+    subtitle: 'Adjust Your Anti-Air Grid and Try Again',
+    beats: [
+      {
+        id: 'w2-l03-def-v1-1',
+        image: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
+        motion: 'zoom',
+        durationMs: 6800,
+        speaker: 'THE RIFT WARDEN',
+        voiceStyle: 'Calm, supportive, steady mentor giving clear tactical advice after a tough run.',
+        voiceText:
+          'The armored Shriekers slipped past the skybridge and struck the Anchor. Try pairing Rail Turrets and Tesla Spires on the central pads with a Frost Totem to slow the flock.',
+        captions: [
+          'The armored Shriekers slipped through and struck the Anchor.',
+          'Tip: pair Rail Turrets and Tesla Spires on the center pads with Frost Totem.',
+        ],
+        accent: 'crimson',
+      },
+    ],
+  },
+};
 
 export const W2_LEVEL3: LevelConfig = {
-  ...W2_LEVEL1,
   id: 'w2-l3',
+  worldId: 'w2',
   num: 3,
+  worldName: 'World 2: The Sunken Foundry',
   name: 'Ironrift Crossing',
   headline: 'Lock the Skies at Ironrift Crossing',
   description:
-    'Armored Rift Shriekers surge overhead across the foundry stacks, dodging ground traps. Decode initial L-blends and R-blends cleanly to keep your anti-air grid online.',
-  enemiesSummary: 'Rift Shriekers, Shieldbearers, and Cinder Imps',
-  wordsSummary: 'L-blends and R-blends + runes',
+    'Armored Rift Shriekers surge overhead across the foundry gorge, flying past ground traps while Shieldbearers press the bridges below. Decode initial L-blends and R-blends cleanly to keep your anti-air grid online.',
+  enemiesSummary: 'Rift Shriekers (Armored Flyers), Shieldbearers, and Cinder Imps',
+  wordsSummary: 'L-blends and R-blends (bl, cl, fr, gr) + runes',
   rewardSummary: 'Crucible Bastion path opens ahead',
+  nextLevelId: 'w2-l4',
   vowels: ['bl', 'cl', 'fr', 'gr'],
-  comingSoon: true,
-  backdropImage: '/src/assets/images/cutscene_w2_l1_victory_1795525102801.jpg',
+  defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail'],
+  runeRate: 0.32,
+  startCrystals: 155,
+  waveEvery: 30,
+  anchor: 20,
+  minWaves: 2,
+  bonusSurgeWaves: 3,
+  mastery: {
+    window: 8,
+    need: 7,
+  },
+  endless: {
+    hpStep: 0.15,
+    countStep: 0.14,
+  },
+  finalBoost: 1.25,
+  hasWalkthrough: false,
+  backdropImage: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
+  pathUv: [
+    [0.115, 0.175],
+    [0.185, 0.235],
+    [0.285, 0.310],
+    [0.380, 0.385],
+    [0.422, 0.440],
+    [0.388, 0.515],
+    [0.400, 0.578],
+    [0.478, 0.585],
+    [0.528, 0.490],
+    [0.575, 0.415],
+    [0.635, 0.445],
+    [0.640, 0.515],
+    [0.592, 0.585],
+    [0.595, 0.645],
+    [0.680, 0.705],
+    [0.785, 0.785],
+    [0.865, 0.845],
+  ],
+  riverUv: [
+    [0.49, 0.06],
+    [0.49, 0.24],
+    [0.35, 0.36],
+    [0.24, 0.52],
+    [0.16, 0.56],
+  ],
+  riftUv: [0.095, 0.115],
+  campUv: [0.930, 0.850],
+  wardenUv: [0.840, 0.845],
+  pads: [
+    { id: 'ic_t1', kind: 'tower', u: 0.465, v: 0.365 },
+    { id: 'ic_t2', kind: 'tower', u: 0.525, v: 0.372 },
+    { id: 'ic_t3', kind: 'tower', u: 0.342, v: 0.498 },
+    { id: 'ic_t4', kind: 'tower', u: 0.445, v: 0.530 },
+    { id: 'ic_t5', kind: 'tower', u: 0.582, v: 0.472 },
+    { id: 'ic_t6', kind: 'tower', u: 0.690, v: 0.428 },
+    { id: 'ic_t7', kind: 'tower', u: 0.668, v: 0.575 },
+    { id: 'ic_t8', kind: 'tower', u: 0.573, v: 0.702 },
+    { id: 'ic_t9', kind: 'tower', u: 0.472, v: 0.670 },
+    { id: 'ic_t10', kind: 'tower', u: 0.155, v: 0.278 },
+    { id: 'ic_r1', kind: 'trail', u: 0.285, v: 0.310 },
+    { id: 'ic_r2', kind: 'trail', u: 0.400, v: 0.578 },
+    { id: 'ic_r3', kind: 'trail', u: 0.575, v: 0.415 },
+    { id: 'ic_r4', kind: 'trail', u: 0.680, v: 0.705 },
+  ],
+  waves: [
+    {
+      hp: 1.0,
+      groups: [
+        { type: 'shrieker', count: 5, gap: 2.5 },
+        { type: 'cinderimp', count: 9, gap: 0.85, delay: 4.5 },
+      ],
+    },
+    {
+      hp: 1.18,
+      groups: [
+        { type: 'shieldbearer', count: 5, gap: 2.9 },
+        { type: 'shrieker', count: 7, gap: 2.0, delay: 3.5 },
+        { type: 'bat', count: 8, gap: 0.9, delay: 10 },
+      ],
+    },
+    {
+      hp: 1.4,
+      groups: [
+        { type: 'shrieker', count: 9, gap: 1.8 },
+        { type: 'shieldbearer', count: 7, gap: 2.5, delay: 4 },
+        { type: 'cinderimp', count: 14, gap: 0.6, delay: 9.5 },
+      ],
+    },
+    {
+      hp: 1.66,
+      groups: [
+        { type: 'shrieker', count: 11, gap: 1.55 },
+        { type: 'shieldbearer', count: 8, gap: 2.2, delay: 3.5 },
+        { type: 'splitter', count: 4, gap: 2.7, delay: 8.5 },
+        { type: 'bat', count: 12, gap: 0.78, delay: 13 },
+      ],
+    },
+    {
+      hp: 1.98,
+      groups: [
+        { type: 'shrieker', count: 14, gap: 1.35 },
+        { type: 'shieldbearer', count: 10, gap: 2.0, delay: 3.5 },
+        { type: 'brute', count: 3, gap: 3.2, delay: 7.5 },
+        { type: 'cinderimp', count: 18, gap: 0.5, delay: 12 },
+      ],
+    },
+  ],
+  realWords: W2_L3_REAL_WORDS,
+  runes: W2_L3_RUNES,
+  cutscenes: W2_L3_CUTSCENES,
 };
+
+// World 2 Roadmap Preview Nodes (Levels 4-5 visible on World 2 map, unlocked as built)
 
 export const W2_LEVEL4: LevelConfig = {
   ...W2_LEVEL1,

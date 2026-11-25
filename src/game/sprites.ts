@@ -18,6 +18,7 @@ export type SpriteKey =
   | 'thornking'
   | 'cinderimp'
   | 'shieldbearer'
+  | 'shrieker'
   | 'warden';
 
 export interface SpriteAsset {
@@ -43,6 +44,7 @@ export const MAP_URLS: Record<LevelId, string> = {
   'w1-l5': '/src/assets/images/map_thornking_heart_1795470435461.jpg',
   'w2-l1': '/src/assets/images/map_w2_l1_ashgate_1795525102099.jpg',
   'w2-l2': '/src/assets/images/map_w2_l2_smelter_causeway_1795606908338.jpg',
+  'w2-l3': '/src/assets/images/map_w2_l3_ironrift_crossing_1795608963074.jpg',
 };
 
 export const SPRITE_URLS: Record<SpriteKey, string> = {
@@ -62,6 +64,7 @@ export const SPRITE_URLS: Record<SpriteKey, string> = {
   thornking: '/src/assets/images/sprite_thornking_boss_1795470435149.jpg',
   cinderimp: '/src/assets/images/sprite_cinder_imp_1795525101831.jpg',
   shieldbearer: '/src/assets/images/sprite_shieldbearer_1795606908368.jpg',
+  shrieker: '/src/assets/images/sprite_rift_shrieker_1795608970938.jpg',
   warden: '/src/assets/images/sprite_rift_warden_1795459980237.jpg',
 };
 

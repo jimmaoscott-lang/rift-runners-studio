@@ -268,108 +268,132 @@ async function startServer() {
           };
         }
 
-        const model = 'gemini-3.8-flash-lite-tts';
-        const maxAttempts = 2;
+        const models = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'];
+        let lastQuotaErr: { retryAfterSec: number } | null = null;
 
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          try {
-            const response = await ai.models.generateContent({
-              model,
-              contents: [
-                {
-                  role: 'user',
-                  parts: [{ text, speechMetadata: { style } } as any],
-                },
-              ],
-              config: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName },
+        for (let mIdx = 0; mIdx < models.length; mIdx++) {
+          const model = models[mIdx];
+          const maxAttempts = 2;
+
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+              const response = await ai.models.generateContent({
+                model,
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [{ text, speechMetadata: { style } } as any],
+                  },
+                ],
+                config: {
+                  responseModalities: ['AUDIO'],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { voiceName },
+                    },
                   },
                 },
-              },
-            });
+              });
 
-            const inlineData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-            const base64Audio = inlineData?.data;
-            if (!base64Audio) {
+              const inlineData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+              const base64Audio = inlineData?.data;
+              if (!base64Audio) {
+                return {
+                  ok: false,
+                  status: 502,
+                  code: 'EMPTY_AUDIO',
+                  error: 'No audio was returned by the voice service.',
+                };
+              }
+
+              const rawBuffer = Buffer.from(base64Audio, 'base64');
+              const wavBuffer = ensureWavBuffer(rawBuffer, 24000);
+              cutsceneAudioCache.set(cacheKey, { buffer: wavBuffer, contentType: 'audio/wav' });
+              try {
+                fs.writeFileSync(diskPath, wavBuffer);
+              } catch {
+                // ignore disk write error if read-only
+              }
+              return { ok: true, buffer: wavBuffer, contentType: 'audio/wav' };
+            } catch (err: any) {
+              const msg = err?.message || String(err);
+              const statusCode = Number(err?.status || err?.code || 0);
+              const isQuota =
+                statusCode === 429 ||
+                msg.includes('429') ||
+                msg.includes('RESOURCE_EXHAUSTED') ||
+                msg.toLowerCase().includes('quota');
+              const isDailyQuota = /perday|daily|requestsperday/i.test(msg);
+              const isAuth =
+                statusCode === 401 ||
+                statusCode === 403 ||
+                msg.includes('PERMISSION_DENIED') ||
+                msg.includes('API_KEY_INVALID');
+              const isTransient =
+                statusCode === 500 ||
+                statusCode === 503 ||
+                msg.includes('500') ||
+                msg.includes('503') ||
+                msg.includes('UNAVAILABLE');
+
+              if (isAuth) {
+                return {
+                  ok: false,
+                  status: 403,
+                  code: 'API_KEY_ERROR',
+                  error: 'Gemini API key permission error. Check your key in Settings > Secrets.',
+                };
+              }
+
+              if (isQuota) {
+                const retryAfterSec = parseRetryAfterSec(msg, isDailyQuota);
+                lastQuotaErr = { retryAfterSec };
+                // Fall through to the secondary TTS model if available
+                if (mIdx < models.length - 1) {
+                  break;
+                }
+                if (!isDailyQuota && attempt === 0) {
+                  await sleep(1600);
+                  continue;
+                }
+                ttsQuotaCooldownUntil = Date.now() + retryAfterSec * 1000;
+                return {
+                  ok: false,
+                  status: 429,
+                  code: 'QUOTA_EXHAUSTED',
+                  retryAfterSec,
+                  error: 'Voice generation quota temporarily reached. Captions remain active.',
+                };
+              }
+
+              if (isTransient && attempt === 0) {
+                await sleep(1000);
+                continue;
+              }
+
+              if (mIdx < models.length - 1) {
+                break;
+              }
+
               return {
                 ok: false,
                 status: 502,
-                code: 'EMPTY_AUDIO',
-                error: 'No audio was returned by the voice service.',
+                code: 'TTS_FAILED',
+                error: 'Voice generation failed temporarily.',
               };
             }
-
-            const rawBuffer = Buffer.from(base64Audio, 'base64');
-            const wavBuffer = ensureWavBuffer(rawBuffer, 24000);
-            cutsceneAudioCache.set(cacheKey, { buffer: wavBuffer, contentType: 'audio/wav' });
-            try {
-              fs.writeFileSync(diskPath, wavBuffer);
-            } catch {
-              // ignore disk write error if read-only
-            }
-            return { ok: true, buffer: wavBuffer, contentType: 'audio/wav' };
-          } catch (err: any) {
-            const msg = err?.message || String(err);
-            const statusCode = Number(err?.status || err?.code || 0);
-            const isQuota =
-              statusCode === 429 ||
-              msg.includes('429') ||
-              msg.includes('RESOURCE_EXHAUSTED') ||
-              msg.toLowerCase().includes('quota');
-            const isDailyQuota = /perday|daily|requestsperday/i.test(msg);
-            const isAuth =
-              statusCode === 401 ||
-              statusCode === 403 ||
-              msg.includes('PERMISSION_DENIED') ||
-              msg.includes('API_KEY_INVALID');
-            const isTransient =
-              statusCode === 500 ||
-              statusCode === 503 ||
-              msg.includes('500') ||
-              msg.includes('503') ||
-              msg.includes('UNAVAILABLE');
-
-            if (isAuth) {
-              return {
-                ok: false,
-                status: 403,
-                code: 'API_KEY_ERROR',
-                error: 'Gemini API key permission error. Check your key in Settings > Secrets.',
-              };
-            }
-
-            if (isQuota) {
-              // Retry once after brief backoff only if not explicitly a daily limit
-              if (!isDailyQuota && attempt === 0) {
-                await sleep(1600);
-                continue;
-              }
-              const retryAfterSec = parseRetryAfterSec(msg, isDailyQuota);
-              ttsQuotaCooldownUntil = Date.now() + retryAfterSec * 1000;
-              return {
-                ok: false,
-                status: 429,
-                code: 'QUOTA_EXHAUSTED',
-                retryAfterSec,
-                error: 'Voice generation quota temporarily reached. Captions remain active.',
-              };
-            }
-
-            if (isTransient && attempt === 0) {
-              await sleep(1000);
-              continue;
-            }
-
-            return {
-              ok: false,
-              status: 502,
-              code: 'TTS_FAILED',
-              error: 'Voice generation failed temporarily.',
-            };
           }
+        }
+
+        if (lastQuotaErr) {
+          ttsQuotaCooldownUntil = Date.now() + lastQuotaErr.retryAfterSec * 1000;
+          return {
+            ok: false,
+            status: 429,
+            code: 'QUOTA_EXHAUSTED',
+            retryAfterSec: lastQuotaErr.retryAfterSec,
+            error: 'Voice generation quota temporarily reached. Captions remain active.',
+          };
         }
 
         return {

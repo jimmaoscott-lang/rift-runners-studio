@@ -114,6 +114,42 @@ const VOICE_CHECK_PROFILES: Record<string, VoiceCheckProfile> = {
     tip: 'Finish with a quick, unvoiced pop from the back of your tongue so the ending stays crisp.',
     swapHint: 'Keep the final "k" sharp and unvoiced instead of humming through it.',
   },
+  bl: {
+    label: 'bl Blend',
+    soundTile: 'bl',
+    anchor: 'black',
+    contrast: 'back',
+    contrastPattern: 'b',
+    tip: 'Pop the "b" with your lips and glide straight into "l" by lifting your tongue tip behind your top teeth.',
+    swapHint: 'Make sure both the "b" and the "l" come through before the vowel.',
+  },
+  cl: {
+    label: 'cl Blend',
+    soundTile: 'cl',
+    anchor: 'clap',
+    contrast: 'cap',
+    contrastPattern: 'c',
+    tip: 'Tap a crisp "k" sound at the back of your mouth and slide smoothly into "l" with your tongue tip up.',
+    swapHint: 'Let the "l" follow right after "c" so both sounds stay clear.',
+  },
+  fr: {
+    label: 'fr Blend',
+    soundTile: 'fr',
+    anchor: 'frog',
+    contrast: 'fog',
+    contrastPattern: 'f',
+    tip: 'Blow a quick "f" across your bottom lip and pull your tongue slightly back into a smooth "r".',
+    swapHint: 'Keep the "r" gliding right after "f" without rounding into a "w".',
+  },
+  gr: {
+    label: 'gr Blend',
+    soundTile: 'gr',
+    anchor: 'grab',
+    contrast: 'gab',
+    contrastPattern: 'g',
+    tip: 'Start with a voiced "g" in the back of your mouth and slide directly into a smooth "r".',
+    swapHint: 'Keep both the "g" and the "r" steady before moving into the vowel.',
+  },
 };
 
 function getProfile(pattern: PatternKey): VoiceCheckProfile {

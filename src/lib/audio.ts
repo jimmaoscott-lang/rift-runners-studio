@@ -18,6 +18,7 @@ class SoundManager {
   private wordManifest: Manifest = { en: {}, es: {} };
   private uiManifest: Manifest = { en: {}, es: {} };
   private loaded = false;
+  private initPromise: Promise<void> | null = null;
   private activeVoice: HTMLAudioElement | null = null;
   private activeSource: AudioBufferSourceNode | null = null;
   private spriteBuffers = new Map<string, Promise<AudioBuffer | null>>();
@@ -40,17 +41,23 @@ class SoundManager {
 
   async init(): Promise<void> {
     if (this.loaded) return;
-    this.loaded = true;
-    try {
-      const [wm, um] = await Promise.all([
-        fetch(assetUrl('/assets/audio/words/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
-        fetch(assetUrl('/assets/audio/ui/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
-      ]);
-      this.wordManifest = wm;
-      this.uiManifest = um;
-    } catch {
-      // Manifests optional
-    }
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = (async () => {
+      try {
+        const [wm, um] = await Promise.all([
+          fetch(assetUrl('/assets/audio/words/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
+          fetch(assetUrl('/assets/audio/ui/manifest.json')).then((r) => (r.ok ? r.json() : { en: {}, es: {} })),
+        ]);
+        this.wordManifest = wm;
+        this.uiManifest = um;
+        this.loaded = true;
+      } catch {
+        // Manifests optional
+      } finally {
+        this.initPromise = null;
+      }
+    })();
+    return this.initPromise;
   }
 
   setVolumes(v: AudioVolumes) {
@@ -305,6 +312,20 @@ class SoundManager {
       teg: 'tegg',
       zod: 'zahd',
       zot: 'zaht',
+      blap: 'blapp',
+      bleg: 'blegg',
+      blug: 'blugg',
+      bap: 'bapp',
+      clep: 'clepp',
+      clug: 'clugg',
+      clob: 'clahb',
+      frab: 'frabb',
+      frep: 'frepp',
+      frib: 'fribb',
+      frop: 'frahp',
+      fab: 'fabb',
+      grem: 'gremm',
+      grob: 'grahb',
     };
     return runeSpellings[key] || word;
   }
@@ -417,7 +438,9 @@ class SoundManager {
       for (let i = 0; i < parts.length; i++) {
         if (myToken !== this.seqToken) return;
         onTileIdx?.(i);
-        const key = parts[i].toLowerCase();
+        const rawKey = parts[i].toLowerCase();
+        const key =
+          rawKey === 'll' ? 'l' : rawKey === 'ss' ? 's' : rawKey === 'ff' ? 'f' : rawKey === 'zz' ? 'z' : rawKey;
         const rel = this.wordManifest.en[`snd:${key}`];
         if (rel) {
           await this.playManifestEntry(this.wordManifest, '/assets/audio/words', rel);
@@ -478,6 +501,10 @@ class SoundManager {
       ss: 'sss',
       ff: 'fff',
       zz: 'zzz',
+      bl: 'bl',
+      cl: 'cl',
+      fr: 'fr',
+      gr: 'gr',
     };
     return fallbackMap[key] || key;
   }
@@ -486,7 +513,9 @@ class SoundManager {
     await this.init();
     this.stopSpeaking();
     const myToken = this.seqToken;
-    const key = letter.toLowerCase();
+    const rawKey = letter.toLowerCase();
+    const key =
+      rawKey === 'll' ? 'l' : rawKey === 'ss' ? 's' : rawKey === 'ff' ? 'f' : rawKey === 'zz' ? 'z' : rawKey;
     const rel = this.wordManifest.en[`snd:${key}`];
     if (rel) {
       await this.playManifestEntry(this.wordManifest, '/assets/audio/words', rel);
@@ -582,7 +611,9 @@ class SoundManager {
         continue;
       }
       if (step.snd) {
-        const key = step.snd.toLowerCase();
+        const rawKey = step.snd.toLowerCase();
+        const key =
+          rawKey === 'll' ? 'l' : rawKey === 'ss' ? 's' : rawKey === 'ff' ? 'f' : rawKey === 'zz' ? 'z' : rawKey;
         const rel = this.wordManifest.en[`snd:${key}`];
         if (rel) {
           await this.playManifestEntry(this.wordManifest, '/assets/audio/words', rel);
@@ -662,8 +693,10 @@ class SoundManager {
     if (pending) return pending;
 
     const req = (async (): Promise<{ url: string | null; quotaExceeded: boolean }> => {
-      // 1. Check pre-cached WAV on disk first (zero API call, works even during quota cooldown)
-      const staticUrl = await this.checkStaticTtsCache(id, voice);
+      // 1. Check pre-cached MP3/WAV on disk first (zero API call, works even during quota cooldown)
+      const staticUrl =
+        (await this.checkStaticTtsCache(id, voice)) ||
+        (voice !== 'Leda' ? await this.checkStaticTtsCache(id, 'Leda') : null);
       if (staticUrl) {
         this.cutsceneBlobCache.set(key, staticUrl);
         return { url: staticUrl, quotaExceeded: false };

@@ -1024,6 +1024,68 @@ export function scoreAzureWord(
     }
   }
 
+  // Catch initial L-blend and R-blend drops or l/r swaps (bl, cl, fr, gr, etc.) while honoring Personal Voice Profiles.
+  const initBlendMatch = targetLower.match(/^(bl|cl|fl|gl|pl|sl|br|cr|dr|fr|gr|pr|tr)/);
+  if (initBlendMatch && !digraphSwapMiss && consPh.length >= 2) {
+    const blendKey = initBlendMatch[1];
+    const isLBlend = blendKey[1] === 'l';
+    const expectedLiquid = isLBlend ? 'l' : 'ɹ';
+    const leadPh = consPh[0];
+    const liquidPh = consPh[1];
+    const leadSc = effectiveCons[0] ?? 0;
+    const liqSc = effectiveCons[1] ?? 0;
+    const leadTop = Array.isArray(leadPh.best) ? leadPh.best[0]?.p : null;
+    const liqTop = Array.isArray(liquidPh.best) ? liquidPh.best[0]?.p : null;
+    const blendProfile = getDigraphProfile(blendKey);
+    const blendGrace = graceActive || Boolean(blendProfile);
+
+    if (!observedDigraph || explicitKey === blendKey) {
+      observedDigraph = {
+        targetIpa: expectedLiquid,
+        targetScore: Math.round(liqSc),
+        heardIpa: liqTop || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+    }
+    digraphDetail += `, ${blendKey} ${Math.round(leadSc)}/${Math.round(liqSc)}${liqTop ? ` (heard ${liqTop})` : ''}`;
+
+    const allowedLiqSig = Boolean(liqTop && blendProfile?.allowedHeard?.includes(liqTop));
+    if (blendProfile?.allowContrastOverlap && allowedLiqSig) {
+      usedAccommodation = true;
+      effectiveCons[1] = Math.max(effectiveCons[1], 76);
+    } else {
+      const swappedLiquid = isLBlend
+        ? liqTop === 'ɹ' || liqTop === 'w'
+        : liqTop === 'l' || liqTop === 'w';
+      // Check if Azure transcribed the dropped-liquid single-consonant word (e.g., "back" for "black", "fog" for "frog")
+      const droppedLiquidWord = blendKey[0] + targetLower.slice(2);
+      const heardSingleWord = normTokens(res.heard || '').includes(droppedLiquidWord);
+      const liqBaseFloor = blendProfile ? blendProfile.targetFloor : blendGrace ? 30 : 42;
+      const liqSwapFloor = blendGrace ? 64 : 70;
+      const leadFloor = blendGrace ? 24 : 34;
+
+      if (
+        liqSc < liqBaseFloor ||
+        (swappedLiquid && liqSc < liqSwapFloor) ||
+        (heardSingleWord && liqSc < 78)
+      ) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = !swappedLiquid && !heardSingleWord && liqSc >= 24;
+        digraphExpected = blendKey;
+        digraphHeard = heardSingleWord
+          ? blendKey[0]
+          : ipaToPlainSound(liqTop);
+        digraphScore = Math.round(liqSc);
+      } else if (leadSc < leadFloor) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = leadSc >= 20;
+        digraphExpected = blendKey;
+        digraphHeard = ipaToPlainSound(leadTop);
+        digraphScore = Math.round(leadSc);
+      }
+    }
+  }
+
   const avg = effectiveCons.length
     ? effectiveCons.reduce((a, b) => a + b, 0) / effectiveCons.length
     : 100;
