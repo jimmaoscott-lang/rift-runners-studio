@@ -18,6 +18,7 @@ import { BattleEngine, BattleSnapshot } from './game/CanvasBattleEngine';
 import { loadGameSprites } from './game/sprites';
 import { sound } from './lib/audio';
 import {
+  buildAccommodationSnapshot,
   clearPatternLocks,
   GameSettings,
   getPatternLocks,
@@ -68,6 +69,9 @@ const EMPTY_FORGE_STATS: ForgeStats = {
   runes: 0,
   runeFirst: 0,
   practice: [],
+  slowBlendUsed: 0,
+  meaningTapped: 0,
+  voiceFitMatches: 0,
 };
 
 const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLast'>[] = [
@@ -412,6 +416,17 @@ export default function App() {
                 firstTry: forgeStatsRef.current.firstTry,
                 waves: res.waves,
                 anchor: res.anchor,
+                accommodations: buildAccommodationSnapshot(
+                  prev.settings,
+                  speech.getAllVoiceProfiles(),
+                  speech.getAllWordVoiceOverrides(),
+                  {
+                    slowBlendUsed: forgeStatsRef.current.slowBlendUsed,
+                    meaningTapped: forgeStatsRef.current.meaningTapped,
+                    voiceFitMatches: forgeStatsRef.current.voiceFitMatches,
+                    helpUsed: forgeStatsRef.current.help,
+                  }
+                ),
               },
             ].slice(-20),
           };
@@ -964,6 +979,7 @@ export default function App() {
         <SettingsModal
           level={activeLevel}
           locks={locks}
+          progress={progress}
           settings={settings}
           azureStatus={azureStatus}
           onChange={handleSettingsChange}

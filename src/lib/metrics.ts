@@ -28,6 +28,16 @@ export interface PatternHistory {
   locked?: boolean;
 }
 
+export interface AccommodationSnapshot {
+  ellSupports: string[];
+  readingSupports: string[];
+  voiceAdaptations: string[];
+  slowBlendUsed?: number;
+  meaningTapped?: number;
+  voiceFitMatches?: number;
+  helpUsed?: number;
+}
+
 export interface BattleRecord {
   ts: number;
   levelId?: LevelId;
@@ -37,6 +47,7 @@ export interface BattleRecord {
   firstTry: number;
   waves: number;
   anchor: number;
+  accommodations?: AccommodationSnapshot;
 }
 
 export interface StoredProgress {
@@ -80,6 +91,174 @@ export function countActiveEllSupports(s: GameSettings): number {
   if (s.spanishRules) count += 1;
   if (s.spanishCaptions) count += 1;
   return count;
+}
+
+export function buildAccommodationSnapshot(
+  settings: GameSettings,
+  voiceProfiles: Array<{
+    pattern: string;
+    mode?: string;
+    labelNote?: string;
+    targetFloor?: number;
+    allowedHeard?: string[];
+  }> = [],
+  wordOverrides: Array<{ word: string; acceptedHeard: string[] }> = [],
+  usage?: {
+    slowBlendUsed?: number;
+    meaningTapped?: number;
+    voiceFitMatches?: number;
+    helpUsed?: number;
+  }
+): AccommodationSnapshot {
+  const ellSupports: string[] = [];
+  if (settings.spanishL1Voice) ellSupports.push('Spanish L1 Voice Fit');
+  if (settings.slowBlendAudio) ellSupports.push('Slow Blend Audio');
+  if (settings.spanish) ellSupports.push('Spanish Meanings & Glosses');
+  if (settings.spanishRules) ellSupports.push('Bilingual Sound Rules');
+  if (settings.spanishCaptions) ellSupports.push('Dual-Language Captions');
+
+  const readingSupports: string[] = [];
+  if (settings.font === 'dyslexic') readingSupports.push('OpenDyslexic Font');
+  if (settings.textSize === 'large') readingSupports.push('Large Word Text');
+  if (settings.textSize === 'xlarge') readingSupports.push('Extra Large Word Text');
+  if (settings.focusMode) readingSupports.push('Focus Mode (0.5x Speed)');
+  if (settings.reducedMotion) readingSupports.push('Reduced Motion');
+  if (settings.speakFirst > 0) readingSupports.push(`Speak First (${settings.speakFirst} tries)`);
+  if (!settings.speakRunes) readingSupports.push('Tap Mode for Runes');
+
+  const voiceAdaptations: string[] = [];
+  for (const vp of voiceProfiles) {
+    const label = getPatternRule(vp.pattern as PatternKey).label;
+    if (vp.labelNote) {
+      voiceAdaptations.push(`${label}: ${vp.labelNote}`);
+    } else if (vp.mode === 'accommodation') {
+      voiceAdaptations.push(
+        `${label}: accepts ${vp.allowedHeard?.join(', ') || 'adapted sound'}`
+      );
+    } else {
+      voiceAdaptations.push(`${label}: calibrated floor ${vp.targetFloor ?? 50}`);
+    }
+  }
+  for (const wo of wordOverrides) {
+    const variants = wo.acceptedHeard.map((h) => `"${h}"`).join(', ');
+    voiceAdaptations.push(`Word "${wo.word}": counts ${variants}`);
+  }
+
+  return {
+    ellSupports,
+    readingSupports,
+    voiceAdaptations,
+    slowBlendUsed: usage?.slowBlendUsed ?? 0,
+    meaningTapped: usage?.meaningTapped ?? 0,
+    voiceFitMatches: usage?.voiceFitMatches ?? 0,
+    helpUsed: usage?.helpUsed ?? 0,
+  };
+}
+
+export function formatBattleTeacherNote(params: {
+  worldName: string;
+  levelNum: number;
+  levelName: string;
+  win: boolean;
+  stars: number;
+  waves: number;
+  forged: number;
+  firstTry: number;
+  runes: number;
+  runeFirst: number;
+  practice: string[];
+  locks: PatternLockStatus[];
+  snapshot: AccommodationSnapshot;
+  date?: Date;
+}): string {
+  const dt = (params.date || new Date()).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  const accPct = params.forged > 0 ? Math.round((params.firstTry / params.forged) * 100) : 0;
+  const runeLine =
+    params.runes > 0
+      ? `Nonsense runes: ${params.runeFirst}/${params.runes} first try`
+      : 'Nonsense runes: 0';
+  const lockLine = params.locks
+    .map((l) => `${l.label} ${l.recentCorrect}/${l.need}${l.done ? ' (Mastered)' : ''}`)
+    .join('; ');
+
+  const usageParts: string[] = [];
+  if ((params.snapshot.helpUsed ?? 0) > 0) usageParts.push(`Audio help: ${params.snapshot.helpUsed}`);
+  if ((params.snapshot.slowBlendUsed ?? 0) > 0) {
+    usageParts.push(`Slow Blend: ${params.snapshot.slowBlendUsed}`);
+  }
+  if ((params.snapshot.meaningTapped ?? 0) > 0) {
+    usageParts.push(`Spanish meanings tapped: ${params.snapshot.meaningTapped}`);
+  }
+  if ((params.snapshot.voiceFitMatches ?? 0) > 0) {
+    usageParts.push(`Voice-fit matches: ${params.snapshot.voiceFitMatches}`);
+  }
+
+  const lines = [
+    `Rift Runners Session Summary (${dt})`,
+    `Stage: ${params.worldName}, Level ${params.levelNum}: ${params.levelName}`,
+    `Outcome: ${params.win ? `Victory (${params.stars}/3 stars)` : 'Attempt completed'}, Waves cleared: ${params.waves}`,
+    `Reading: ${params.forged} words forged, ${accPct}% first-try accuracy (${params.firstTry}/${params.forged}). ${runeLine}.`,
+    `Rift Locks: ${lockLine}`,
+    `Practice words: ${params.practice.length > 0 ? params.practice.join(', ') : 'None'}`,
+    `ELL supports active: ${params.snapshot.ellSupports.length > 0 ? params.snapshot.ellSupports.join(', ') : 'None'}`,
+    `Reading/display supports: ${params.snapshot.readingSupports.length > 0 ? params.snapshot.readingSupports.join(', ') : 'Standard'}`,
+    `Voice adaptations: ${params.snapshot.voiceAdaptations.length > 0 ? params.snapshot.voiceAdaptations.join('; ') : 'None'}`,
+    `Support usage in session: ${usageParts.length > 0 ? usageParts.join(', ') : 'None used'}`,
+  ];
+  return lines.join('\n');
+}
+
+export function formatOverallTeacherNote(params: {
+  progress: StoredProgress;
+  activeLevelLabel: string;
+  locks: PatternLockStatus[];
+  snapshot: AccommodationSnapshot;
+  levelNameLookup: (id?: LevelId) => string;
+  date?: Date;
+}): string {
+  const dt = (params.date || new Date()).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  const lockLine = params.locks
+    .map((l) => `${l.label} ${l.recentCorrect}/${l.need}${l.done ? ' (Mastered)' : ''}`)
+    .join('; ');
+  const recent = [...params.progress.battles].slice(-5).reverse();
+  const recentLines =
+    recent.length > 0
+      ? recent.map((b) => {
+          const bDate = new Date(b.ts).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          });
+          const pct = b.words > 0 ? Math.round((b.firstTry / b.words) * 100) : 0;
+          const ellCount = b.accommodations?.ellSupports.length ?? 0;
+          const accTag =
+            ellCount > 0
+              ? `ELL supports: ${ellCount}`
+              : b.accommodations?.voiceAdaptations.length
+              ? `Voice fits: ${b.accommodations.voiceAdaptations.length}`
+              : 'Standard';
+          return `- ${bDate} | ${params.levelNameLookup(b.levelId)} | ${b.win ? `Win (${b.stars}*)` : 'Attempt'} | ${b.words}w (${pct}% first try) | ${accTag}`;
+        })
+      : ['- No completed battles recorded yet.'];
+
+  const lines = [
+    `Rift Runners Progress & Accommodation Snapshot (${dt})`,
+    `All-time totals: ${params.progress.totalForged} words forged, ${params.progress.wins} wins`,
+    `Active stage (${params.activeLevelLabel}): ${lockLine}`,
+    `Current ELL supports: ${params.snapshot.ellSupports.length > 0 ? params.snapshot.ellSupports.join(', ') : 'None'}`,
+    `Current reading/display supports: ${params.snapshot.readingSupports.length > 0 ? params.snapshot.readingSupports.join(', ') : 'Standard'}`,
+    `Saved voice adaptations: ${params.snapshot.voiceAdaptations.length > 0 ? params.snapshot.voiceAdaptations.join('; ') : 'None'}`,
+    'Recent sessions:',
+    ...recentLines,
+  ];
+  return lines.join('\n');
 }
 
 const BASE_PATTERNS: PatternKey[] = ['a', 'e', 'i', 'o', 'u'];

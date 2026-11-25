@@ -1,9 +1,28 @@
-import React from 'react';
-import { ArrowRight, Film, Gauge, RotateCcw, Settings, Shield, Star, Volume2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  Check,
+  ClipboardCopy,
+  Film,
+  Gauge,
+  Languages,
+  RotateCcw,
+  Settings,
+  Shield,
+  Star,
+  Volume2,
+} from 'lucide-react';
 import { LevelConfig, LEVELS } from '../data/level1';
 import { sound } from '../lib/audio';
 import { assetUrl } from '../lib/assetUrl';
-import { computeThenAndNow, PatternLockStatus, StoredProgress } from '../lib/metrics';
+import {
+  buildAccommodationSnapshot,
+  computeThenAndNow,
+  formatBattleTeacherNote,
+  PatternLockStatus,
+  StoredProgress,
+} from '../lib/metrics';
+import { speech } from '../lib/speech';
 import { ForgeStats } from './RuneForgePanel';
 
 export interface BattleEndData {
@@ -49,6 +68,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   onReplayCutscene,
   onReturnTitle,
 }) => {
+  const [copiedNote, setCopiedNote] = useState(false);
   const firstTryPct =
     forgeStats.forged > 0 ? Math.round((forgeStats.firstTry / forgeStats.forged) * 100) : 0;
   const growth = computeThenAndNow(progress, level.vowels);
@@ -59,6 +79,72 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   const victoryImg =
     level.cutscenes.victory.beats[0]?.image ||
     '/src/assets/images/cutscene_victory_seal_1795457393110.jpg';
+
+  const snapshot = useMemo(
+    () =>
+      buildAccommodationSnapshot(
+        progress.settings,
+        speech.getAllVoiceProfiles(),
+        speech.getAllWordVoiceOverrides(),
+        {
+          slowBlendUsed: forgeStats.slowBlendUsed,
+          meaningTapped: forgeStats.meaningTapped,
+          voiceFitMatches: forgeStats.voiceFitMatches,
+          helpUsed: forgeStats.help,
+        }
+      ),
+    [progress.settings, forgeStats]
+  );
+
+  const hasAnyAccommodation =
+    snapshot.ellSupports.length > 0 ||
+    snapshot.readingSupports.length > 0 ||
+    snapshot.voiceAdaptations.length > 0;
+
+  const usageSummaryParts: string[] = [];
+  if ((snapshot.helpUsed ?? 0) > 0) usageSummaryParts.push(`Audio help: ${snapshot.helpUsed}`);
+  if ((snapshot.slowBlendUsed ?? 0) > 0) {
+    usageSummaryParts.push(`Slow Blend: ${snapshot.slowBlendUsed}`);
+  }
+  if ((snapshot.meaningTapped ?? 0) > 0) {
+    usageSummaryParts.push(`Spanish meanings: ${snapshot.meaningTapped}`);
+  }
+  if ((snapshot.voiceFitMatches ?? 0) > 0) {
+    usageSummaryParts.push(`Voice-fit matches: ${snapshot.voiceFitMatches}`);
+  }
+
+  const handleCopyTeacherNote = async () => {
+    const text = formatBattleTeacherNote({
+      worldName: level.worldName,
+      levelNum: level.num,
+      levelName: level.name,
+      win: result.win,
+      stars: result.stars,
+      waves: result.waves,
+      forged: forgeStats.forged,
+      firstTry: forgeStats.firstTry,
+      runes: forgeStats.runes,
+      runeFirst: forgeStats.runeFirst,
+      practice: forgeStats.practice,
+      locks,
+      snapshot,
+    });
+    sound.sfx('tap');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopiedNote(true);
+    window.setTimeout(() => setCopiedNote(false), 2400);
+  };
 
   return (
     <div className="fixed inset-0 flex h-[100dvh] w-full items-start md:items-center justify-center overflow-y-auto bg-[#070a13] p-4 md:p-6 text-slate-100">
@@ -193,6 +279,70 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
               );
             })}
           </div>
+        </div>
+
+        {/* Teacher & IEP/ELL Accommodation Snapshot */}
+        <div className="mt-5 rounded-xl border border-emerald-500/35 bg-emerald-950/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-200">
+              <Languages className="h-4 w-4 text-emerald-300 shrink-0" />
+              <span>Accommodation Snapshot (Teacher / IEP Note)</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyTeacherNote}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                copiedNote
+                  ? 'border-emerald-300 bg-emerald-400 text-slate-950'
+                  : 'border-emerald-400/60 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25 hover:text-white'
+              }`}
+            >
+              {copiedNote ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Copied Note</span>
+                </>
+              ) : (
+                <>
+                  <ClipboardCopy className="h-3.5 w-3.5" />
+                  <span>Copy Teacher Note</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {hasAnyAccommodation ? (
+            <div className="mt-2.5 space-y-1.5 text-xs text-slate-200">
+              {snapshot.ellSupports.length > 0 && (
+                <div>
+                  <span className="font-semibold text-emerald-300">ELL supports: </span>
+                  <span>{snapshot.ellSupports.join(', ')}</span>
+                </div>
+              )}
+              {snapshot.readingSupports.length > 0 && (
+                <div>
+                  <span className="font-semibold text-cyan-300">Reading &amp; display: </span>
+                  <span>{snapshot.readingSupports.join(', ')}</span>
+                </div>
+              )}
+              {snapshot.voiceAdaptations.length > 0 && (
+                <div>
+                  <span className="font-semibold text-amber-300">Voice adaptations: </span>
+                  <span>{snapshot.voiceAdaptations.join('; ')}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-300">
+              Standard settings were used for this battle (no ELL or display accommodations active).
+            </p>
+          )}
+
+          {usageSummaryParts.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-emerald-500/20 font-tabular text-[11px] text-cyan-200/90">
+              Used in battle: {usageSummaryParts.join(' · ')}
+            </div>
+          )}
         </div>
 
         {/* Practice Words (every word tappable to hear) */}

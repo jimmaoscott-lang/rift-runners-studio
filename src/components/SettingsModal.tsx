@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Check,
+  ClipboardCopy,
   Languages,
   Mic,
   Play,
@@ -24,13 +25,21 @@ import {
   WardenVoiceId,
 } from '../data/level1';
 import { sound } from '../lib/audio';
-import { countActiveEllSupports, GameSettings, PatternLockStatus } from '../lib/metrics';
+import {
+  buildAccommodationSnapshot,
+  countActiveEllSupports,
+  formatOverallTeacherNote,
+  GameSettings,
+  PatternLockStatus,
+  StoredProgress,
+} from '../lib/metrics';
 import { PatternVoiceProfile, speech, WordVoiceOverride } from '../lib/speech';
 import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 
 interface SettingsModalProps {
   level: LevelConfig;
   locks: PatternLockStatus[];
+  progress: StoredProgress;
   settings: GameSettings;
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
   onChange: (next: GameSettings) => void;
@@ -43,6 +52,7 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   level,
   locks,
+  progress,
   settings,
   azureStatus,
   onChange,
@@ -52,6 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
 }) => {
   const ellActiveCount = countActiveEllSupports(settings);
+  const [copiedProgress, setCopiedProgress] = useState(false);
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micTestWord, setMicTestWord] = useState<string>(() => level.runes[0]?.w || 'sun');
@@ -77,6 +88,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setGraceList(speech.getAllPatternGrace());
     setVoiceProfiles(speech.getAllVoiceProfiles());
     setWordOverrides(speech.getAllWordVoiceOverrides());
+  };
+
+  const currentSnapshot = useMemo(
+    () => buildAccommodationSnapshot(settings, voiceProfiles, wordOverrides),
+    [settings, voiceProfiles, wordOverrides]
+  );
+
+  const recentBattles = useMemo(() => [...progress.battles].slice(-5).reverse(), [progress.battles]);
+
+  const handleCopyProgressNote = async () => {
+    const text = formatOverallTeacherNote({
+      progress,
+      activeLevelLabel: `${level.worldName}, Level ${level.num}: ${level.name}`,
+      locks,
+      snapshot: currentSnapshot,
+      levelNameLookup: (id) => {
+        if (!id || !LEVELS[id]) return 'Level 1: Thornwood Edge';
+        return `Lv ${LEVELS[id].num}: ${LEVELS[id].name}`;
+      },
+    });
+    sound.sfx('tap');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopiedProgress(true);
+    window.setTimeout(() => setCopiedProgress(false), 2400);
   };
 
   const update = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => {
@@ -741,6 +787,124 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Save &ldquo;{lastMicMiss.heard}&rdquo; for &ldquo;{lastMicMiss.word}&rdquo;
                   </button>
                 </div>
+              )}
+            </div>
+          </section>
+
+          {/* Teacher Progress & Accommodation Snapshot */}
+          <section className="space-y-3 pt-4 border-t border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-300">
+                  Teacher Progress &amp; Accommodation Snapshot
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Copy a ready-to-paste IEP/ELL summary of active supports and recent reading sessions.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyProgressNote}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  copiedProgress
+                    ? 'border-emerald-300 bg-emerald-400 text-slate-950'
+                    : 'border-emerald-400/60 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25 hover:text-white'
+                }`}
+              >
+                {copiedProgress ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Copied Summary</span>
+                  </>
+                ) : (
+                  <>
+                    <ClipboardCopy className="h-3.5 w-3.5" />
+                    <span>Copy Progress Note</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/15 p-3.5 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-tabular text-slate-200">
+                <span>
+                  All-time words: <strong className="text-white">{progress.totalForged}</strong>
+                </span>
+                <span>
+                  Wins: <strong className="text-emerald-300">{progress.wins}</strong>
+                </span>
+                <span>
+                  Active ELL supports:{' '}
+                  <strong className="text-cyan-200">{currentSnapshot.ellSupports.length}</strong>
+                </span>
+              </div>
+
+              <div className="text-slate-300 leading-snug">
+                <span className="font-semibold text-emerald-200">Active supports: </span>
+                {currentSnapshot.ellSupports.length > 0 ||
+                currentSnapshot.readingSupports.length > 0 ||
+                currentSnapshot.voiceAdaptations.length > 0
+                  ? [
+                      ...currentSnapshot.ellSupports,
+                      ...currentSnapshot.readingSupports,
+                      ...currentSnapshot.voiceAdaptations,
+                    ].join(', ')
+                  : 'Standard settings (no accommodations active)'}
+              </div>
+
+              {recentBattles.length > 0 ? (
+                <div className="pt-2 border-t border-emerald-500/20 space-y-1.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    Recent Sessions (Last {recentBattles.length})
+                  </div>
+                  {recentBattles.map((b, idx) => {
+                    const lvName =
+                      b.levelId && LEVELS[b.levelId]
+                        ? `Lv ${LEVELS[b.levelId].num}: ${LEVELS[b.levelId].name}`
+                        : 'Lv 1: Thornwood Edge';
+                    const pct = b.words > 0 ? Math.round((b.firstTry / b.words) * 100) : 0;
+                    const ellCount = b.accommodations?.ellSupports.length ?? 0;
+                    const vfCount = b.accommodations?.voiceAdaptations.length ?? 0;
+                    const bDate = new Date(b.ts).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                    return (
+                      <div
+                        key={`${b.ts}-${idx}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800/90 bg-[#0d1424] px-2.5 py-1.5 text-[11px]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-tabular text-slate-400 shrink-0">{bDate}</span>
+                          <span className="font-semibold text-white truncate">{lvName}</span>
+                          <span
+                            className={`font-bold shrink-0 ${
+                              b.win ? 'text-emerald-300' : 'text-amber-300'
+                            }`}
+                          >
+                            {b.win ? `Win (${b.stars}*)` : 'Attempt'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2.5 font-tabular text-slate-300 shrink-0">
+                          <span>
+                            {b.words}w ({pct}%)
+                          </span>
+                          <span className="text-cyan-200">
+                            {ellCount > 0
+                              ? `ELL: ${ellCount}`
+                              : vfCount > 0
+                              ? `Voice fit: ${vfCount}`
+                              : 'Standard'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="pt-1 text-[11px] text-slate-400">
+                  Completed battles will appear here with the exact accommodations used.
+                </p>
               )}
             </div>
           </section>

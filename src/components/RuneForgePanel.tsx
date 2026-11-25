@@ -33,6 +33,9 @@ export interface ForgeStats {
   runes: number;
   runeFirst: number;
   practice: string[];
+  slowBlendUsed?: number;
+  meaningTapped?: number;
+  voiceFitMatches?: number;
 }
 
 interface RecentForgeItem {
@@ -247,6 +250,9 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     runes: 0,
     runeFirst: 0,
     practice: [],
+    slowBlendUsed: 0,
+    meaningTapped: 0,
+    voiceFitMatches: 0,
   });
   const recentWordsRef = useRef<string[]>([]);
   const fastGuessesRef = useRef<number[]>([]);
@@ -398,6 +404,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
       st.crystals += amount;
       if (firstClean) st.firstTry += 1;
       if (usedHelp) st.help += 1;
+      if (usedVoiceFit) st.voiceFitMatches = (st.voiceFitMatches || 0) + 1;
       if (cur.kind === 'rune') {
         st.runes += 1;
         if (firstClean) st.runeFirst += 1;
@@ -511,6 +518,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     if (disabled || listening) return;
     setUsedHelp(true);
     setShowTiles(true);
+    statsRef.current.slowBlendUsed = (statsRef.current.slowBlendUsed || 0) + 1;
     sound.sfx('tap');
     void sound.speakWordSlow(cur.w, cur.tiles, setBlendTileIdx);
   };
@@ -897,6 +905,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    statsRef.current.meaningTapped = (statsRef.current.meaningTapped || 0) + 1;
                     sound.speakWord(gloss.es, 'es');
                     if (gloss.enDef) setShowMeaning((prev) => !prev);
                   }}

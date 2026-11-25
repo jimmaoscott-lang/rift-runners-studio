@@ -89,6 +89,7 @@ Before marking any new phonics target complete, test spoken words against live A
   - **Spanish Meanings & Tap-for-Meaning Glosses**: Shows tappable Spanish translations and cognates under real words inside the Rune Forge, reveals a compact plain-English meaning on tap, and marks nonsense runes as `Runa mágica · palabra inventada`.
   - **Bilingual Sound Rule Tips (`SoundRuleModal.tsx`)**: Adds a `Puente en español` mouth-placement and English-to-Spanish sound bridge card with Spanish audio inside every Sound Rule popup.
   - **Dual-Language Captions (`CutscenePlayer.tsx`, `BattleHUD.tsx`, `App.tsx`)**: Displays Spanish subtitles beneath English lines across all shipped cutscenes, Level 1 walkthrough steps (with Spanish tap-to-hear audio), defender cards, upgrade and specialty popovers, hero power tooltips, placement guidance, and victory milestone prompts.
+  - **Accommodation Snapshot & Copyable Teacher Notes (`metrics.ts`, `ResultsScreen.tsx`, `SettingsModal.tsx`)**: Records active ELL supports, reading/display supports, saved voice adaptations, and in-battle support usage (`Audio help`, `Slow Blend`, `Spanish meanings`, `Voice-fit matches`) on every battle record, with one-click `Copy Teacher Note` / `Copy Progress Note` buttons formatted for IEP, ELL, and PLAAF logs.
 
 ## 5. Audio, Voice Acting, and Direct Instruction Rules
 

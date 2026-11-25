@@ -2,6 +2,21 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-25 (Part 3): ELL Batch 3 (Accommodation Snapshot) and 15-Inch Chromebook Layout Polish
+
+### Completed
+- **15-Inch Chromebook & Desktop Layout Polish (`RuneForgePanel.tsx`, `SoundRuleModal.tsx`)**:
+  - Moved the pattern label, `Slow` blend button, and word speaker into a dedicated flex header row inside the Rune Forge target word card so the `Slow` button never overlaps letter tiles or large words.
+  - Widened `SoundRuleModal` to `max-w-2xl`, paired the phoneme tiles beside the whole-word button, tightened vertical spacing, and added `max-h-[92dvh] overflow-y-auto` so the Sound Rule lesson card sits comfortably centered with breathing room on 15-inch Chromebooks and wider monitors even with Spanish bridge tips turned on.
+- **ELL Batch 3: Accommodation Snapshot for Teacher / IEP / ELL Notes (`metrics.ts`, `RuneForgePanel.tsx`, `App.tsx`, `ResultsScreen.tsx`, `SettingsModal.tsx`)**:
+  - Added per-battle tracking for `slowBlendUsed`, `meaningTapped`, and `voiceFitMatches` alongside `help`, saving a structured `AccommodationSnapshot` on every completed `BattleRecord`.
+  - Added an **Accommodation Snapshot (Teacher / IEP Note)** card to `ResultsScreen` showing active ELL supports, reading/display supports, saved voice adaptations, in-battle support usage, and a one-click **`Copy Teacher Note`** button.
+  - Added a **Teacher Progress & Accommodation Snapshot** section to `SettingsModal` showing current active supports, the last 5 completed sessions with their active accommodations, and a one-click **`Copy Progress Note`** button formatted for IEP, ELL, and PLAAF logs.
+
+### Next Up
+1. Playtest the end-of-battle `Copy Teacher Note` button and Settings `Copy Progress Note` summary, then push this completed ELL suite to GitHub.
+2. Build World 2, Level 2: `Smelter Causeway` (`th`/`wh`/`-ck`, Shieldbearer enemy, Rail Turret + Side Loadout Selector), or refresh World 2 Level 1 cutscenes to match the World 1 painterly style.
+
 ## 2026-11-25 (Part 2): ELL Batch 2 (Bilingual Sound Rules, Tap-for-Meaning Glosses, and Dual-Language Captions)
 
 ### Completed
