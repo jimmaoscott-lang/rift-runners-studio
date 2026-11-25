@@ -818,42 +818,44 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         )}
 
         {/* Target Word Box (Zero Timers, Compact & Crisp) */}
-        <div className="relative mt-2 flex flex-col items-center justify-center rounded-2xl border-2 border-purple-400/60 bg-[#1c1540] px-3 py-4 shadow-inner shrink-0">
-          <div className="absolute left-2.5 top-2 text-[11px] font-bold text-amber-300">
-            {cur.kind === 'rune'
-              ? `Rune (+${FORGE_CONFIG.rune})`
-              : getPatternRule(getWordPattern(cur, level.vowels[0])).label}
-          </div>
-          <div className="absolute right-2 top-2 flex items-center gap-1">
-            {settings.slowBlendAudio && (
+        <div className="mt-2 flex flex-col items-center justify-center rounded-2xl border-2 border-purple-400/60 bg-[#1c1540] px-3 py-2.5 shadow-inner shrink-0">
+          <div className="flex w-full items-center justify-between gap-2">
+            <div className="text-[11px] font-bold text-amber-300 truncate">
+              {cur.kind === 'rune'
+                ? `Rune (+${FORGE_CONFIG.rune})`
+                : getPatternRule(getWordPattern(cur, level.vowels[0])).label}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {settings.slowBlendAudio && (
+                <button
+                  type="button"
+                  onClick={handleHearWordSlow}
+                  title="Slow Blend: hear each sound clearly, then the whole word."
+                  aria-label="Hear slow sound blend"
+                  className={`flex h-7 items-center justify-center gap-1 rounded-lg border px-2 text-[10px] font-bold transition-colors cursor-pointer ${
+                    blendTileIdx !== null
+                      ? 'border-cyan-300 bg-cyan-500/30 text-white'
+                      : 'border-emerald-400/60 bg-emerald-950/55 text-emerald-200 hover:border-cyan-300 hover:text-white'
+                  }`}
+                >
+                  <AudioLines className="h-3.5 w-3.5" />
+                  <span>Slow</span>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleHearWordSlow}
-                title="Slow Blend: hear each sound clearly, then the whole word."
-                aria-label="Hear slow sound blend"
-                className={`flex h-8 items-center justify-center gap-1 rounded-xl border px-2 text-[10px] font-bold transition-colors cursor-pointer ${
-                  blendTileIdx !== null
-                    ? 'border-cyan-300 bg-cyan-500/30 text-white'
-                    : 'border-emerald-400/60 bg-emerald-950/55 text-emerald-200 hover:border-cyan-300 hover:text-white'
-                }`}
+                onClick={handleHearWord}
+                title="Hear the word. You still get crystals."
+                aria-label="Hear the word"
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-purple-400/60 bg-[#2a2159] text-cyan-300 hover:border-cyan-300 hover:text-white cursor-pointer"
               >
-                <AudioLines className="h-3.5 w-3.5" />
-                <span>Slow</span>
+                <Volume2 className="h-3.5 w-3.5" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleHearWord}
-              title="Hear the word. You still get crystals."
-              aria-label="Hear the word"
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-400/60 bg-[#2a2159] text-cyan-300 hover:border-cyan-300 hover:text-white cursor-pointer"
-            >
-              <Volume2 className="h-4 w-4" />
-            </button>
+            </div>
           </div>
 
           {showTiles ? (
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
               {(cur.tiles || cur.w.split('')).map((tile, idx) => {
                 const isTarget = idx === (cur.targetTileIdx ?? 1);
                 const isBlendingNow = blendTileIdx === idx;
@@ -876,7 +878,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
               })}
             </div>
           ) : (
-            <div className={`pt-2 font-reading ${textScaleClass} font-bold tracking-wider text-white`}>
+            <div className={`mt-1.5 font-reading ${textScaleClass} font-bold tracking-wider text-white leading-tight`}>
               {cur.w}
             </div>
           )}

@@ -103,22 +103,22 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
   const keywordMatchIdx = rule.word.toLowerCase().indexOf(keywordClean.toLowerCase());
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="sound-rule-title"
-        className="w-full max-w-xl rounded-2xl border border-cyan-500/40 bg-[#101729] p-6 md:p-8 shadow-2xl text-center"
+        className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto rounded-2xl border border-cyan-500/40 bg-[#101729] px-5 py-4 md:px-7 md:py-5 shadow-2xl text-center"
       >
         <h2
           id="sound-rule-title"
-          className="font-display text-lg font-bold tracking-wider text-cyan-300"
+          className="font-display text-base md:text-lg font-bold tracking-wider text-cyan-300"
         >
           Sound Rule
         </h2>
 
         {fullRule && (
-          <div className="mt-4 space-y-4">
+          <div className="mt-2.5 space-y-2.5">
             <button
               type="button"
               onClick={() =>
@@ -127,7 +127,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                   ? sound.speakUI(rule.ruleAudioId, rule.ruleLine)
                   : sound.speakFallback(rule.ruleLine))
               }
-              className={`w-full rounded-xl border px-4 py-3 font-reading text-base md:text-lg leading-relaxed transition-colors cursor-pointer ${
+              className={`w-full rounded-xl border px-4 py-2 font-reading text-sm md:text-base leading-snug transition-colors cursor-pointer ${
                 litTarget === 'rule'
                   ? 'border-amber-400 bg-amber-500/15 text-amber-100'
                   : 'border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-500'
@@ -137,7 +137,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
             </button>
 
             <div
-              className={`flex flex-wrap items-center justify-center gap-4 rounded-xl border px-4 py-3 transition-colors ${
+              className={`flex flex-wrap items-center justify-center gap-3 rounded-xl border px-3.5 py-2 transition-colors ${
                 litTarget === 'vowel'
                   ? 'border-amber-400 bg-amber-500/15'
                   : 'border-slate-700/80 bg-slate-900/60'
@@ -146,21 +146,21 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
               <button
                 type="button"
                 onClick={() => ready && sound.speakPhoneme(patternDisplay)}
-                className="flex h-14 min-w-14 px-3 items-center justify-center rounded-xl border border-amber-400/70 bg-amber-500/20 font-reading text-2xl sm:text-3xl font-bold text-amber-300 cursor-pointer"
+                className="flex h-11 min-w-11 px-2.5 items-center justify-center rounded-xl border border-amber-400/70 bg-amber-500/20 font-reading text-2xl font-bold text-amber-300 cursor-pointer"
               >
                 {patternDisplay}
               </button>
               <button
                 type="button"
                 onClick={() => ready && sound.speakPhoneme(patternDisplay)}
-                className="font-reading text-2xl font-bold text-cyan-200 cursor-pointer"
+                className="font-reading text-xl font-bold text-cyan-200 cursor-pointer"
               >
                 {rule.show}
               </button>
               <button
                 type="button"
                 onClick={() => ready && sound.speakWord(rule.word)}
-                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 hover:border-cyan-400 cursor-pointer"
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 hover:border-cyan-400 cursor-pointer"
               >
                 <span className="text-xs font-medium text-slate-400">Key word</span>
                 <span className="flex gap-1">
@@ -172,7 +172,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                     return (
                       <span
                         key={idx}
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-md font-reading text-xl font-bold ${
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-md font-reading text-lg font-bold ${
                           inChunk
                             ? 'bg-amber-400/25 text-amber-200 border border-amber-400/60'
                             : 'bg-slate-900 text-slate-100 border border-slate-700'
@@ -189,7 +189,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
         )}
 
         {spanishTip && (
-          <div className="mt-4 rounded-xl border border-emerald-400/45 bg-emerald-950/25 px-4 py-3 text-left">
+          <div className="mt-2.5 rounded-xl border border-emerald-400/45 bg-emerald-950/25 px-3.5 py-2.5 text-left">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-200">
                 <Languages className="h-3.5 w-3.5 text-emerald-300 shrink-0" />
@@ -207,58 +207,63 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                 <span>Escuchar</span>
               </button>
             </div>
-            <p className="mt-1.5 font-reading text-xs sm:text-sm text-emerald-50 leading-relaxed">
+            <p className="mt-1 font-reading text-xs sm:text-sm text-emerald-50 leading-snug">
               {spanishTip.tipEs}
             </p>
-            <p className="mt-1 text-xs text-cyan-200/90 leading-snug">{spanishTip.bridgeEs}</p>
+            <p className="mt-0.5 text-xs text-cyan-200/90 leading-snug">{spanishTip.bridgeEs}</p>
           </div>
         )}
 
-        {/* Word broken into interactive phoneme tiles */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          {soundTiles.map((tile, idx) => {
-            const isTarget = idx === highlightIdx;
-            const isLit = litTarget === idx || litTarget === 'whole';
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => ready && sound.speakPhoneme(tile)}
-                title="Tap to hear this sound"
-                className={`flex h-20 min-w-20 px-3 items-center justify-center rounded-xl border-2 font-reading text-3xl sm:text-4xl font-bold transition-transform cursor-pointer ${
-                  isLit
-                    ? 'scale-105 border-amber-300 bg-amber-400/25 text-white'
-                    : isTarget
-                    ? 'border-amber-400/70 bg-amber-500/15 text-amber-200'
-                    : 'border-slate-600 bg-slate-900 text-slate-100'
-                }`}
-              >
-                {tile}
-              </button>
-            );
-          })}
+        {/* Word broken into interactive phoneme tiles + Whole word button */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {soundTiles.map((tile, idx) => {
+              const isTarget = idx === highlightIdx;
+              const isLit = litTarget === idx || litTarget === 'whole';
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => ready && sound.speakPhoneme(tile)}
+                  title="Tap to hear this sound"
+                  className={`flex h-14 min-w-14 sm:h-16 sm:min-w-16 px-2.5 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold transition-transform cursor-pointer ${
+                    isLit
+                      ? 'scale-105 border-amber-300 bg-amber-400/25 text-white'
+                      : isTarget
+                      ? 'border-amber-400/70 bg-amber-500/15 text-amber-200'
+                      : 'border-slate-600 bg-slate-900 text-slate-100'
+                  }`}
+                >
+                  {tile}
+                </button>
+              );
+            })}
+          </div>
+
+          <span className="hidden sm:inline text-slate-500 text-lg font-bold" aria-hidden="true">
+            =
+          </span>
+
+          <button
+            type="button"
+            onClick={() => ready && sound.speakWord(word)}
+            className={`inline-flex items-center gap-2.5 rounded-xl border px-5 py-2.5 font-reading text-2xl sm:text-3xl font-bold transition-colors cursor-pointer ${
+              litTarget === 'whole'
+                ? 'border-cyan-300 bg-cyan-500/20 text-white'
+                : 'border-slate-700 bg-slate-900 text-slate-100 hover:border-cyan-400'
+            }`}
+          >
+            <Volume2 className="h-5 w-5 text-cyan-300" />
+            <span>{word}</span>
+          </button>
         </div>
 
-        {/* Whole word tappable button */}
-        <button
-          type="button"
-          onClick={() => ready && sound.speakWord(word)}
-          className={`mt-5 inline-flex items-center gap-3 rounded-xl border px-6 py-3 font-reading text-4xl font-bold transition-colors cursor-pointer ${
-            litTarget === 'whole'
-              ? 'border-cyan-300 bg-cyan-500/20 text-white'
-              : 'border-slate-700 bg-slate-900 text-slate-100 hover:border-cyan-400'
-          }`}
-        >
-          <Volume2 className="h-6 w-6 text-cyan-300" />
-          <span>{word}</span>
-        </button>
-
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-400">
           Tap any letter or word to hear it again.
         </p>
 
         {/* Footer Controls */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
           {!fullRule && (
             <button
               type="button"
@@ -266,7 +271,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                 sound.sfx('tap');
                 onExpandFull();
               }}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-cyan-400 cursor-pointer whitespace-nowrap shrink-0"
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 hover:border-cyan-400 cursor-pointer whitespace-nowrap shrink-0"
             >
               Show the rule
             </button>
@@ -278,7 +283,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
               sound.sfx('tap');
               playSequence(false);
             }}
-            className={`inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-100 transition-opacity whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-opacity whitespace-nowrap shrink-0 ${
               ready ? 'opacity-100 hover:border-cyan-400 cursor-pointer' : 'opacity-40 cursor-not-allowed'
             }`}
           >
@@ -292,7 +297,7 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
               sound.sfx('select');
               onClose();
             }}
-            className={`rounded-lg bg-cyan-400 px-6 py-2.5 text-base font-bold text-slate-950 transition-opacity whitespace-nowrap shrink-0 ${
+            className={`rounded-lg bg-cyan-400 px-6 py-2 text-sm md:text-base font-bold text-slate-950 transition-opacity whitespace-nowrap shrink-0 ${
               ready ? 'opacity-100 hover:bg-cyan-300 cursor-pointer' : 'opacity-40 cursor-not-allowed'
             }`}
           >
