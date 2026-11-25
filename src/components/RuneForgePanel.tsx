@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Flame, FlaskConical, Mic, Sparkles, Volume2 } from 'lucide-react';
+import { AlertTriangle, Flame, FlaskConical, Mic, SlidersHorizontal, Sparkles, Volume2 } from 'lucide-react';
 import {
   FORGE_CONFIG,
   getPatternRule,
@@ -10,6 +10,7 @@ import {
 import { sound } from '../lib/audio';
 import { GameSettings } from '../lib/metrics';
 import { speech } from '../lib/speech';
+import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 import { SoundRuleModal } from './SoundRuleModal';
 
 export interface ForgeStats {
@@ -211,6 +212,16 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     targetTileIdx?: number;
     full: boolean;
   } | null>(null);
+  const [voiceCheckModal, setVoiceCheckModal] = useState<{
+    pattern: PatternKey;
+    word?: string;
+  } | null>(null);
+  const [voiceCheckOffer, setVoiceCheckOffer] = useState<{
+    pattern: PatternKey;
+    word?: string;
+  } | null>(null);
+  const [sessionShowChoices, setSessionShowChoices] = useState(false);
+  const [graceVersion, setGraceVersion] = useState(0);
 
   const statsRef = useRef<ForgeStats>({
     forged: 0,
@@ -228,6 +239,8 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   const shownAtRef = useRef(performance.now());
   const ruleSeenRef = useRef<Record<string, boolean>>({});
   const practiceQueueRef = useRef<WordEntry[]>([]);
+  const spokenMissCountRef = useRef<Record<string, number>>({});
+  const voiceCheckOfferedRef = useRef<Set<string>>(new Set());
   const unlockedPatternsRef = useRef<PatternKey[]>(unlockedPatterns);
   unlockedPatternsRef.current = unlockedPatterns;
 
@@ -272,6 +285,10 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   useEffect(() => {
     recentWordsRef.current = [];
     practiceQueueRef.current = [];
+    spokenMissCountRef.current = {};
+    voiceCheckOfferedRef.current.clear();
+    setVoiceCheckOffer(null);
+    setSessionShowChoices(false);
     pickNextWord();
   }, [pickNextWord]);
 
@@ -291,8 +308,26 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     return speech.canCheck(cur, settings.speakRunes);
   }, [azureStatus, liveEngine, cur, settings.speakRunes]);
 
+  const activePattern = getWordPattern(cur, level.vowels[0]);
+  const activePatternHasGrace = useMemo(
+    () => speech.getPatternGrace(activePattern),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activePattern, graceVersion]
+  );
+  const activeVoiceProfile = useMemo(
+    () => speech.getVoiceProfile(activePattern),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activePattern, graceVersion]
+  );
+  const activeWordOverride = useMemo(
+    () => speech.getWordVoiceOverride(cur.w),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cur.w, graceVersion]
+  );
+  const hasActiveVoiceFit = activePatternHasGrace || Boolean(activeWordOverride);
+
   const hideTapChoices =
-    canUseMic && !revealed && speakTries < settings.speakFirst;
+    canUseMic && !revealed && !sessionShowChoices && speakTries < settings.speakFirst;
 
   const currentPayout = (mode: 'tap' | 'speak') => {
     if (revealed) return FORGE_CONFIG.shown;
@@ -327,7 +362,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   };
 
   const completeForge = useCallback(
-    (mode: 'tap' | 'speak') => {
+    (mode: 'tap' | 'speak', usedVoiceFit = false) => {
       const firstClean = tries === 0 && !usedHelp && !revealed;
       let amount = currentPayout(mode);
       let mega = false;
@@ -384,14 +419,22 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         setFeedback("Forged. You'll see this word again soon.");
       } else if (tries > 0) {
         sound.sfx('select');
-        setFeedback('Second try, and it landed.');
+        setFeedback(
+          usedVoiceFit
+            ? 'Second try, and it landed (matched your voice profile).'
+            : 'Second try, and it landed.'
+        );
       } else if (usedHelp) {
         sound.sfx('select');
         setFeedback('Forged. Using the speaker is a smart move.');
       } else {
         sound.sfx('hit');
-        const lines = ['Clean read.', 'Forged.', 'Sharp.', 'Locked in.'];
-        setFeedback(lines[st.forged % lines.length]);
+        if (usedVoiceFit) {
+          setFeedback('Clean read (matched your voice profile).');
+        } else {
+          const lines = ['Clean read.', 'Forged.', 'Sharp.', 'Locked in.'];
+          setFeedback(lines[st.forged % lines.length]);
+        }
       }
 
       pickNextWord();
@@ -505,6 +548,13 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     }
   };
 
+  const openVoiceCheck = (pat: PatternKey, word?: string) => {
+    sound.stopSpeaking();
+    speech.stop();
+    onRuleHold(true);
+    setVoiceCheckModal({ pattern: pat, word });
+  };
+
   const handleSpeak = async () => {
     if (disabled || heatLeft > 0 || !canUseMic) return;
     if (listening) {
@@ -512,6 +562,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
       speech.submitNow();
       return;
     }
+    const pat = getWordPattern(cur, level.vowels[0]);
     sound.stopSpeaking();
     sound.duck(2);
     setListening(true);
@@ -519,13 +570,16 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     setMicLevel(0);
     setFeedback('Opening mic...');
 
-    const res = await speech.listen(cur, {
-      onReady: () => {
-        setMicReady(true);
-        setFeedback('Speak now... tap again when done.');
-      },
-      onLevel: (lvl) => setMicLevel(lvl),
-    });
+    const res = await speech.listen(
+      { ...cur, pattern: pat },
+      {
+        onReady: () => {
+          setMicReady(true);
+          setFeedback('Speak now... tap again when done.');
+        },
+        onLevel: (lvl) => setMicLevel(lvl),
+      }
+    );
     sound.duck(0);
     setListening(false);
     setMicReady(false);
@@ -537,7 +591,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     setScoreDetail(detailLine);
 
     if (res.outcome === 'match') {
-      completeForge('speak');
+      completeForge('speak', Boolean(res.diagnostic?.usedProfile));
       return;
     }
 
@@ -566,9 +620,34 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     statsRef.current.misses += 1;
     sound.sfx('soft');
 
+    // Cumulative genuine spoken misses for this sound in the current level
+    const nextPatMisses = (spokenMissCountRef.current[pat] || 0) + 1;
+    spokenMissCountRef.current[pat] = nextPatMisses;
+
+    const shouldAutoOpenVoiceCheck =
+      nextPatMisses >= 3 && !voiceCheckOfferedRef.current.has(pat);
+
+    if (nextPatMisses >= 3) {
+      setVoiceCheckOffer({ pattern: pat, word: cur.w });
+    }
+
+    if (shouldAutoOpenVoiceCheck) {
+      voiceCheckOfferedRef.current.add(pat);
+      setShowTiles(true);
+      if (nextTries >= 2) {
+        setRevealed(true);
+        const correctIdx = choices.indexOf(cur.w);
+        if (correctIdx >= 0) setSelectedIdx(correctIdx);
+      }
+      setFeedback(
+        `Let's run a quick mic check on ${getPatternRule(pat).label} so Speak Mode fits your voice.`
+      );
+      openVoiceCheck(pat, cur.w);
+      return;
+    }
+
     if (nextTries === 1) {
       setShowTiles(true);
-      const pat = getWordPattern(cur, level.vowels[0]);
       setFeedback(
         pat.length > 1
           ? `Let's check the "${pat}" sound, then read it again.`
@@ -588,7 +667,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   // Keyboard shortcuts (1, 2, 3, F, M, H)
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      if (disabled || ruleModal || heatLeft > 0) return;
+      if (disabled || ruleModal || voiceCheckModal || heatLeft > 0) return;
       if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLTextAreaElement) return;
       if (ev.key === '1' || ev.key === '2' || ev.key === '3') {
         if (!hideTapChoices) handlePickSound(Number(ev.key) - 1);
@@ -770,7 +849,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         )}
 
         {/* Voice Verification Engine Note */}
-        <div className="mt-1 flex items-center justify-between text-[10px] text-purple-200/75 shrink-0">
+        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-purple-200/75 shrink-0">
           <span>
             {liveEngine === 'azure'
               ? 'Voice check: Azure sound scoring'
@@ -780,11 +859,27 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
               ? 'Voice check: Connecting...'
               : 'Tap mode active'}
           </span>
-          {hideTapChoices && (
+          {canUseMic && hasActiveVoiceFit ? (
+            <button
+              type="button"
+              disabled={disabled || listening}
+              onClick={() => openVoiceCheck(activePattern, cur.w)}
+              className="text-emerald-300 hover:text-emerald-200 font-semibold cursor-pointer disabled:opacity-50"
+              title="Speak Mode is adapted for your voice. Click to review."
+            >
+              {activeWordOverride
+                ? 'Word voice fit on'
+                : activeVoiceProfile?.mode === 'accommodation'
+                ? 'Voice fit on'
+                : activeVoiceProfile
+                ? 'Voice adapted'
+                : 'Mic grace on'}
+            </button>
+          ) : hideTapChoices ? (
             <span className="text-cyan-300">
               Choices in {settings.speakFirst - speakTries}
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Tap Mode: 3 Sound Choices + Forge Button */}
@@ -854,6 +949,28 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
             </div>
           )}
         </div>
+
+        {/* Adaptive Quick Sound Check CTA (appears after 3 cumulative spoken misses on a sound in this level) */}
+        {voiceCheckOffer && canUseMic && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-cyan-400/50 bg-cyan-500/12 px-2.5 py-2 shrink-0">
+            <div className="min-w-0 text-[11px] leading-snug text-cyan-100">
+              Mic trouble with{' '}
+              <span className="font-bold text-amber-200">
+                {getPatternRule(voiceCheckOffer.pattern).label}
+              </span>
+              ?
+            </div>
+            <button
+              type="button"
+              disabled={disabled || listening}
+              onClick={() => openVoiceCheck(voiceCheckOffer.pattern, voiceCheckOffer.word)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-cyan-400 px-2.5 py-1.5 text-[11px] font-bold text-slate-950 hover:bg-cyan-300 cursor-pointer disabled:opacity-50"
+            >
+              <SlidersHorizontal className="h-3 w-3" />
+              <span>Sound Check</span>
+            </button>
+          </div>
+        )}
 
         {/* Recent Forged Words (all tappable to hear) */}
         <div className="mt-2 pt-2 border-t border-purple-500/40">
@@ -952,6 +1069,33 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
           onExpandFull={() => setRuleModal((prev) => (prev ? { ...prev, full: true } : null))}
           onClose={() => {
             setRuleModal(null);
+            onRuleHold(false);
+          }}
+        />
+      )}
+
+      {voiceCheckModal && (
+        <QuickVoiceCheckModal
+          pattern={voiceCheckModal.pattern}
+          missedWord={voiceCheckModal.word}
+          source="forge"
+          onGraceChange={() => setGraceVersion((v) => v + 1)}
+          onSwitchToTap={() => {
+            setSessionShowChoices(true);
+            setVoiceCheckModal(null);
+            setVoiceCheckOffer(null);
+            setFeedback('Listen & Pick choices are open below. You can still use SAY IT anytime.');
+            onRuleHold(false);
+          }}
+          onClose={(passedOrCalibrated) => {
+            if (passedOrCalibrated) {
+              spokenMissCountRef.current[voiceCheckModal.pattern] = 0;
+              setVoiceCheckOffer((prev) =>
+                prev && prev.pattern === voiceCheckModal.pattern ? null : prev
+              );
+            }
+            setGraceVersion((v) => v + 1);
+            setVoiceCheckModal(null);
             onRuleHold(false);
           }}
         />

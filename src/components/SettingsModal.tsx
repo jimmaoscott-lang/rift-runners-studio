@@ -1,17 +1,31 @@
 import React, { useState } from 'react';
-import { Check, Mic, Play, RotateCcw, Volume2, X } from 'lucide-react';
+import {
+  Check,
+  Mic,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  Volume2,
+  X,
+} from 'lucide-react';
 import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
+  getPatternRule,
   LevelConfig,
   LEVELS,
+  PatternKey,
   WARDEN_SAMPLE_LINE,
   WARDEN_VOICES,
   WardenVoiceId,
 } from '../data/level1';
 import { sound } from '../lib/audio';
 import { GameSettings, PatternLockStatus } from '../lib/metrics';
-import { speech } from '../lib/speech';
+import { PatternVoiceProfile, speech, WordVoiceOverride } from '../lib/speech';
+import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 
 interface SettingsModalProps {
   level: LevelConfig;
@@ -41,6 +55,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [auditioning, setAuditioning] = useState<WardenVoiceId | null>(null);
   const [voiceNote, setVoiceNote] = useState<string>('');
   const [locksNote, setLocksNote] = useState<string>('');
+  const [voiceCheckPattern, setVoiceCheckPattern] = useState<PatternKey | null>(null);
+  const [graceList, setGraceList] = useState<string[]>(() => speech.getAllPatternGrace());
+  const [voiceProfiles, setVoiceProfiles] = useState<PatternVoiceProfile[]>(() =>
+    speech.getAllVoiceProfiles()
+  );
+  const [wordOverrides, setWordOverrides] = useState<WordVoiceOverride[]>(() =>
+    speech.getAllWordVoiceOverrides()
+  );
+  const [lastMicMiss, setLastMicMiss] = useState<{
+    word: string;
+    heard: string;
+    heardIpa?: string;
+  } | null>(null);
+
+  const refreshVoiceAdaptations = () => {
+    setGraceList(speech.getAllPatternGrace());
+    setVoiceProfiles(speech.getAllVoiceProfiles());
+    setWordOverrides(speech.getAllWordVoiceOverrides());
+  };
 
   const update = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => {
     const next = { ...settings, [key]: value };
@@ -68,19 +101,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       speech.submitNow();
       return;
     }
-    const allRunes = Object.values(LEVELS).flatMap((lv) => lv.runes);
+    const allLevels = Object.values(LEVELS);
+    const allRunes = allLevels.flatMap((lv) => lv.runes);
+    const allReal = allLevels.flatMap((lv) => lv.realWords);
     const runeEntry = allRunes.find((r) => r.w === wordToTest);
+    const realEntry = allReal.find((r) => r.w === wordToTest);
+    const matchedEntry = runeEntry || realEntry;
+
     setMicTestWord(wordToTest);
     setMicTesting(true);
     setMicLevel(0);
+    setLastMicMiss(null);
     setMicMessage(`Listening... Say "${wordToTest}" out loud.`);
     sound.duck(2);
     const res = await speech.listen(
       {
         w: wordToTest,
         kind: runeEntry ? 'rune' : 'real',
+        pattern: matchedEntry?.pattern,
         azureRef: runeEntry?.azureRef,
-        sayAlso: wordToTest === 'sun' ? ['son'] : undefined,
+        sayAlso: matchedEntry?.sayAlso || (wordToTest === 'sun' ? ['son'] : undefined),
       },
       {
         onLevel: (lvl) => setMicLevel(lvl),
@@ -91,6 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setMicLevel(0);
     if (res.outcome === 'match') {
       sound.sfx('hit');
+      setLastMicMiss(null);
       setMicMessage(
         `PASS on "${wordToTest}" (${res.engine}). Heard "${res.heard || wordToTest}" · ${res.note}`
       );
@@ -99,10 +140,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } else if (res.outcome === 'nothing') {
       setMicMessage(`No word heard for "${wordToTest}". Speak right after pressing Test.`);
     } else {
+      if (res.outcome === 'miss' && res.heard) {
+        setLastMicMiss({
+          word: wordToTest,
+          heard: res.heard,
+          heardIpa: res.diagnostic?.observed?.heardIpa,
+        });
+      }
       setMicMessage(
         `MISS on "${wordToTest}" (${res.engine}). Heard "${res.heard || 'other'}" · ${res.note}`
       );
     }
+  };
+
+  const handleSaveTesterWordFit = () => {
+    if (!lastMicMiss) return;
+    sound.sfx('select');
+    const saved = speech.saveWordVoiceOverride(
+      lastMicMiss.word,
+      lastMicMiss.heard,
+      lastMicMiss.heardIpa
+    );
+    refreshVoiceAdaptations();
+    if (saved) {
+      setMicMessage(
+        `Saved to voice profile: "${lastMicMiss.heard}" now counts as correct for "${lastMicMiss.word}". Press Test "${lastMicMiss.word}" again to verify.`
+      );
+    }
+    setLastMicMiss(null);
   };
 
   return (
@@ -436,6 +501,144 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
+            {/* Adaptive Quick Sound Check & Voice Fit Controls */}
+            <div className="rounded-xl border border-cyan-500/35 bg-[#121a30] p-4 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                    <SlidersHorizontal className="h-4 w-4 text-cyan-300" />
+                    <span>Quick Sound Check &amp; Voice Fit</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-300">
+                    Opens automatically after 3 cumulative spoken misses on the same sound in a level. Launch any sound below to tune the mic or save an accent or speech accommodation.
+                  </p>
+                </div>
+                {(graceList.length > 0 || voiceProfiles.length > 0 || wordOverrides.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.sfx('tap');
+                      speech.clearAllPatternGrace();
+                      refreshVoiceAdaptations();
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 hover:border-cyan-400 hover:text-white cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset All Voice Fits
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {level.vowels.map((pat) => {
+                  const rule = getPatternRule(pat);
+                  const vp = speech.getVoiceProfile(pat);
+                  const hasGrace = speech.getPatternGrace(pat);
+                  return (
+                    <button
+                      key={pat}
+                      type="button"
+                      disabled={micTesting}
+                      onClick={() => {
+                        sound.sfx('tap');
+                        setVoiceCheckPattern(pat);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
+                        hasGrace
+                          ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25'
+                          : 'border-cyan-400/50 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/25'
+                      }`}
+                    >
+                      {hasGrace && <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />}
+                      <span>Check {rule.label}</span>
+                      {vp?.mode === 'accommodation' ? (
+                        <span className="text-[10px] font-semibold text-emerald-300">
+                          (Voice fit)
+                        </span>
+                      ) : vp ? (
+                        <span className="text-[10px] font-semibold text-emerald-300">
+                          (Adapted · {vp.targetFloor})
+                        </span>
+                      ) : hasGrace ? (
+                        <span className="text-[10px] font-semibold text-emerald-300">(Grace on)</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(voiceProfiles.length > 0 || wordOverrides.length > 0) && (
+                <div className="rounded-lg border border-emerald-500/35 bg-emerald-950/20 p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-200">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
+                    <span>Saved Voice Adaptations (Active Across Levels)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {voiceProfiles.map((vp) => (
+                      <div
+                        key={`vp-${vp.pattern}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-[#0e1729] px-2.5 py-1.5 text-xs"
+                      >
+                        <div className="min-w-0 text-slate-200">
+                          <span className="font-bold text-emerald-200">
+                            {getPatternRule(vp.pattern as PatternKey).label}
+                          </span>
+                          <span className="text-slate-400"> · </span>
+                          <span className="text-slate-300">
+                            {vp.labelNote
+                              ? vp.labelNote
+                              : vp.mode === 'accommodation'
+                              ? `Speech fit (accepts ${vp.allowedHeard?.join(', ') || 'custom pronunciation'})`
+                              : `Calibrated floor ${vp.targetFloor}`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.sfx('tap');
+                            speech.setPatternGrace(vp.pattern, false);
+                            refreshVoiceAdaptations();
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 hover:border-rose-400 hover:text-rose-200 cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    {wordOverrides.map((wo) => (
+                      <div
+                        key={`wo-${wo.word}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-cyan-500/25 bg-[#0e1729] px-2.5 py-1.5 text-xs"
+                      >
+                        <div className="min-w-0 text-slate-200">
+                          <span className="font-reading font-bold text-cyan-200">
+                            &ldquo;{wo.word}&rdquo;
+                          </span>
+                          <span className="text-slate-400"> · </span>
+                          <span className="text-slate-300">
+                            counts {wo.acceptedHeard.map((h) => `"${h}"`).join(', ')} as correct
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.sfx('tap');
+                            speech.removeWordVoiceOverride(wo.word);
+                            refreshVoiceAdaptations();
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 hover:border-rose-400 hover:text-rose-200 cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -511,6 +714,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {micMessage && (
                 <p className="font-tabular text-xs text-cyan-200 break-words">{micMessage}</p>
               )}
+
+              {lastMicMiss && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-400/45 bg-emerald-500/12 px-3 py-2">
+                  <span className="text-xs text-emerald-100">
+                    Accent or speech difference? Save how you say &ldquo;{lastMicMiss.word}&rdquo;.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveTesterWordFit}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 cursor-pointer"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Save &ldquo;{lastMicMiss.heard}&rdquo; for &ldquo;{lastMicMiss.word}&rdquo;
+                  </button>
+                </div>
+              )}
             </div>
           </section>
 
@@ -553,6 +772,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      {voiceCheckPattern && (
+        <QuickVoiceCheckModal
+          pattern={voiceCheckPattern}
+          source="settings"
+          onGraceChange={refreshVoiceAdaptations}
+          onClose={() => {
+            refreshVoiceAdaptations();
+            setVoiceCheckPattern(null);
+          }}
+        />
+      )}
     </div>
   );
 };

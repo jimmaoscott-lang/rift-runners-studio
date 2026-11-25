@@ -5,17 +5,543 @@ const DIRECT_SPEECH_WORKER_URL = 'https://rift-runners-speech.jimmaoscott.worker
 
 export type SpeechEngineMode = 'azure' | 'chrome' | 'off';
 
+export interface ObservedPhoneme {
+  targetIpa?: string;
+  targetScore?: number;
+  heardIpa?: string;
+  wordScore?: number;
+}
+
+export interface SpeechDiagnostic {
+  kind: 'pass' | 'quiet' | 'vowel_swap' | 'digraph_swap' | 'borderline' | 'consonant' | 'unclear';
+  expected?: string;
+  heard?: string;
+  score?: number;
+  usedGrace?: boolean;
+  usedProfile?: boolean;
+  observed?: ObservedPhoneme;
+}
+
 export interface ListenResult {
   outcome: 'match' | 'miss' | 'nothing' | 'down' | 'again' | 'switch';
   engine: SpeechEngineMode;
   heard: string;
   note: string;
   reason?: string;
+  diagnostic?: SpeechDiagnostic;
 }
 
 export interface ListenOptions {
   onLevel?: (level01: number) => void;
   onReady?: () => void;
+}
+
+export interface PatternVoiceProfile {
+  pattern: string;
+  mode: 'calibrated' | 'grace' | 'accommodation';
+  targetFloor: number;
+  allowedHeard?: string[];
+  allowContrastOverlap?: boolean;
+  labelNote?: string;
+  targetSampleScore?: number;
+  contrastSampleScore?: number;
+  updatedAt: number;
+}
+
+export interface WordVoiceOverride {
+  word: string;
+  acceptedHeard: string[];
+  acceptedHeardIpa?: string[];
+  updatedAt: number;
+}
+
+export interface CalibrationOutcome {
+  adapted: boolean;
+  reason:
+    | 'already_clean'
+    | 'calibrated_floor'
+    | 'calibrated_signature'
+    | 'same_sound_swap'
+    | 'contrast_unclear'
+    | 'too_quiet';
+  profile?: PatternVoiceProfile;
+  summary: string;
+}
+
+const MIC_GRACE_KEY = 'rift_runners_mic_grace_v1';
+const VOICE_PROFILES_KEY = 'rift_runners_voice_profiles_v1';
+const WORD_VOICES_KEY = 'rift_runners_word_voices_v1';
+
+export function normalizePatternKey(pattern?: string): string {
+  return String(pattern || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^[-_]+|[-_]+$/g, '');
+}
+
+function loadMicGraceSet(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(MIC_GRACE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map((item) => normalizePatternKey(String(item))).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveMicGraceSet(set: Set<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(MIC_GRACE_KEY, JSON.stringify(Array.from(set)));
+  } catch {
+    // ignore storage quota / private mode errors
+  }
+}
+
+function loadVoiceProfiles(): Record<string, PatternVoiceProfile> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(VOICE_PROFILES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const out: Record<string, PatternVoiceProfile> = {};
+    for (const [k, val] of Object.entries(parsed)) {
+      const key = normalizePatternKey(k);
+      if (key && val && typeof val === 'object' && typeof (val as any).targetFloor === 'number') {
+        out[key] = { ...(val as PatternVoiceProfile), pattern: key };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveVoiceProfiles(map: Record<string, PatternVoiceProfile>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(VOICE_PROFILES_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage quota / private mode errors
+  }
+}
+
+function loadWordVoiceOverrides(): Record<string, WordVoiceOverride> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(WORD_VOICES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const out: Record<string, WordVoiceOverride> = {};
+    for (const [k, val] of Object.entries(parsed)) {
+      const key = String(k || '').trim().toLowerCase();
+      if (key && val && typeof val === 'object' && Array.isArray((val as any).acceptedHeard)) {
+        out[key] = { ...(val as WordVoiceOverride), word: key };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveWordVoiceOverrides(map: Record<string, WordVoiceOverride>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(WORD_VOICES_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage quota / private mode errors
+  }
+}
+
+let micGraceCache: Set<string> | null = null;
+let voiceProfilesCache: Record<string, PatternVoiceProfile> | null = null;
+let wordVoicesCache: Record<string, WordVoiceOverride> | null = null;
+
+function getMicGraceStore(): Set<string> {
+  if (!micGraceCache) {
+    micGraceCache = loadMicGraceSet();
+  }
+  return micGraceCache;
+}
+
+function getVoiceProfileStore(): Record<string, PatternVoiceProfile> {
+  if (!voiceProfilesCache) {
+    voiceProfilesCache = loadVoiceProfiles();
+  }
+  return voiceProfilesCache;
+}
+
+function getWordVoiceStore(): Record<string, WordVoiceOverride> {
+  if (!wordVoicesCache) {
+    wordVoicesCache = loadWordVoiceOverrides();
+  }
+  return wordVoicesCache;
+}
+
+export function getWordVoiceOverride(word: string): WordVoiceOverride | null {
+  const key = String(word || '').trim().toLowerCase();
+  if (!key) return null;
+  return getWordVoiceStore()[key] || null;
+}
+
+export function saveWordVoiceOverride(
+  word: string,
+  heardText: string,
+  heardIpa?: string
+): WordVoiceOverride | null {
+  const key = String(word || '').trim().toLowerCase();
+  if (!key) return null;
+  const tokens = normTokens(heardText).filter((t) => t.length >= 2);
+  if (!tokens.length && !heardIpa) return null;
+  const store = getWordVoiceStore();
+  const prev = store[key];
+  const mergedHeard = Array.from(new Set([...(prev?.acceptedHeard || []), ...tokens]));
+  const mergedIpa = Array.from(
+    new Set([...(prev?.acceptedHeardIpa || []), ...(heardIpa ? [heardIpa] : [])])
+  );
+  const next: WordVoiceOverride = {
+    word: key,
+    acceptedHeard: mergedHeard,
+    acceptedHeardIpa: mergedIpa.length ? mergedIpa : undefined,
+    updatedAt: Date.now(),
+  };
+  store[key] = next;
+  saveWordVoiceOverrides(store);
+  return next;
+}
+
+export function removeWordVoiceOverride(word: string): void {
+  const key = String(word || '').trim().toLowerCase();
+  if (!key) return;
+  const store = getWordVoiceStore();
+  delete store[key];
+  saveWordVoiceOverrides(store);
+}
+
+export function getAllWordVoiceOverrides(): WordVoiceOverride[] {
+  return Object.values(getWordVoiceStore());
+}
+
+export function clearAllWordVoiceOverrides(): void {
+  const store = getWordVoiceStore();
+  for (const k of Object.keys(store)) {
+    delete store[k];
+  }
+  saveWordVoiceOverrides(store);
+}
+
+export function matchesWordVoiceOverride(
+  word: string,
+  heardTexts: string[],
+  observedHeardIpa?: string
+): string | null {
+  const ov = getWordVoiceOverride(word);
+  if (!ov) return null;
+  for (const tx of heardTexts) {
+    for (const tok of normTokens(tx)) {
+      if (ov.acceptedHeard.includes(tok)) {
+        return tok;
+      }
+    }
+  }
+  if (observedHeardIpa && ov.acceptedHeardIpa?.includes(observedHeardIpa)) {
+    return ov.acceptedHeard[0] || ipaToPlainSound(observedHeardIpa) || observedHeardIpa;
+  }
+  return null;
+}
+
+export function getVoiceProfile(pattern: string): PatternVoiceProfile | null {
+  const key = normalizePatternKey(pattern);
+  if (!key) return null;
+  return getVoiceProfileStore()[key] || null;
+}
+
+export function saveVoiceProfile(profile: PatternVoiceProfile): void {
+  const key = normalizePatternKey(profile.pattern);
+  if (!key) return;
+  const store = getVoiceProfileStore();
+  store[key] = { ...profile, pattern: key };
+  saveVoiceProfiles(store);
+}
+
+export function removeVoiceProfile(pattern: string): void {
+  const key = normalizePatternKey(pattern);
+  if (!key) return;
+  const store = getVoiceProfileStore();
+  delete store[key];
+  saveVoiceProfiles(store);
+}
+
+export function getAllVoiceProfiles(): PatternVoiceProfile[] {
+  return Object.values(getVoiceProfileStore());
+}
+
+export function saveSpeechAccommodation(
+  pattern: string,
+  sample: ListenResult,
+  customNote?: string
+): PatternVoiceProfile {
+  const key = normalizePatternKey(pattern);
+  const obs = sample.diagnostic?.observed;
+  const cfg = DEFAULT_PATTERN_FLOOR[key] || { base: 55, min: 30, forbiddenSwaps: [] };
+  const prev = getVoiceProfile(key);
+  const heardSet = new Set<string>(prev?.allowedHeard || []);
+  if (obs?.heardIpa) {
+    heardSet.add(obs.heardIpa);
+  }
+  // If a student's ch sample came through as a sh-word transcript (e.g. Spanish L1 "ship" for "chip")
+  // or sh came through as s/st (e.g. "rust" for "rush"), include the matching IPA signature cleanly.
+  const heardLower = String(sample.heard || '').toLowerCase();
+  if (key === 'ch' && (heardLower.includes('sh') || sample.diagnostic?.heard === 'sh')) {
+    heardSet.add('ʃ');
+  }
+  if (key === 'sh' && (heardLower.endsWith('st') || heardLower.endsWith('s') || sample.diagnostic?.heard === 's')) {
+    heardSet.add('s');
+  }
+  const allowedHeard = Array.from(heardSet);
+  const plainList = allowedHeard.map((ipa) => ipaToPlainSound(ipa) || ipa).join('/');
+  const labelNote =
+    customNote ||
+    (plainList
+      ? `accepts "${plainList}" voice fit`
+      : 'adapted to student voice');
+
+  const rawScore = obs?.targetScore ?? sample.diagnostic?.score ?? 45;
+  const floor = Math.max(cfg.min, Math.min(cfg.base - 6, Math.round(rawScore - 10)));
+
+  const profile: PatternVoiceProfile = {
+    pattern: key,
+    mode: 'accommodation',
+    targetFloor: floor,
+    allowedHeard: allowedHeard.length ? allowedHeard : undefined,
+    allowContrastOverlap: true,
+    labelNote,
+    targetSampleScore: Math.round(rawScore),
+    updatedAt: Date.now(),
+  };
+  saveVoiceProfile(profile);
+  return profile;
+}
+
+export function getPatternGrace(pattern: string): boolean {
+  const key = normalizePatternKey(pattern);
+  if (!key) return false;
+  return getMicGraceStore().has(key) || Boolean(getVoiceProfileStore()[key]);
+}
+
+export function setPatternGrace(pattern: string, enabled: boolean): void {
+  const key = normalizePatternKey(pattern);
+  if (!key) return;
+  const store = getMicGraceStore();
+  if (enabled) {
+    store.add(key);
+  } else {
+    store.delete(key);
+    removeVoiceProfile(key);
+  }
+  saveMicGraceSet(store);
+}
+
+export function getAllPatternGrace(): string[] {
+  const keys = new Set<string>([
+    ...Array.from(getMicGraceStore()),
+    ...Object.keys(getVoiceProfileStore()),
+  ]);
+  return Array.from(keys);
+}
+
+export function clearAllPatternGrace(): void {
+  const store = getMicGraceStore();
+  store.clear();
+  saveMicGraceSet(store);
+  const profiles = getVoiceProfileStore();
+  for (const k of Object.keys(profiles)) {
+    delete profiles[k];
+  }
+  saveVoiceProfiles(profiles);
+  clearAllWordVoiceOverrides();
+}
+
+const DEFAULT_PATTERN_FLOOR: Record<string, { base: number; min: number; forbiddenSwaps: string[] }> = {
+  sh: { base: 70, min: 36, forbiddenSwaps: ['tʃ'] },
+  ch: { base: 70, min: 36, forbiddenSwaps: ['ʃ'] },
+  th: { base: 48, min: 28, forbiddenSwaps: ['t', 'd'] },
+  wh: { base: 50, min: 30, forbiddenSwaps: ['ɹ', 'r'] },
+  ck: { base: 55, min: 32, forbiddenSwaps: ['g', 'd'] },
+  a: { base: 52, min: 28, forbiddenSwaps: ['ɪ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
+  e: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
+  i: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
+  o: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'i', 'eɪ'] },
+  u: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'i', 'eɪ'] },
+};
+
+export function calibratePatternFromSamples(
+  pattern: string,
+  targetWord: string,
+  contrastWord: string,
+  targetRes: ListenResult,
+  contrastRes: ListenResult,
+  label?: string
+): CalibrationOutcome {
+  const key = normalizePatternKey(pattern);
+  const displayLabel = label || key;
+
+  if (targetRes.outcome === 'match') {
+    return {
+      adapted: false,
+      reason: 'already_clean',
+      summary: `Your voice already passes cleanly on ${displayLabel}. No adjustment needed.`,
+    };
+  }
+
+  const tObs = targetRes.diagnostic?.observed;
+  const cObs = contrastRes.diagnostic?.observed;
+  const tScore = tObs?.targetScore ?? targetRes.diagnostic?.score ?? 0;
+  const tWordScore = tObs?.wordScore ?? 0;
+  const cWordScore = cObs?.wordScore ?? 0;
+
+  if (
+    targetRes.outcome === 'nothing' ||
+    targetRes.outcome === 'down' ||
+    targetRes.outcome === 'again' ||
+    (tWordScore < 32 && tScore < 22)
+  ) {
+    return {
+      adapted: false,
+      reason: 'too_quiet',
+      summary: `The mic barely caught "${targetWord}". Lean a bit closer and try again, or turn on Mic Grace manually below.`,
+    };
+  }
+
+  const cfg = DEFAULT_PATTERN_FLOOR[key] || { base: 55, min: 32, forbiddenSwaps: [] };
+  const tHeard = tObs?.heardIpa;
+  const cTarget = cObs?.targetIpa;
+  const cHeard = cObs?.heardIpa;
+
+  // Reject calibration if the student actually produced the contrast word's target sound
+  // (for example, saying "chip" /tʃ/ when asked to read "ship" /ʃ/, or saying short "a" for short "i").
+  const saidContrastSound =
+    Boolean(tHeard && cTarget && tHeard === cTarget && tHeard !== tObs?.targetIpa) ||
+    Boolean(tHeard && cfg.forbiddenSwaps.includes(tHeard) && tScore < 55);
+
+  if (saidContrastSound) {
+    return {
+      adapted: false,
+      reason: 'same_sound_swap',
+      summary: `To the mic, "${targetWord}" sounded just like "${contrastWord}". Listen to both words side by side, then try again.`,
+    };
+  }
+
+  const contrastReadable =
+    contrastRes.outcome === 'match' ||
+    cWordScore >= 38 ||
+    (cObs?.targetScore ?? 0) >= 35;
+
+  if (!contrastReadable) {
+    return {
+      adapted: false,
+      reason: 'contrast_unclear',
+      summary: `The mic did not clearly hear "${contrastWord}" for comparison. Try saying "${contrastWord}" once more, or toggle Mic Grace below.`,
+    };
+  }
+
+  // Also check that both words didn't collapse to the exact same heard phoneme
+  if (tHeard && cHeard && tHeard === cHeard && tObs?.targetIpa !== cObs?.targetIpa) {
+    return {
+      adapted: false,
+      reason: 'same_sound_swap',
+      summary: `Both "${targetWord}" and "${contrastWord}" sounded identical to the mic. Listen to the contrast above and try once more.`,
+    };
+  }
+
+  const effectiveTargetScore = Math.max(tScore, Math.round(tWordScore * 0.7));
+  const personalizedFloor = Math.max(
+    cfg.min,
+    Math.min(cfg.base - 4, Math.round(effectiveTargetScore - 10))
+  );
+
+  // If the student's voice consistently maps this target to a distinct non-contrast sound
+  // (e.g., a mild lisp producing 's' for 'sh' while keeping 'ch' clearly /tʃ/), learn that signature!
+  const allowedHeard: string[] = [];
+  if (
+    tHeard &&
+    tHeard !== tObs?.targetIpa &&
+    tHeard !== cTarget &&
+    tHeard !== cHeard &&
+    !cfg.forbiddenSwaps.includes(tHeard)
+  ) {
+    allowedHeard.push(tHeard);
+  }
+
+  const profile: PatternVoiceProfile = {
+    pattern: key,
+    mode: 'calibrated',
+    targetFloor: personalizedFloor,
+    allowedHeard: allowedHeard.length ? allowedHeard : undefined,
+    targetSampleScore: Math.round(tScore),
+    contrastSampleScore: Math.round(cObs?.targetScore ?? cWordScore),
+    updatedAt: Date.now(),
+  };
+
+  saveVoiceProfile(profile);
+
+  return {
+    adapted: true,
+    reason: allowedHeard.length ? 'calibrated_signature' : 'calibrated_floor',
+    profile,
+    summary: `Adapted Speak Mode to your voice for ${displayLabel}! Your reading clearly separates "${targetWord}" from "${contrastWord}", so scoring is now tuned for your voice while still catching sound swaps.`,
+  };
+}
+
+function inferWordPatterns(target: string, explicitPattern?: string): string[] {
+  const keys = new Set<string>();
+  const explicit = normalizePatternKey(explicitPattern);
+  if (explicit) keys.add(explicit);
+  const t = String(target || '').toLowerCase();
+  if (t.includes('sh')) keys.add('sh');
+  if (t.includes('ch')) keys.add('ch');
+  if (t.includes('th')) keys.add('th');
+  if (t.includes('wh')) keys.add('wh');
+  if (t.endsWith('ck')) keys.add('ck');
+  const vm = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(t);
+  if (vm && vm[1]) keys.add(vm[1]);
+  return Array.from(keys);
+}
+
+function ipaToPlainSound(ipa?: string | null): string | undefined {
+  if (!ipa) return undefined;
+  const map: Record<string, string> = {
+    'æ': 'short a',
+    'ɛ': 'short e',
+    'ɪ': 'short i',
+    'ɑ': 'short o',
+    'ɔ': 'short o',
+    'ʌ': 'short u',
+    'ə': 'short u',
+    'ʃ': 'sh',
+    'tʃ': 'ch',
+    'θ': 'th',
+    'ð': 'th',
+    'w': 'wh',
+    'k': 'ck',
+    's': 's',
+    't': 't',
+    'd': 'd',
+    'g': 'g',
+    'z': 'z',
+    'f': 'f',
+    'v': 'v',
+    'dʒ': 'j',
+    'ʒ': 'zh',
+    'ɹ': 'r',
+  };
+  return map[ipa];
 }
 
 const VOWELS = [
@@ -72,18 +598,21 @@ export function matchesChromeTranscript(
 export function scoreAzureWord(
   res: any,
   target: string,
-  isRune = false
+  isRune = false,
+  opts?: { pattern?: string; grace?: boolean; profile?: PatternVoiceProfile | null }
 ): {
   outcome: 'match' | 'miss' | 'nothing';
   note: string;
   alignmentDrop?: boolean;
   nasalSchwa?: boolean;
+  diagnostic: SpeechDiagnostic;
 } {
   const s = SPEECH_SCORE_CONFIG;
   if (!res || res.status !== 'Success' || !res.word) {
     return {
       outcome: res && res.heard ? 'miss' : 'nothing',
       note: 'azure ' + (res && res.status ? res.status : 'no-match'),
+      diagnostic: { kind: res && res.heard ? 'unclear' : 'quiet' },
     };
   }
   const w = res.word;
@@ -92,14 +621,60 @@ export function scoreAzureWord(
     return {
       outcome: res.heard ? 'miss' : 'nothing',
       note: 'azure skipped the word',
+      diagnostic: { kind: res.heard ? 'unclear' : 'quiet' },
     };
   }
 
+  const inferredPatterns = inferWordPatterns(target, opts?.pattern);
+  const explicitKey = normalizePatternKey(opts?.pattern);
+  const activeProfile: PatternVoiceProfile | null =
+    opts?.profile !== undefined
+      ? opts.profile
+      : (explicitKey ? getVoiceProfile(explicitKey) : null) ||
+        inferredPatterns.map((k) => getVoiceProfile(k)).find(Boolean) ||
+        null;
+
+  const graceActive =
+    typeof opts?.grace === 'boolean'
+      ? opts.grace
+      : Boolean(activeProfile) || inferredPatterns.some((k) => getMicGraceStore().has(k));
+
+  const profileForVowel =
+    activeProfile && ['a', 'e', 'i', 'o', 'u'].includes(activeProfile.pattern)
+      ? activeProfile
+      : null;
+
+  const vowelMin = profileForVowel
+    ? Math.min(s.vowelMin, profileForVowel.targetFloor)
+    : graceActive
+    ? Math.max(36, s.vowelMin - 14)
+    : s.vowelMin;
+  const vowelClearMiss = graceActive ? Math.max(50, s.vowelClearMiss - 8) : s.vowelClearMiss;
+  const consAvgMin = activeProfile
+    ? Math.max(22, s.consonantAvgMin - 10)
+    : graceActive
+    ? Math.max(26, s.consonantAvgMin - 7)
+    : s.consonantAvgMin;
+  const wordMin = activeProfile
+    ? Math.max(28, s.wordMin - 10)
+    : graceActive
+    ? Math.max(32, s.wordMin - 8)
+    : s.wordMin;
+
   const vi = ph.findIndex((p) => VOWELS.includes(p.p));
   if (vi < 0) {
+    const pass = (w.accuracy || 0) >= wordMin;
+    const tag = activeProfile ? ' [adapted]' : graceActive ? ' [grace]' : '';
     return {
-      outcome: (w.accuracy || 0) >= s.wordMin ? 'match' : 'miss',
-      note: `word ${Math.round(w.accuracy || 0)}`,
+      outcome: pass ? 'match' : 'miss',
+      note: `word ${Math.round(w.accuracy || 0)}${tag}`,
+      diagnostic: {
+        kind: pass ? 'pass' : 'unclear',
+        score: Math.round(w.accuracy || 0),
+        usedGrace: graceActive,
+        usedProfile: Boolean(activeProfile),
+        observed: { wordScore: Math.round(w.accuracy || 0) },
+      },
     };
   }
 
@@ -116,6 +691,9 @@ export function scoreAzureWord(
     // Nasalized short a before m/n (e.g., fan) can raise slightly in Azure NBest
     ok = ok.concat(['ɛ']);
   }
+  if (profileForVowel?.allowedHeard?.length) {
+    ok = ok.concat(profileForVowel.allowedHeard);
+  }
 
   const bestList = Array.isArray(v.best) ? v.best : [];
   const top = bestList[0]?.p || null;
@@ -129,7 +707,7 @@ export function scoreAzureWord(
   const runeSecondOK =
     isRune &&
     offGuess &&
-    Boolean(second && ok.includes(second.p) && (second.score || 0) >= 42) &&
+    Boolean(second && ok.includes(second.p) && (second.score || 0) >= (graceActive ? 34 : 42)) &&
     top !== oppositeTargetVowel;
 
   // Natural Southern / relaxed short i can dip slightly toward ɛ or ə while keeping ɪ right behind as #2.
@@ -137,19 +715,227 @@ export function scoreAzureWord(
   const relaxedShortIOK =
     want === 'ɪ' &&
     Boolean(top && ['ɛ', 'ə', 'ɨ'].includes(top)) &&
-    Boolean(second && ok.includes(second.p) && (second.score || 0) >= 35) &&
-    (v.score || 0) >= 25;
+    Boolean(second && ok.includes(second.p) && (second.score || 0) >= (graceActive ? 28 : 35)) &&
+    (v.score || 0) >= (graceActive ? 20 : 25);
 
   const vs = v.score || 0;
   const vowelPass = offGuess
     ? topOK || runeSecondOK
     : (topOK && vs >= 10) ||
       relaxedShortIOK ||
-      (vs >= s.vowelMin && !(topOther && vs < s.vowelClearMiss));
+      (vs >= vowelMin && !(topOther && vs < vowelClearMiss));
 
   const consPh = ph.filter((_p, k) => k !== vi);
   const cons = consPh.map((p) => p.score || 0);
-  const avg = cons.length ? cons.reduce((a, b) => a + b, 0) / cons.length : 100;
+  const effectiveCons = cons.slice();
+
+  // Catch World 2 digraph swaps (sh, ch, th unvoiced/voiced, wh, -ck) using multi-voice calibrated cutoffs.
+  // When a student has a calibrated PatternVoiceProfile (or explicit Speech/ELL Accommodation), apply their
+  // verified personal floor and allowed speech signature while keeping all other sounds in the word graded.
+  const targetLower = String(target || '').toLowerCase();
+  const hasWh = targetLower.includes('wh');
+  const endsCk = targetLower.endsWith('ck');
+  let digraphSwapMiss = false;
+  let digraphBorderlineMiss = false;
+  let digraphExpected: string | undefined;
+  let digraphHeard: string | undefined;
+  let digraphScore: number | undefined;
+  let digraphDetail = '';
+  let observedDigraph: ObservedPhoneme | null = null;
+  let usedAccommodation = false;
+
+  const getDigraphProfile = (patKey: string): PatternVoiceProfile | null => {
+    if (activeProfile && activeProfile.pattern === patKey) return activeProfile;
+    return opts?.profile !== undefined ? null : getVoiceProfile(patKey);
+  };
+
+  for (let ci = 0; ci < consPh.length; ci++) {
+    const cp = consPh[ci];
+    const topC = Array.isArray(cp.best) ? cp.best[0]?.p : null;
+    const sc = cp.score || 0;
+    const isFinalCons = ci === consPh.length - 1;
+
+    if (cp.p === 'ʃ' || cp.p === 'tʃ') {
+      const wantsCh =
+        (!isFinalCons && targetLower.startsWith('ch')) ||
+        (isFinalCons && targetLower.endsWith('ch'));
+      const wantsSh =
+        (!isFinalCons && targetLower.startsWith('sh')) ||
+        (isFinalCons && targetLower.endsWith('sh'));
+      const expected = wantsCh ? 'tʃ' : wantsSh ? 'ʃ' : cp.p;
+      const patKey = expected === 'tʃ' ? 'ch' : 'sh';
+      const dgProfile = getDigraphProfile(patKey);
+      const dgGrace = graceActive || Boolean(dgProfile);
+      const azureDictMismatch = expected !== cp.p;
+
+      observedDigraph = {
+        targetIpa: expected,
+        targetScore: Math.round(sc),
+        heardIpa: topC || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+
+      digraphDetail = `, ${expected} ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      if (azureDictMismatch) {
+        const secondC = Array.isArray(cp.best) ? cp.best[1] : null;
+        const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+        const accommodated = Boolean(dgProfile?.allowContrastOverlap && allowedSig);
+        const heardExpected =
+          accommodated ||
+          topC === expected ||
+          Boolean(
+            secondC &&
+              secondC.p === expected &&
+              (secondC.score || 0) >= (dgGrace ? 45 : 55) &&
+              topC !== cp.p
+          );
+        if (accommodated) {
+          usedAccommodation = true;
+          effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+        }
+        if (!heardExpected) {
+          digraphSwapMiss = true;
+          digraphExpected = ipaToPlainSound(expected);
+          digraphHeard = ipaToPlainSound(topC);
+          digraphScore = Math.round(sc);
+        }
+      } else {
+        const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+        const accommodatedOverlap = Boolean(dgProfile?.allowContrastOverlap && allowedSig);
+        if (accommodatedOverlap) {
+          usedAccommodation = true;
+          effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+        } else {
+          const directOpposite =
+            (expected === 'ʃ' && topC === 'tʃ') || (expected === 'tʃ' && topC === 'ʃ');
+          const swappedWithNeighbor =
+            directOpposite ||
+            (!allowedSig &&
+              ((expected === 'ʃ' && (topC === 's' || topC === 'ʒ')) ||
+                (expected === 'tʃ' && (topC === 's' || topC === 't' || topC === 'dʒ'))));
+          const baseFloor = dgProfile ? dgProfile.targetFloor : dgGrace ? 55 : 70;
+          const swapFloor = dgGrace ? 78 : 82;
+          if (sc < baseFloor || (swappedWithNeighbor && sc < swapFloor)) {
+            digraphSwapMiss = true;
+            digraphBorderlineMiss = !swappedWithNeighbor && sc >= 36;
+            digraphExpected = ipaToPlainSound(expected);
+            digraphHeard = ipaToPlainSound(topC);
+            digraphScore = Math.round(sc);
+          }
+        }
+      }
+    } else if (cp.p === 'θ') {
+      const dgProfile = getDigraphProfile('th');
+      const dgGrace = graceActive || Boolean(dgProfile);
+      observedDigraph = {
+        targetIpa: 'θ',
+        targetScore: Math.round(sc),
+        heardIpa: topC || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+      digraphDetail = `, θ ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+      if (dgProfile?.allowContrastOverlap && allowedSig) {
+        usedAccommodation = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+      } else {
+        const swapped = topC === 't';
+        const baseFloor = dgProfile ? dgProfile.targetFloor : dgGrace ? 36 : 48;
+        const swapFloor = dgGrace ? 62 : 65;
+        if (sc < baseFloor || (swapped && sc < swapFloor)) {
+          digraphSwapMiss = true;
+          digraphBorderlineMiss = !swapped && sc >= 24;
+          digraphExpected = 'th';
+          digraphHeard = ipaToPlainSound(topC);
+          digraphScore = Math.round(sc);
+        }
+      }
+    } else if (cp.p === 'ð') {
+      const dgProfile = getDigraphProfile('th');
+      const dgGrace = graceActive || Boolean(dgProfile);
+      observedDigraph = {
+        targetIpa: 'ð',
+        targetScore: Math.round(sc),
+        heardIpa: topC || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+      digraphDetail = `, ð ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+      if (dgProfile?.allowContrastOverlap && allowedSig) {
+        usedAccommodation = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+      } else {
+        const swappedVoicedTh =
+          topC === 'd' || topC === 't' || (!allowedSig && (topC === 'z' || topC === 'v'));
+        const baseFloor = dgProfile ? dgProfile.targetFloor : dgGrace ? 42 : 55;
+        const swapFloor = dgGrace ? 72 : 75;
+        if (sc < baseFloor || (swappedVoicedTh && sc < swapFloor)) {
+          digraphSwapMiss = true;
+          digraphBorderlineMiss = !swappedVoicedTh && sc >= 28;
+          digraphExpected = 'th';
+          digraphHeard = ipaToPlainSound(topC);
+          digraphScore = Math.round(sc);
+        }
+      }
+    } else if (hasWh && cp.p === 'w') {
+      const dgProfile = getDigraphProfile('wh');
+      const dgGrace = graceActive || Boolean(dgProfile);
+      observedDigraph = {
+        targetIpa: 'w',
+        targetScore: Math.round(sc),
+        heardIpa: topC || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+      digraphDetail = `, w ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+      if (dgProfile?.allowContrastOverlap && allowedSig) {
+        usedAccommodation = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+      } else {
+        const swapped = Boolean(topC && topC !== 'w' && !allowedSig);
+        const baseFloor = dgProfile ? dgProfile.targetFloor : dgGrace ? 38 : 50;
+        const swapFloor = dgGrace ? 66 : 70;
+        if (sc < baseFloor || (swapped && sc < swapFloor)) {
+          digraphSwapMiss = true;
+          digraphBorderlineMiss = !swapped && sc >= 26;
+          digraphExpected = 'wh';
+          digraphHeard = ipaToPlainSound(topC);
+          digraphScore = Math.round(sc);
+        }
+      }
+    } else if (endsCk && isFinalCons && cp.p === 'k') {
+      const dgProfile = getDigraphProfile('ck');
+      const dgGrace = graceActive || Boolean(dgProfile);
+      observedDigraph = {
+        targetIpa: 'k',
+        targetScore: Math.round(sc),
+        heardIpa: topC || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+      digraphDetail = `, k ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
+      const allowedSig = Boolean(topC && dgProfile?.allowedHeard?.includes(topC));
+      if (dgProfile?.allowContrastOverlap && allowedSig) {
+        usedAccommodation = true;
+        effectiveCons[ci] = Math.max(effectiveCons[ci], 78);
+      } else {
+        const swappedCk =
+          topC === 'g' || topC === 'd' || (!allowedSig && (topC === 't' || topC === 'p'));
+        const baseFloor = dgProfile ? dgProfile.targetFloor : dgGrace ? 42 : 55;
+        const swapFloor = dgGrace ? 68 : 72;
+        if (sc < baseFloor || (swappedCk && sc < swapFloor)) {
+          digraphSwapMiss = true;
+          digraphBorderlineMiss = !swappedCk && sc >= 28;
+          digraphExpected = 'ck';
+          digraphHeard = ipaToPlainSound(topC);
+          digraphScore = Math.round(sc);
+        }
+      }
+    }
+  }
+
+  const avg = effectiveCons.length
+    ? effectiveCons.reduce((a, b) => a + b, 0) / effectiveCons.length
+    : 100;
 
   // Natural American English often leaves final voiced stops (b/d/g) or nasals (m/n) softly unreleased.
   // If the vowel and opening consonant are solid, accept a quiet final consonant whose NBest matches its place of articulation.
@@ -162,93 +948,25 @@ export function scoreAzureWord(
     p: ['p', 'b'],
     t: ['t', 'd'],
   };
-  let consEachOK = cons.every((c) => c >= s.consonantEachMin);
+  let consEachOK = effectiveCons.every((c) => c >= s.consonantEachMin);
   if (!consEachOK && consPh.length >= 2 && (topOK || vs >= 55)) {
-    const leadingOK = cons.slice(0, -1).every((c) => c >= s.consonantEachMin);
+    const leadingOK = effectiveCons.slice(0, -1).every((c) => c >= s.consonantEachMin);
     const finalIdx = consPh.length - 1;
     const finalPh = consPh[finalIdx];
     const allowedFinals = SOFT_FINAL_NEIGHBORS[finalPh.p] || [finalPh.p];
     const finalNBest = (finalPh.best || []).slice(0, 3).map((b) => b.p);
-    if (leadingOK && cons[finalIdx] >= 4 && finalNBest.some((p) => allowedFinals.includes(p))) {
+    if (leadingOK && effectiveCons[finalIdx] >= 4 && finalNBest.some((p) => allowedFinals.includes(p))) {
       consEachOK = true;
     }
   }
 
-  // Catch World 2 digraph swaps (sh, ch, th unvoiced/voiced, wh, -ck) using multi-voice calibrated cutoffs.
-  // - /ʃ/ and /tʃ/ share the fricative half, so swaps score 42-72 while clean reads score 79-100.
-  // - /θ/ (thin) is very quiet; clean male/female/noisy reads score 61-82 (often with s/f as NBest #1),
-  //   whereas saying "tin" drops to ~29 (heard t).
-  // - /ð/ (this) cleanly scores 89-91 across voices; saying "dis" drops to ~30 (heard d).
-  // - wh (/w/) cleanly scores 90-99; saying "rip" drops to ~16 (heard ɹ).
-  // - -ck (/k/) cleanly scores 95-100; saying "log" drops to ~45 (heard g).
-  const targetLower = String(target || '').toLowerCase();
-  const hasWh = targetLower.includes('wh');
-  const endsCk = targetLower.endsWith('ck');
-  let digraphSwapMiss = false;
-  let digraphDetail = '';
-
-  for (let ci = 0; ci < consPh.length; ci++) {
-    const cp = consPh[ci];
-    const topC = Array.isArray(cp.best) ? cp.best[0]?.p : null;
-    const sc = cp.score || 0;
-    const isFinalCons = ci === consPh.length - 1;
-
-    if (cp.p === 'ʃ' || cp.p === 'tʃ') {
-      // Azure's lexicon treats some ch- runes (e.g. "chott") as French /ʃ/ instead of English /tʃ/.
-      // Grade against the phonics target spelled in the word rather than Azure's loanword guess.
-      const wantsCh =
-        (!isFinalCons && targetLower.startsWith('ch')) ||
-        (isFinalCons && targetLower.endsWith('ch'));
-      const wantsSh =
-        (!isFinalCons && targetLower.startsWith('sh')) ||
-        (isFinalCons && targetLower.endsWith('sh'));
-      const expected = wantsCh ? 'tʃ' : wantsSh ? 'ʃ' : cp.p;
-      const azureDictMismatch = expected !== cp.p;
-
-      digraphDetail = `, ${expected} ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      if (azureDictMismatch) {
-        const secondC = Array.isArray(cp.best) ? cp.best[1] : null;
-        const heardExpected =
-          topC === expected ||
-          Boolean(secondC && secondC.p === expected && (secondC.score || 0) >= 55 && topC !== cp.p);
-        if (!heardExpected) {
-          digraphSwapMiss = true;
-        }
-      } else {
-        const swappedWithNeighbor =
-          (expected === 'ʃ' && (topC === 'tʃ' || topC === 's' || topC === 'ʒ')) ||
-          (expected === 'tʃ' && (topC === 'ʃ' || topC === 's' || topC === 't' || topC === 'dʒ'));
-        if (sc < 70 || (swappedWithNeighbor && sc < 82)) {
-          digraphSwapMiss = true;
-        }
-      }
-    } else if (cp.p === 'θ') {
-      digraphDetail = `, θ ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      if (sc < 48 || (topC === 't' && sc < 65)) {
-        digraphSwapMiss = true;
-      }
-    } else if (cp.p === 'ð') {
-      digraphDetail = `, ð ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      const swappedVoicedTh = topC === 'd' || topC === 'z' || topC === 'v' || topC === 't';
-      if (sc < 55 || (swappedVoicedTh && sc < 75)) {
-        digraphSwapMiss = true;
-      }
-    } else if (hasWh && cp.p === 'w') {
-      digraphDetail = `, w ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      if (sc < 50 || (topC && topC !== 'w' && sc < 70)) {
-        digraphSwapMiss = true;
-      }
-    } else if (endsCk && isFinalCons && cp.p === 'k') {
-      digraphDetail = `, k ${Math.round(sc)}${topC ? ` (heard ${topC})` : ''}`;
-      const swappedCk = topC === 'g' || topC === 't' || topC === 'p' || topC === 'd';
-      if (sc < 55 || (swappedCk && sc < 72)) {
-        digraphSwapMiss = true;
-      }
-    }
-  }
-
-  const consPass = avg >= s.consonantAvgMin && consEachOK && !digraphSwapMiss;
-  const wordPass = topOK || runeSecondOK || relaxedShortIOK || (w.accuracy || 0) >= s.wordMin;
+  const consPass = avg >= consAvgMin && consEachOK && !digraphSwapMiss;
+  const wordPass =
+    usedAccommodation ||
+    topOK ||
+    runeSecondOK ||
+    relaxedShortIOK ||
+    (w.accuracy || 0) >= wordMin;
 
   // Detect Azure forced-alignment collapse or cold-mic onset clip where every phoneme drops very low
   // (e.g., word 0/12/25, vowel <= 30, cons 0/0, 15/0, or 0/28 even when Azure recognized the word)
@@ -266,14 +984,81 @@ export function scoreAzureWord(
     (want === 'ɪ' || want === 'ɛ') &&
     Boolean(top && ['ɪ', 'ɛ', 'i', 'ə', 'ɨ'].includes(top));
 
+  const primaryObserved: ObservedPhoneme =
+    observedDigraph && (!explicitKey || explicitKey.length > 1)
+      ? observedDigraph
+      : {
+          targetIpa: want,
+          targetScore: Math.round(vs),
+          heardIpa: top || undefined,
+          wordScore: Math.round(w.accuracy || 0),
+        };
+
+  const passed = vowelPass && consPass && wordPass;
+  let diagnostic: SpeechDiagnostic;
+  if (passed) {
+    diagnostic = {
+      kind: 'pass',
+      score: Math.round(w.accuracy || 0),
+      usedGrace: graceActive,
+      usedProfile: Boolean(activeProfile),
+      observed: primaryObserved,
+    };
+  } else if (digraphSwapMiss) {
+    diagnostic = {
+      kind: digraphBorderlineMiss ? 'borderline' : 'digraph_swap',
+      expected: digraphExpected,
+      heard: digraphHeard,
+      score: digraphScore,
+      usedGrace: graceActive,
+      usedProfile: Boolean(activeProfile),
+      observed: primaryObserved,
+    };
+  } else if (!vowelPass) {
+    const isBorderlineVowel = !topOther && vs >= 34;
+    diagnostic = {
+      kind: isBorderlineVowel ? 'borderline' : 'vowel_swap',
+      expected: ipaToPlainSound(want),
+      heard: ipaToPlainSound(top),
+      score: Math.round(vs),
+      usedGrace: graceActive,
+      usedProfile: Boolean(activeProfile),
+      observed: primaryObserved,
+    };
+  } else if (!consPass) {
+    diagnostic = {
+      kind: avg >= 24 ? 'borderline' : 'consonant',
+      score: Math.round(avg),
+      usedGrace: graceActive,
+      usedProfile: Boolean(activeProfile),
+      observed: primaryObserved,
+    };
+  } else {
+    diagnostic = {
+      kind: (w.accuracy || 0) >= 28 ? 'borderline' : 'unclear',
+      score: Math.round(w.accuracy || 0),
+      usedGrace: graceActive,
+      usedProfile: Boolean(activeProfile),
+      observed: primaryObserved,
+    };
+  }
+
   const consSummary = cons.map((c) => Math.round(c)).join('/');
-  const note = `vowel ${v.p} ${Math.round(vs)}${top ? ` (heard ${top})` : ''}${digraphDetail}, cons ${consSummary || 'n/a'}, word ${Math.round(w.accuracy || 0)}`;
+  const tag = usedAccommodation
+    ? ' [voice fit]'
+    : activeProfile
+    ? ' [adapted]'
+    : graceActive
+    ? ' [grace]'
+    : '';
+  const note = `vowel ${v.p} ${Math.round(vs)}${top ? ` (heard ${top})` : ''}${digraphDetail}, cons ${consSummary || 'n/a'}, word ${Math.round(w.accuracy || 0)}${tag}`;
 
   return {
-    outcome: vowelPass && consPass && wordPass ? 'match' : 'miss',
+    outcome: passed ? 'match' : 'miss',
     note,
     alignmentDrop,
     nasalSchwa,
+    diagnostic,
   };
 }
 
@@ -618,8 +1403,79 @@ class SpeechVerifier {
     this.busy = false;
   }
 
+  getVoiceProfile(pattern: string): PatternVoiceProfile | null {
+    return getVoiceProfile(pattern);
+  }
+
+  removeVoiceProfile(pattern: string): void {
+    removeVoiceProfile(pattern);
+  }
+
+  getAllVoiceProfiles(): PatternVoiceProfile[] {
+    return getAllVoiceProfiles();
+  }
+
+  saveSpeechAccommodation(
+    pattern: string,
+    sample: ListenResult,
+    customNote?: string
+  ): PatternVoiceProfile {
+    return saveSpeechAccommodation(pattern, sample, customNote);
+  }
+
+  getWordVoiceOverride(word: string): WordVoiceOverride | null {
+    return getWordVoiceOverride(word);
+  }
+
+  saveWordVoiceOverride(
+    word: string,
+    heardText: string,
+    heardIpa?: string
+  ): WordVoiceOverride | null {
+    return saveWordVoiceOverride(word, heardText, heardIpa);
+  }
+
+  removeWordVoiceOverride(word: string): void {
+    removeWordVoiceOverride(word);
+  }
+
+  getAllWordVoiceOverrides(): WordVoiceOverride[] {
+    return getAllWordVoiceOverrides();
+  }
+
+  clearAllWordVoiceOverrides(): void {
+    clearAllWordVoiceOverrides();
+  }
+
+  calibratePattern(
+    pattern: string,
+    targetWord: string,
+    contrastWord: string,
+    targetRes: ListenResult,
+    contrastRes: ListenResult,
+    label?: string
+  ): CalibrationOutcome {
+    return calibratePatternFromSamples(pattern, targetWord, contrastWord, targetRes, contrastRes, label);
+  }
+
+  getPatternGrace(pattern: string): boolean {
+    return getPatternGrace(pattern);
+  }
+
+  setPatternGrace(pattern: string, enabled: boolean): void {
+    setPatternGrace(pattern, enabled);
+  }
+
+  getAllPatternGrace(): string[] {
+    return getAllPatternGrace();
+  }
+
+  clearAllPatternGrace(): void {
+    clearAllPatternGrace();
+  }
+
   listen(
-    word: Pick<WordEntry, 'w' | 'sayAlso' | 'kind' | 'azureRef'>,
+    word: Pick<WordEntry, 'w' | 'sayAlso' | 'kind' | 'azureRef' | 'pattern'>,
     options?: ListenOptions
   ): Promise<ListenResult> {
     this.stop();
@@ -684,7 +1540,18 @@ class SpeechVerifier {
         } else if (!heard.length) {
           resolve({ outcome: 'nothing', engine: 'chrome', heard: '', note: why });
         } else {
-          resolve({ outcome: 'miss', engine: 'chrome', heard: heard.join(', '), note: 'heard different word' });
+          const learnedMatch = matchesWordVoiceOverride(word.w, heard);
+          if (learnedMatch) {
+            resolve({
+              outcome: 'match',
+              engine: 'chrome',
+              heard: heard.join(', '),
+              note: `matched saved "${learnedMatch}" [word voice fit]`,
+              diagnostic: { kind: 'pass', usedProfile: true },
+            });
+          } else {
+            resolve({ outcome: 'miss', engine: 'chrome', heard: heard.join(', '), note: 'heard different word' });
+          }
         }
       };
 
@@ -703,7 +1570,7 @@ class SpeechVerifier {
             if (tx && !heard.includes(tx)) heard.push(tx);
           }
         }
-        if (matchesChromeTranscript(word.w, heard, word.sayAlso)) {
+        if (matchesChromeTranscript(word.w, heard, word.sayAlso) || matchesWordVoiceOverride(word.w, heard)) {
           finish('matched', true);
           return;
         }
@@ -724,7 +1591,7 @@ class SpeechVerifier {
   }
 
   private listenAzureWithBackup(
-    word: Pick<WordEntry, 'w' | 'sayAlso' | 'kind' | 'azureRef'>,
+    word: Pick<WordEntry, 'w' | 'sayAlso' | 'kind' | 'azureRef' | 'pattern'>,
     options?: ListenOptions
   ): Promise<ListenResult> {
     return new Promise((resolve) => {
@@ -786,7 +1653,13 @@ class SpeechVerifier {
             finish({ outcome: 'match', engine: 'chrome', heard: chromeHeard.join(', '), note: 'Chrome backup' });
             return;
           }
-          finish({ outcome: 'nothing', engine: 'azure', heard: chromeHeard.join(', '), note: 'too quiet' });
+          finish({
+            outcome: 'nothing',
+            engine: 'azure',
+            heard: chromeHeard.join(', '),
+            note: 'too quiet',
+            diagnostic: { kind: 'quiet' },
+          });
           return;
         }
 
@@ -819,24 +1692,52 @@ class SpeechVerifier {
               }
             }
             if (chromeMatched && word.kind !== 'rune') {
-              finish({ outcome: 'match', engine: 'chrome', heard: chromeHeard.join(', '), note: 'Chrome fallback' });
+              finish({ outcome: 'match', engine: 'chrome', heard: chromeHeard.join(', '), note: 'Chrome fallback', diagnostic: { kind: 'pass' } });
               return;
             }
             finish({ outcome: 'again', engine: 'azure', heard: chromeHeard.join(', '), note: `worker ${res.status}` });
             return;
           }
           const json = await res.json();
-          const scored = scoreAzureWord(json, word.w, word.kind === 'rune');
+          const scored = scoreAzureWord(json, word.w, word.kind === 'rune', {
+            pattern: word.pattern,
+          });
           const heardText = json.heard || chromeHeard.join(', ');
+          const learnedWordMatch = matchesWordVoiceOverride(
+            word.w,
+            [json.heard || '', ...chromeHeard],
+            scored.diagnostic?.observed?.heardIpa
+          );
           if (scored.outcome === 'match') {
             this.azureFailures = 0;
-            finish({ outcome: 'match', engine: 'azure', heard: heardText, note: scored.note });
+            finish({
+              outcome: 'match',
+              engine: 'azure',
+              heard: heardText,
+              note: scored.note,
+              diagnostic: scored.diagnostic,
+            });
+          } else if (learnedWordMatch) {
+            this.azureFailures = 0;
+            finish({
+              outcome: 'match',
+              engine: 'azure',
+              heard: heardText,
+              note: `matched saved "${learnedWordMatch}" [word voice fit] (${scored.note})`,
+              diagnostic: { ...scored.diagnostic, kind: 'pass', usedProfile: true },
+            });
           } else if (scored.outcome === 'nothing') {
             if (chromeMatched && word.kind !== 'rune') {
-              finish({ outcome: 'match', engine: 'chrome', heard: chromeHeard.join(', '), note: 'Chrome backup' });
+              finish({ outcome: 'match', engine: 'chrome', heard: chromeHeard.join(', '), note: 'Chrome backup', diagnostic: { kind: 'pass' } });
               return;
             }
-            finish({ outcome: 'nothing', engine: 'azure', heard: heardText, note: scored.note });
+            finish({
+              outcome: 'nothing',
+              engine: 'azure',
+              heard: heardText,
+              note: scored.note,
+              diagnostic: scored.diagnostic,
+            });
           } else if (
             chromeMatched &&
             word.kind !== 'rune' &&
@@ -848,6 +1749,7 @@ class SpeechVerifier {
               engine: 'azure',
               heard: heardText,
               note: `confirmed (${scored.note})`,
+              diagnostic: { kind: 'pass' },
             });
           } else if (
             scored.alignmentDrop &&
@@ -866,7 +1768,13 @@ class SpeechVerifier {
               note: `aligner glitch (${scored.note})`,
             });
           } else {
-            finish({ outcome: 'miss', engine: 'azure', heard: heardText, note: scored.note });
+            finish({
+              outcome: 'miss',
+              engine: 'azure',
+              heard: heardText,
+              note: scored.note,
+              diagnostic: scored.diagnostic,
+            });
           }
         } catch {
           if (chromeMatched && word.kind !== 'rune') {

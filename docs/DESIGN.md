@@ -9,7 +9,8 @@ This document holds the core game design, pedagogical rules, economy numbers, to
 - **Zero Reading Timers**: Students never face a ticking clock on an individual word card. They decode at their own pace while managing battlefield waves.
 - **Zero Negative Feedback**: Missed reads never deduct crystals, damage the Anchor, or trigger harsh failure buzzers. Calm retry cues and guided sound help keep students moving forward.
 - **Sticky Rift Locks**: Each level displays target phonics locks in the bottom-left bar. Once sealed, a lock stays sealed for that run and never regresses unless manually cleared. While open locks remain, 75% of Rune Forge draws focus on the remaining open locks.
-- **Emergent Bilingual and Accessibility Support**: Includes optional Spanish translations, cognate hints, human audio pronunciation, pure phoneme Sound Rule cards, selectable mentor voices, and high-contrast readable typography.
+- **Emergent Bilingual and Accessibility Support**: Includes optional Spanish translations, cognate hints, human audio pronunciation (preferring `Leda` for all new word banks and narration), pure phoneme Sound Rule cards, selectable mentor voices, and high-contrast readable typography.
+- **Adaptive Quick Voice Check (Shipped)**: Keeps Speak Mode completely frictionless for students who pass words cleanly. Only after 3 consecutive spoken misses on the same phonics pattern does the game pause waves and offer a quick single-sound check with plain-English coaching, optional per-sound Mic Grace for accents or noisy Chromebooks, and one-tap switching to Listen & Pick. Also available on demand from Settings.
 
 ## 2. Difficulty Tiers (`DIFFICULTIES` in `src/data/level1.ts`)
 
@@ -79,5 +80,5 @@ Status: **Level 1 Shipped; Levels 2 to 5 Planned**
 
 ## 7. Approved Feature Backlog
 
-1. **Adaptive Quick Voice Check**: Keep Speak Mode frictionless for students who pass words cleanly. Only if a student misses the same target sound 3 times in a row during Speak Mode should the game quietly offer a quick optional sound check for that specific sound.
-2. **World 2, Level 1 Painterly Cutscene Refresh**: Regenerate the `w2-l1` opening, victory, and defeat cutscenes using `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` as the visual anchor so they match World 1's painterly style and canonical Rift Warden/Runner cast.
+1. **World 2, Level 1 Painterly Cutscene Refresh**: Regenerate the `w2-l1` opening, victory, and defeat cutscenes using `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` as the visual anchor so they match World 1's painterly style and canonical Rift Warden/Runner cast.
+2. **Optional World 1 Level 1 Word Voice Refresh**: Because Mr. Scott prefers the Leda voice used in World 2 word readings, World 1 Level 1's older recorded words can be refreshed to Leda in a future pass if desired.

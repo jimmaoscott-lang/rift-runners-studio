@@ -2,6 +2,31 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-24 (Part 2): Adaptive Quick Voice Check, Personal Voice Profiles, and Leda Voice Lock
+
+### Completed
+- **Built Adaptive Quick Voice Check (`src/components/QuickVoiceCheckModal.tsx`)**:
+  - Added structured plain-English speech diagnostics (`pass`, `quiet`, `vowel_swap`, `digraph_swap`, `borderline`, `consonant`, `unclear`), raw observed phoneme tracking, and persisted **Personal Voice Profiles** (`rift_runners_voice_profiles_v1`) plus manual Mic Grace to `src/lib/speech.ts`.
+  - Built 2-step Contrast Calibration (`calibratePatternFromSamples`): when a student misses the target word (for example, `ship`), Step 2 listens to the contrast word (`chip`). If their voice clearly separates the two sounds (for example, a mild lisp, accent, or quiet mic), the game saves a personalized scoring floor and verified non-contrast speech signature for all words with that sound.
+  - Added explicit **Speech & ELL Voice Accommodations**:
+    - **Word-Level Voice Fit** (`rift_runners_word_voices_v1`): Students or teachers can save how a student says a specific word (for example, `"rust"` for `"rush"`) right from `QuickVoiceCheckModal` or the Settings Mic Tester so future encounters count as correct (`[word voice fit]`).
+    - **Sound-Level Voice Fit** (`saveSpeechAccommodation` with `allowContrastOverlap: true`): Adapts an entire sound across all words (for example, a native Spanish speaker whose `"ch"` comes out as `"sh"`), accepting that sound while still grading the vowel and every other consonant strictly (`[voice fit]`).
+  - Fixed a `useEffect` cleanup bug in `QuickVoiceCheckModal` that caused `azure: cancelled` immediately on starting the mic.
+  - Wired automatic adaptive detection in `src/components/RuneForgePanel.tsx`: students who read cleanly experience zero upfront prompts; after 3 cumulative genuine spoken misses on the same phonics pattern within a level (ignoring silence, mic errors, and aligner glitches), the Rune Forge pauses the wave and opens `QuickVoiceCheckModal` for that sound and missed word (at most once automatically per sound per battle).
+  - Added immediate green confirmation banners when a voice fit is saved, `(matched your voice profile)` feedback in the Rune Forge, a quiet **"Voice fit on"** / **"Word voice fit on"** indicator in the voice bar, and a **Saved Voice Adaptations** list with individual `Remove` buttons inside `src/components/SettingsModal.tsx`.
+- **Updated Living Docs**:
+  - Locked Mr. Scott's preference for the **Leda** voice across all future word readings in `BUILD.md` and `docs/DESIGN.md`.
+  - Moved Adaptive Quick Voice Check from the backlog to shipped features in `docs/DESIGN.md`.
+
+### Decisions Locked
+- **Leda Preferred for Word Readings**: Mr. Scott prefers the Leda voice used in World 2 word readings over the older World 1 Level 1 voice. All future word banks (World 2 Level 2 onward) and any word refreshes will use Leda.
+- **Speech & ELL Accommodation Guardrail**: Sound-level accommodations (like Spanish L1 `ch` to `sh`) adapt only the targeted consonant sound while continuing to grade vowels and remaining consonants strictly; word-level fits target specific articulation patterns (like final `-sh` to `-st`) and stay visible and removable in Settings.
+
+### Next Up
+1. Playtest Adaptive Quick Voice Check in Speak Mode and Settings, then push verified milestone to GitHub.
+2. Optionally refresh World 2, Level 1 (`Ashgate Outpost`) cutscenes to match the World 1 painterly Rift Warden style.
+3. Build World 2, Level 2: `Smelter Causeway` (`th`/`wh`/`-ck`, Shieldbearer enemy, Rail Turret + Side Loadout Selector).
+
 ## 2026-11-24: Documentation System, Repo Cleanup, and World 2 Speech Calibration
 
 ### Completed

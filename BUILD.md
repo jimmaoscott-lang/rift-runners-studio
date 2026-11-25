@@ -74,9 +74,19 @@ Before marking any new phonics target complete, test spoken words against live A
 - **`wh` (`/w/`, e.g., `whip`)**: Miss if score `< 50`, or if heard as anything other than `w` and score `< 70`.
 - **Final `-ck` (`/k/`, e.g., `lock`)**: Miss if score `< 55`, or if heard as `g`/`t`/`p`/`d` and score `< 72`.
 
+### D. Adaptive Quick Voice Check and Personal Voice Profiles
+
+- **Zero Upfront Friction**: Students who pass words cleanly never see voice calibration screens.
+- **Trigger Rule**: After 3 cumulative genuine spoken misses on the same phonics pattern in the current level (ignoring silence, mic errors, and alignment drops), `RuneForgePanel.tsx` pauses the wave cleanly (`onRuleHold(true)`) and opens `QuickVoiceCheckModal.tsx` focused on that sound and the missed word. It opens automatically at most once per sound per battle.
+- **2-Step Contrast Calibration (`calibratePatternFromSamples`)**: If a student misses the target word (for example, `ship`), Step 2 asks them to say its contrast word (`chip`). If their voice clearly separates the two sounds (for example, a lisp, regional accent, or quiet Chromebook mic scoring lower than standard Azure norms while keeping `ch` distinct), the game saves a personalized `PatternVoiceProfile` (`rift_runners_voice_profiles_v1`) with a custom scoring floor and verified non-contrast speech signature.
+- **Explicit Speech & ELL Accommodations (`saveSpeechAccommodation` and `saveWordVoiceOverride`)**: When a student has a consistent speech articulation pattern (for example, saying `"rust"` for `"rush"`) or an L1 transfer pattern (for example, a native Spanish speaker whose `"ch"` comes out as `"sh"`), `QuickVoiceCheckModal.tsx` offers two clear one-click adaptations right after a miss:
+  1. **Word-Level Voice Fit** (`rift_runners_word_voices_v1`): Saves that exact spoken variant (`"rust"` -> `"rush"`) so future encounters with that word pass automatically and display `[word voice fit]`.
+  2. **Sound-Level Voice Fit** (`mode: 'accommodation'`, `allowContrastOverlap: true`): Adapts all words sharing that phonics sound (for example, accepting `"sh"` on `"ch"` words like `chip`, `chop`, `chum`) while STILL grading the vowel and every other consonant strictly (so saying `"shop"` for `"chip"` still misses on the vowel).
+- **Clear Notifications & Management**: Saving any voice fit shows an immediate confirmation banner, displays `Voice fit on` / `Word voice fit on` in the Rune Forge voice bar, notes `(matched your voice profile)` when triggered, and lists every active sound and word adaptation with individual `Remove` controls inside `SettingsModal -> Voice Verification`.
+
 ## 5. Audio, Voice Acting, and Direct Instruction Rules
 
-- **Mentor Voice**: Default to `Leda` (pre-cached Gemini TTS clips stored as 64 kbps mono `.mp3` files in `public/assets/audio/tts-cache/`, with `.wav` fallback supported at runtime).
+- **Preferred Voice for Narration and Word Readings (`Leda`)**: Use `Leda` as the default voice for ALL new word readings (World 2 onward and any future word bank additions), cutscenes, walkthrough narration, and zero-schwa pure phonemes. Mr. Scott explicitly prefers Leda over the older World 1 Level 1 word voice. Store pre-cached Gemini TTS clips as 64 kbps mono `.mp3` files in `public/assets/audio/tts-cache/` (with `.wav` fallback supported at runtime) and pack all word clips into `public/assets/audio/words/sprite.mp3`.
 - **TTS Quota Hygiene**: Batch words into a single Gemini TTS request with pauses and split locally with Python to avoid `429 RESOURCE_EXHAUSTED` cooldowns, then convert to 64 kbps mono `.mp3` and store permanently in `public/assets/audio/`.
 - **Zero-Schwa Pure Phoneme Clips**: Sound Rule cards must play clean isolated human phonemes with zero trailing "uh" schwa. Slice pure phonemes directly from Leda's spoken word audio, verify at 95+ on live Azure Speech, and register `snd:<pattern>` in `public/assets/audio/words/manifest.json` (which supports both packed `sprite.mp3` slices and standalone `.mp3` paths).
 - **Sound Rule Narration**: Keep rule scripts focused on the sound and anchor word with zero trailing letter-spelling cues.
