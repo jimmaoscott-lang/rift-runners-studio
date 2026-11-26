@@ -28,6 +28,7 @@ import {
 import {
   DEFENDERS,
   DIFFICULTIES,
+  FORGE_CONFIG,
   getPatternRule,
   HERO_POWER_ORDER,
   HERO_POWERS,
@@ -63,6 +64,7 @@ interface BattleHUDProps {
   toast: string;
   waveBanner: WaveBannerInfo | null;
   walkthrough: WalkthroughInfo | null;
+  lockBonusFlash?: { patterns: PatternKey[]; amount: number } | null;
   spanishCaptions?: boolean;
   onWalkthroughNext: () => void;
   onWalkthroughSkip: () => void;
@@ -125,6 +127,10 @@ const VOWEL_LOCK_STYLES: Record<string, { icon: string; filled: string; btn: str
   cl: LOCK_STYLE_PALETTE[0],
   fr: LOCK_STYLE_PALETTE[3],
   gr: LOCK_STYLE_PALETTE[1],
+  sp: LOCK_STYLE_PALETTE[4],
+  st: LOCK_STYLE_PALETTE[3],
+  nd: LOCK_STYLE_PALETTE[1],
+  mp: LOCK_STYLE_PALETTE[2],
 };
 
 function getLockStyle(pattern: PatternKey, index: number) {
@@ -138,6 +144,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
   toast,
   waveBanner,
   walkthrough,
+  lockBonusFlash = null,
   spanishCaptions = false,
   onWalkthroughNext,
   onWalkthroughSkip,
@@ -576,16 +583,24 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
 
       {/* Compact Horizontal RIFT LOCKS Bar tucked tightly along bottom-left so it never blocks build pads */}
       <div
-        className={`pointer-events-auto absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-xl border-2 bg-[#161030]/94 px-2.5 py-1.5 shadow-xl ${
-          highlightLocks
+        className={`pointer-events-auto absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-xl border-2 bg-[#161030]/94 px-2.5 py-1.5 shadow-xl transition-all ${
+          lockBonusFlash
+            ? 'border-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.55)]'
+            : highlightLocks
             ? 'border-amber-300 animate-tutorial-pulse'
             : 'border-purple-500/75'
         }`}
       >
+        {lockBonusFlash && (
+          <div className="pointer-events-none absolute -top-8 left-2 flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-400 px-2.5 py-0.5 text-[11px] font-extrabold text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.75)] animate-bounce">
+            <Gem className="h-3.5 w-3.5 text-slate-950 fill-cyan-300" />
+            <span>Lock Sealed! +{lockBonusFlash.amount} Crystals</span>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => onClearLocks()}
-          title={`Click to clear all Level ${level.num} Rift Locks`}
+          title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals. Click to clear all Level ${level.num} Rift Locks.`}
           className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase hover:text-rose-200 cursor-pointer transition-colors shrink-0"
         >
           <Lock className="h-3 w-3 text-cyan-300" />
@@ -597,10 +612,15 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
             const st = getLockStyle(lk.vowel, idx);
             const fillCount = lk.done ? lk.need : Math.min(lk.need, lk.recentCorrect);
             const shortTag = getPatternRule(lk.vowel).shortLabel || lk.vowel;
+            const justSealed = Boolean(lockBonusFlash?.patterns.includes(lk.vowel));
             return (
               <div
                 key={lk.vowel}
-                className="flex items-center gap-1 rounded-lg border border-purple-500/35 bg-[#0e0a22]/85 px-1.5 py-1"
+                className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 transition-all ${
+                  justSealed
+                    ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.55)]'
+                    : 'border-purple-500/35 bg-[#0e0a22]/85'
+                }`}
               >
                 {/* Tappable pattern label to hear the phoneme */}
                 <button
@@ -618,8 +638,8 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                   onClick={() => onClearLocks(lk.vowel)}
                   title={
                     lk.done
-                      ? `${lk.label} locked! Click to clear only this lock on Level ${level.num}`
-                      : `${lk.label}: ${fillCount}/${lk.need}. Click to clear on Level ${level.num}`
+                      ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)! Click to clear only this lock on Level ${level.num}`
+                      : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked). Click to clear on Level ${level.num}`
                   }
                   className="group flex flex-col items-start gap-0.5 rounded px-0.5 hover:bg-rose-500/20 cursor-pointer transition-colors"
                 >

@@ -85,6 +85,9 @@ export interface DefenderLevelStats {
   armorPierce?: boolean;
   pierceCount?: number;
   armorShred?: number;
+  pullEvery?: number;
+  pullStrength?: number;
+  hitsAir?: boolean;
 }
 
 export interface DefenderSpec {
@@ -95,7 +98,15 @@ export interface DefenderSpec {
   stats: DefenderLevelStats;
 }
 
-export type DefenderType = 'archer' | 'spike' | 'golem' | 'frost' | 'ember' | 'tesla' | 'rail';
+export type DefenderType =
+  | 'archer'
+  | 'spike'
+  | 'golem'
+  | 'frost'
+  | 'ember'
+  | 'tesla'
+  | 'rail'
+  | 'gravity';
 
 export interface DefenderDef {
   id: DefenderType;
@@ -124,7 +135,9 @@ export type CreatureType =
   | 'thornking'
   | 'cinderimp'
   | 'shieldbearer'
-  | 'shrieker';
+  | 'shrieker'
+  | 'weaver'
+  | 'ironwarden';
 
 export interface CreatureDef {
   id: CreatureType;
@@ -248,6 +261,7 @@ export const FORGE_CONFIG = {
   mega: 115,
   megaPips: 8,
   megaBlast: 25,
+  lockBonus: 100,
   fastGuessMs: 1500,
   cooldownFirst: 5,
   cooldownLater: 10,
@@ -378,6 +392,38 @@ export const PATTERN_RULES: Record<string, PatternRule> = {
     word: 'grab',
     ruleAudioId: 'rule.blend.v2',
     ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  sp: {
+    label: 'sp blend',
+    shortLabel: 'sp',
+    show: '/sp/',
+    word: 'spin',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  st: {
+    label: 'st blend',
+    shortLabel: 'st',
+    show: '/st/',
+    word: 'stop',
+    ruleAudioId: 'rule.blend.v2',
+    ruleLine: 'Two consonants slide smoothly together at the start, and you hear both sounds.',
+  },
+  nd: {
+    label: '-nd blend',
+    shortLabel: 'nd',
+    show: '/nd/',
+    word: 'hand',
+    ruleAudioId: 'rule.endblend.v2',
+    ruleLine: 'Two consonants blend smoothly together at the end of a word, and you hear both sounds.',
+  },
+  mp: {
+    label: '-mp blend',
+    shortLabel: 'mp',
+    show: '/mp/',
+    word: 'camp',
+    ruleAudioId: 'rule.endblend.v2',
+    ruleLine: 'Two consonants blend smoothly together at the end of a word, and you hear both sounds.',
   },
 };
 
@@ -668,6 +714,54 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
       },
     },
   },
+  gravity: {
+    id: 'gravity',
+    name: 'Gravity Snare',
+    shortName: 'Gravity',
+    desc: 'Trail vortex trap that drags ground and flying foes down, slowing and pulling them back into tower range.',
+    kind: 'trail',
+    cost: 95,
+    up: [65, 105],
+    levels: [
+      { dps: 14, radius: 2.35, slow: 0.45, pullEvery: 2.8, pullStrength: 0.018, hitsAir: true },
+      { dps: 22, radius: 2.6, slow: 0.54, pullEvery: 2.5, pullStrength: 0.024, hitsAir: true },
+      { dps: 32, radius: 2.85, slow: 0.62, pullEvery: 2.2, pullStrength: 0.03, hitsAir: true },
+    ],
+    spec: {
+      a: {
+        id: 'a',
+        name: 'Singularity Well',
+        desc: 'Crushing gravity well that pulls enemies backward, cracks enemy armor for 3 seconds, and deals heavy damage.',
+        cost: 175,
+        stats: {
+          dps: 46,
+          radius: 3.0,
+          slow: 0.72,
+          pullEvery: 2.1,
+          pullStrength: 0.04,
+          armorPierce: true,
+          armorShred: 3.0,
+          hitsAir: true,
+        },
+      },
+      b: {
+        id: 'b',
+        name: 'Stasis Anchor',
+        desc: 'Wide graviton field that locks ground and flying creatures in place for 1.5 seconds every 4 seconds.',
+        cost: 175,
+        stats: {
+          dps: 34,
+          radius: 3.35,
+          slow: 0.65,
+          freezeEvery: 4.0,
+          freezeTime: 1.5,
+          pullEvery: 2.8,
+          pullStrength: 0.024,
+          hitsAir: true,
+        },
+      },
+    },
+  },
 };
 
 export const DEFENDER_ORDER: DefenderType[] = ['archer', 'spike', 'golem', 'frost'];
@@ -679,6 +773,7 @@ export const ALL_DEFENDER_ORDER: DefenderType[] = [
   'ember',
   'tesla',
   'rail',
+  'gravity',
 ];
 
 export const CREATURES: Record<CreatureType, CreatureDef> = {
@@ -788,6 +883,30 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     size: 1.05,
     flying: true,
     armor: 0.4,
+  },
+  weaver: {
+    id: 'weaver',
+    name: 'Forge Weaver',
+    hp: 155,
+    speed: 1.78,
+    anchor: 3,
+    shards: 8,
+    hit: 18,
+    size: 1.15,
+    armor: 0.2,
+  },
+  ironwarden: {
+    id: 'ironwarden',
+    name: 'The Iron Warden',
+    hp: 1180,
+    speed: 0.98,
+    anchor: 10,
+    shards: 65,
+    hit: 58,
+    size: 1.65,
+    isBoss: true,
+    armor: 0.45,
+    slowResist: 0.35,
   },
 };
 
@@ -1124,7 +1243,7 @@ export const LEVEL1: LevelConfig = {
   startCrystals: 105,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
     window: 10,
@@ -1244,11 +1363,11 @@ export const LEVEL2: LevelConfig = {
   startCrystals: 140,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
-    window: 10,
-    need: 9,
+    window: 11,
+    need: 10,
   },
   endless: {
     hpStep: 0.14,
@@ -1513,11 +1632,11 @@ export const LEVEL3: LevelConfig = {
   startCrystals: 155,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
-    window: 10,
-    need: 9,
+    window: 11,
+    need: 10,
   },
   endless: {
     hpStep: 0.15,
@@ -1783,7 +1902,7 @@ export const LEVEL4: LevelConfig = {
   startCrystals: 205,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
     window: 6,
@@ -2310,11 +2429,11 @@ export const W2_LEVEL1: LevelConfig = {
   startCrystals: 225,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
-    window: 10,
-    need: 9,
+    window: 11,
+    need: 10,
   },
   endless: {
     hpStep: 0.14,
@@ -2583,7 +2702,7 @@ export const W2_LEVEL2: LevelConfig = {
   startCrystals: 245,
   waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 3,
   bonusSurgeWaves: 3,
   mastery: {
     window: 8,
@@ -2848,10 +2967,10 @@ export const W2_LEVEL3: LevelConfig = {
   vowels: ['bl', 'cl', 'fr', 'gr'],
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail'],
   runeRate: 0.32,
-  startCrystals: 155,
-  waveEvery: 30,
+  startCrystals: 255,
+  waveEvery: 10,
   anchor: 20,
-  minWaves: 2,
+  minWaves: 4,
   bonusSurgeWaves: 3,
   mastery: {
     window: 8,
@@ -2957,38 +3076,568 @@ export const W2_LEVEL3: LevelConfig = {
   cutscenes: W2_L3_CUTSCENES,
 };
 
-// World 2 Roadmap Preview Nodes (Levels 4-5 visible on World 2 map, unlocked as built)
+// ---------------------------------------------------------------------------
+// World 2 · Level 4: Crucible Bastion (sp, st, nd, mp Blends + Forge Weavers + Gravity Snare)
+// ---------------------------------------------------------------------------
+export const W2_L4_REAL_WORDS: WordEntry[] = [
+  // sp initial blend
+  { w: 'spin', kind: 'real', pattern: 'sp', tiles: ['sp', 'i', 'n'], targetTileIdx: 0, options: ['pin', 'sin'], es: 'girar' },
+  { w: 'spot', kind: 'real', pattern: 'sp', tiles: ['sp', 'o', 't'], targetTileIdx: 0, options: ['pot', 'sot'], es: 'lugar o punto' },
+  { w: 'spun', kind: 'real', pattern: 'sp', tiles: ['sp', 'u', 'n'], targetTileIdx: 0, options: ['pun', 'sun'], es: 'hiló o giró' },
+  { w: 'spit', kind: 'real', pattern: 'sp', tiles: ['sp', 'i', 't'], targetTileIdx: 0, options: ['pit', 'sit'], es: 'escupir' },
+  { w: 'span', kind: 'real', pattern: 'sp', tiles: ['sp', 'a', 'n'], targetTileIdx: 0, options: ['pan', 'san'], es: 'alcance o tramo' },
+  { w: 'sped', kind: 'real', pattern: 'sp', tiles: ['sp', 'e', 'd'], targetTileIdx: 0, options: ['fed', 'red'], es: 'aceleró' },
+  // st initial blend
+  { w: 'stop', kind: 'real', pattern: 'st', tiles: ['st', 'o', 'p'], targetTileIdx: 0, options: ['top', 'sop'], es: 'parar o alto' },
+  { w: 'step', kind: 'real', pattern: 'st', tiles: ['st', 'e', 'p'], targetTileIdx: 0, options: ['pep', 'set'], es: 'paso' },
+  { w: 'stem', kind: 'real', pattern: 'st', tiles: ['st', 'e', 'm'], targetTileIdx: 0, options: ['hem', 'set'], es: 'tallo' },
+  { w: 'stun', kind: 'real', pattern: 'st', tiles: ['st', 'u', 'n'], targetTileIdx: 0, options: ['sun', 'ton'], es: 'aturdir' },
+  { w: 'stag', kind: 'real', pattern: 'st', tiles: ['st', 'a', 'g'], targetTileIdx: 0, options: ['tag', 'sag'], es: 'ciervo' },
+  { w: 'stub', kind: 'real', pattern: 'st', tiles: ['st', 'u', 'b'], targetTileIdx: 0, options: ['tub', 'sub'], es: 'trozo o talón' },
+  // -nd final blend
+  { w: 'hand', kind: 'real', pattern: 'nd', tiles: ['h', 'a', 'nd'], targetTileIdx: 2, options: ['had', 'hat'], es: 'mano' },
+  { w: 'sand', kind: 'real', pattern: 'nd', tiles: ['s', 'a', 'nd'], targetTileIdx: 2, options: ['sad', 'sat'], es: 'arena' },
+  { w: 'land', kind: 'real', pattern: 'nd', tiles: ['l', 'a', 'nd'], targetTileIdx: 2, options: ['lad', 'lap'], es: 'tierra' },
+  { w: 'band', kind: 'real', pattern: 'nd', tiles: ['b', 'a', 'nd'], targetTileIdx: 2, options: ['bad', 'bat'], es: 'banda', cognate: true },
+  { w: 'bend', kind: 'real', pattern: 'nd', tiles: ['b', 'e', 'nd'], targetTileIdx: 2, options: ['bed', 'bet'], es: 'doblar' },
+  { w: 'send', kind: 'real', pattern: 'nd', tiles: ['s', 'e', 'nd'], targetTileIdx: 2, options: ['fed', 'set'], es: 'enviar' },
+  // -mp final blend
+  { w: 'camp', kind: 'real', pattern: 'mp', tiles: ['c', 'a', 'mp'], targetTileIdx: 2, options: ['cap', 'cat'], es: 'campamento', cognate: true },
+  { w: 'lamp', kind: 'real', pattern: 'mp', tiles: ['l', 'a', 'mp'], targetTileIdx: 2, options: ['lap', 'lad'], es: 'lámpara', cognate: true },
+  { w: 'jump', kind: 'real', pattern: 'mp', tiles: ['j', 'u', 'mp'], targetTileIdx: 2, options: ['jug', 'jut'], es: 'saltar' },
+  { w: 'bump', kind: 'real', pattern: 'mp', tiles: ['b', 'u', 'mp'], targetTileIdx: 2, options: ['bud', 'bug'], es: 'golpe o bache' },
+  { w: 'pump', kind: 'real', pattern: 'mp', tiles: ['p', 'u', 'mp'], targetTileIdx: 2, options: ['pup', 'pug'], es: 'bomba de agua' },
+  { w: 'ramp', kind: 'real', pattern: 'mp', tiles: ['r', 'a', 'mp'], targetTileIdx: 2, options: ['rap', 'rat'], es: 'rampa', cognate: true },
+];
+
+export const W2_L4_RUNES: WordEntry[] = [
+  // sp runes
+  { w: 'spab', kind: 'rune', pattern: 'sp', tiles: ['sp', 'a', 'b'], targetTileIdx: 0, options: ['pab', 'sab'], azureRef: 'spabb' },
+  { w: 'spog', kind: 'rune', pattern: 'sp', tiles: ['sp', 'o', 'g'], targetTileIdx: 0, options: ['pog', 'sog'], azureRef: 'spogg' },
+  // st runes
+  { w: 'steb', kind: 'rune', pattern: 'st', tiles: ['st', 'e', 'b'], targetTileIdx: 0, options: ['teb', 'seb'], azureRef: 'stebb' },
+  { w: 'stug', kind: 'rune', pattern: 'st', tiles: ['st', 'u', 'g'], targetTileIdx: 0, options: ['tug', 'sug'], azureRef: 'stugg' },
+  // -nd runes
+  { w: 'fand', kind: 'rune', pattern: 'nd', tiles: ['f', 'a', 'nd'], targetTileIdx: 2, options: ['fad', 'fan'], azureRef: 'fand' },
+  { w: 'rond', kind: 'rune', pattern: 'nd', tiles: ['r', 'o', 'nd'], targetTileIdx: 2, options: ['rod', 'ron'], azureRef: 'rond' },
+  // -mp runes
+  { w: 'bamp', kind: 'rune', pattern: 'mp', tiles: ['b', 'a', 'mp'], targetTileIdx: 2, options: ['bap', 'bam'], azureRef: 'bamp' },
+  { w: 'zump', kind: 'rune', pattern: 'mp', tiles: ['z', 'u', 'mp'], targetTileIdx: 2, options: ['zup', 'zum'], azureRef: 'zump' },
+];
+
+export const W2_L4_CUTSCENES: Record<CutsceneId, CutsceneScript> = {
+  opening: {
+    id: 'opening',
+    title: 'World 2, Level 4: Crucible Bastion',
+    subtitle: 'Opening Cutscene',
+    beats: [
+      {
+        id: 'w2-l04-open-v1-1',
+        image: '/src/assets/images/cutscene_w2_l4_opening_1795713155111.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Crucible Bastion stands just ahead of the Furnace Core. Cloaked Forge Weavers are healing the iron column and wrapping their allies in golden shields.',
+        captions: [
+          'Crucible Bastion guards the gate to the Furnace Core.',
+          'Forge Weavers heal and shield nearby allies until brought down.',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Focused, tactical field commander briefing on Forge Weavers and the Gravity Snare.',
+      },
+      {
+        id: 'w2-l04-open-v1-2',
+        image: '/src/assets/images/cutscene_w2_l4_opening_1795713155111.jpg',
+        motion: 'pan',
+        durationMs: 11000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Our engineers unlocked the Gravity Snare. Drop it on the trail to drag both flyers and armored foes into range, and read every sp, st, nd, and mp blend cleanly to crack their line.',
+        captions: [
+          'New trap unlocked: Gravity Snare pulls ground and flying foes backward on the trail.',
+          'Fill the sp, st, nd, and mp Rift Locks to open the Final Wave.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Sharp, encouraging mentor introducing initial S-blends, final blends, and the Gravity Snare.',
+      },
+    ],
+  },
+  victory: {
+    id: 'victory',
+    title: 'Crucible Bastion: Rift Sealed',
+    subtitle: 'Victory Cutscene',
+    beats: [
+      {
+        id: 'w2-l04-vic-v1-1',
+        image: '/src/assets/images/cutscene_w2_l4_victory_1795713157719.jpg',
+        motion: 'lift',
+        durationMs: 9500,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Every Forge Weaver fell, and the Gravity Snares pinned the bastion garrison in its tracks. Your starting and ending blends stayed crisp under pressure.',
+        captions: [
+          'Crucible Bastion secured! Every Forge Weaver fell.',
+          'Your clean sp, st, nd, and mp blend reads broke the bastion line.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Warm, victorious commander praising strong blend mastery.',
+      },
+      {
+        id: 'w2-l04-vic-v1-2',
+        image: '/src/assets/images/cutscene_w2_l4_victory_1795713157719.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The heavy gates stand open to the Furnace Core. Deep inside waits the Iron Warden. Bring your strongest loadout and get ready to seal the Sunken Foundry for good.',
+        captions: [
+          'The heavy gates stand open to the Furnace Core.',
+          'World 2 Boss Finale unlocked: The Iron Warden awaits.',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Steady, dramatic build-up to the World 2 boss finale.',
+      },
+    ],
+  },
+  defeat: {
+    id: 'defeat',
+    title: 'Bastion Line Broken',
+    subtitle: 'Defeat Cutscene',
+    beats: [
+      {
+        id: 'w2-l04-def-v1-1',
+        image: '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg',
+        motion: 'zoom',
+        durationMs: 9800,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The Forge Weavers kept the armored column standing too long. Every lock progress count stays banked. Place a Gravity Snare at the bend with Rail Turrets overhead and try again.',
+        captions: [
+          'The Forge Weavers kept the armored column standing past the line.',
+          'Tip: place a Gravity Snare at the bend with Rail Turrets overhead and try again.',
+        ],
+        accent: 'crimson',
+        voiceStyle:
+          'Calm, supportive mentor encouraging a tactical reset.',
+      },
+    ],
+  },
+};
 
 export const W2_LEVEL4: LevelConfig = {
-  ...W2_LEVEL1,
   id: 'w2-l4',
+  worldId: 'w2',
   num: 4,
+  worldName: 'World 2: The Sunken Foundry',
   name: 'Crucible Bastion',
   headline: 'Shatter the Line at Crucible Bastion',
   description:
-    'Forge Weavers shield and mend armored foundry columns until focused down. Master initial S-blends and final consonant blends to punch through their defenses.',
-  enemiesSummary: 'Forge Weavers, Rift Shriekers, and Shieldbearers',
-  wordsSummary: 'S-blends and final blends + runes',
-  rewardSummary: 'The Furnace Core boss stage + Gravity Snare',
+    'Forge Weavers heal and shield armored foundry columns until focused down. Deploy the new Gravity Snare on key trail bends and decode initial S-blends and final blends cleanly.',
+  enemiesSummary: 'Forge Weavers (Healers/Shielders), Rift Shriekers, and Shieldbearers',
+  wordsSummary: 'S-blends and final blends (sp, st, nd, mp) + runes',
+  rewardSummary: 'The Furnace Core boss stage + Gravity Snare unlocked',
+  nextLevelId: 'w2-l5',
   vowels: ['sp', 'st', 'nd', 'mp'],
-  comingSoon: true,
-  backdropImage: '/src/assets/images/cutscene_w2_l1_victory_1795525102801.jpg',
+  defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
+  runeRate: 0.32,
+  startCrystals: 265,
+  waveEvery: 10,
+  anchor: 20,
+  minWaves: 4,
+  bonusSurgeWaves: 3,
+  mastery: {
+    window: 8,
+    need: 7,
+  },
+  endless: {
+    hpStep: 0.16,
+    countStep: 0.14,
+  },
+  finalBoost: 1.25,
+  hasWalkthrough: false,
+  backdropImage: '/src/assets/images/cutscene_w2_l4_opening_1795713155111.jpg',
+  pathUv: [
+    [0.115, 0.195],
+    [0.190, 0.250],
+    [0.245, 0.315],
+    [0.240, 0.375],
+    [0.195, 0.445],
+    [0.215, 0.525],
+    [0.295, 0.568],
+    [0.385, 0.558],
+    [0.455, 0.480],
+    [0.515, 0.370],
+    [0.595, 0.285],
+    [0.695, 0.290],
+    [0.765, 0.365],
+    [0.750, 0.455],
+    [0.665, 0.515],
+    [0.595, 0.585],
+    [0.605, 0.675],
+    [0.670, 0.740],
+    [0.765, 0.785],
+    [0.835, 0.815],
+  ],
+  riverUv: [
+    [0.50, 0.15],
+    [0.42, 0.30],
+    [0.36, 0.42],
+    [0.48, 0.78],
+    [0.51, 0.94],
+  ],
+  riftUv: [0.095, 0.125],
+  campUv: [0.910, 0.800],
+  wardenUv: [0.825, 0.835],
+  pads: [
+    { id: 'cb_t1', kind: 'tower', u: 0.138, v: 0.326 },
+    { id: 'cb_t2', kind: 'tower', u: 0.285, v: 0.205 },
+    { id: 'cb_t3', kind: 'tower', u: 0.305, v: 0.448 },
+    { id: 'cb_t4', kind: 'tower', u: 0.567, v: 0.198 },
+    { id: 'cb_t5', kind: 'tower', u: 0.745, v: 0.208 },
+    { id: 'cb_t6', kind: 'tower', u: 0.852, v: 0.338 },
+    { id: 'cb_t7', kind: 'tower', u: 0.836, v: 0.506 },
+    { id: 'cb_t8', kind: 'tower', u: 0.514, v: 0.635 },
+    { id: 'cb_t9', kind: 'tower', u: 0.747, v: 0.652 },
+    { id: 'cb_t10', kind: 'tower', u: 0.576, v: 0.802 },
+    { id: 'cb_t11', kind: 'tower', u: 0.678, v: 0.875 },
+    { id: 'cb_r1', kind: 'trail', u: 0.242, v: 0.345 },
+    { id: 'cb_r2', kind: 'trail', u: 0.365, v: 0.562 },
+    { id: 'cb_r3', kind: 'trail', u: 0.655, v: 0.285 },
+    { id: 'cb_r4', kind: 'trail', u: 0.600, v: 0.625 },
+  ],
+  waves: [
+    {
+      hp: 1.0,
+      groups: [
+        { type: 'shieldbearer', count: 4, gap: 2.8 },
+        { type: 'weaver', count: 2, gap: 4.5, delay: 3.2 },
+        { type: 'cinderimp', count: 8, gap: 0.85, delay: 6.5 },
+      ],
+    },
+    {
+      hp: 1.18,
+      groups: [
+        { type: 'shrieker', count: 6, gap: 2.1 },
+        { type: 'shieldbearer', count: 5, gap: 2.5, delay: 2.8 },
+        { type: 'weaver', count: 3, gap: 3.8, delay: 5.5 },
+      ],
+    },
+    {
+      hp: 1.4,
+      groups: [
+        { type: 'shieldbearer', count: 6, gap: 2.2 },
+        { type: 'weaver', count: 4, gap: 3.2, delay: 3.0 },
+        { type: 'shrieker', count: 8, gap: 1.75, delay: 6.5 },
+        { type: 'cinderimp', count: 14, gap: 0.6, delay: 11.0 },
+      ],
+    },
+    {
+      hp: 1.68,
+      groups: [
+        { type: 'shieldbearer', count: 8, gap: 2.0 },
+        { type: 'weaver', count: 5, gap: 2.8, delay: 2.5 },
+        { type: 'shrieker', count: 10, gap: 1.5, delay: 6.0 },
+        { type: 'brute', count: 3, gap: 3.2, delay: 10.5 },
+      ],
+    },
+    {
+      hp: 1.98,
+      groups: [
+        { type: 'shieldbearer', count: 10, gap: 1.85 },
+        { type: 'weaver', count: 6, gap: 2.4, delay: 2.0 },
+        { type: 'shrieker', count: 12, gap: 1.35, delay: 5.5 },
+        { type: 'cinderimp', count: 18, gap: 0.5, delay: 11.5 },
+      ],
+    },
+  ],
+  realWords: W2_L4_REAL_WORDS,
+  runes: W2_L4_RUNES,
+  cutscenes: W2_L4_CUTSCENES,
+};
+
+// ---------------------------------------------------------------------------
+// World 2 · Level 5: The Furnace Core (World 2 Boss Finale · The Iron Warden)
+// ---------------------------------------------------------------------------
+export const W2_L5_REAL_WORDS: WordEntry[] = [
+  // sh review (5)
+  { w: 'ship', kind: 'real', pattern: 'sh', tiles: ['sh', 'i', 'p'], targetTileIdx: 0, options: ['chip', 'sip'], es: 'barco' },
+  { w: 'shop', kind: 'real', pattern: 'sh', tiles: ['sh', 'o', 'p'], targetTileIdx: 0, options: ['chop', 'cop'], es: 'tienda' },
+  { w: 'shut', kind: 'real', pattern: 'sh', tiles: ['sh', 'u', 't'], targetTileIdx: 0, options: ['cut', 'rut'], es: 'cerrar' },
+  { w: 'cash', kind: 'real', pattern: 'sh', tiles: ['c', 'a', 'sh'], targetTileIdx: 2, options: ['cat', 'cap'], es: 'efectivo' },
+  { w: 'rush', kind: 'real', pattern: 'sh', tiles: ['r', 'u', 'sh'], targetTileIdx: 2, options: ['rug', 'run'], es: 'prisa' },
+  // th review (5)
+  { w: 'thin', kind: 'real', pattern: 'th', tiles: ['th', 'i', 'n'], targetTileIdx: 0, options: ['tin', 'fin'], es: 'delgado' },
+  { w: 'this', kind: 'real', pattern: 'th', tiles: ['th', 'i', 's'], targetTileIdx: 0, options: ['dis', 'his'], es: 'esto o este' },
+  { w: 'that', kind: 'real', pattern: 'th', tiles: ['th', 'a', 't'], targetTileIdx: 0, options: ['hat', 'cat'], es: 'eso o ese' },
+  { w: 'path', kind: 'real', pattern: 'th', tiles: ['p', 'a', 'th'], targetTileIdx: 2, options: ['pat', 'pad'], es: 'camino' },
+  { w: 'math', kind: 'real', pattern: 'th', tiles: ['m', 'a', 'th'], targetTileIdx: 2, options: ['mat', 'mad'], es: 'matemáticas', cognate: true },
+  // bl review (5)
+  { w: 'black', kind: 'real', pattern: 'bl', tiles: ['bl', 'a', 'ck'], targetTileIdx: 0, options: ['back', 'rack'], es: 'negro' },
+  { w: 'block', kind: 'real', pattern: 'bl', tiles: ['bl', 'o', 'ck'], targetTileIdx: 0, options: ['lock', 'rock'], es: 'bloque', cognate: true },
+  { w: 'blast', kind: 'real', pattern: 'bl', tiles: ['bl', 'a', 's', 't'], targetTileIdx: 0, options: ['last', 'fast'], es: 'explosión' },
+  { w: 'blend', kind: 'real', pattern: 'bl', tiles: ['bl', 'e', 'n', 'd'], targetTileIdx: 0, options: ['bend', 'lend'], es: 'mezclar' },
+  { w: 'blink', kind: 'real', pattern: 'bl', tiles: ['bl', 'i', 'n', 'k'], targetTileIdx: 0, options: ['link', 'sink'], es: 'parpadear' },
+  // st review (5)
+  { w: 'stop', kind: 'real', pattern: 'st', tiles: ['st', 'o', 'p'], targetTileIdx: 0, options: ['top', 'sop'], es: 'parar o alto' },
+  { w: 'step', kind: 'real', pattern: 'st', tiles: ['st', 'e', 'p'], targetTileIdx: 0, options: ['pep', 'set'], es: 'paso' },
+  { w: 'stem', kind: 'real', pattern: 'st', tiles: ['st', 'e', 'm'], targetTileIdx: 0, options: ['hem', 'set'], es: 'tallo' },
+  { w: 'stun', kind: 'real', pattern: 'st', tiles: ['st', 'u', 'n'], targetTileIdx: 0, options: ['sun', 'ton'], es: 'aturdir' },
+  { w: 'stag', kind: 'real', pattern: 'st', tiles: ['st', 'a', 'g'], targetTileIdx: 0, options: ['tag', 'sag'], es: 'ciervo' },
+  // -mp review (5)
+  { w: 'camp', kind: 'real', pattern: 'mp', tiles: ['c', 'a', 'mp'], targetTileIdx: 2, options: ['cap', 'cat'], es: 'campamento', cognate: true },
+  { w: 'lamp', kind: 'real', pattern: 'mp', tiles: ['l', 'a', 'mp'], targetTileIdx: 2, options: ['lap', 'lad'], es: 'lámpara', cognate: true },
+  { w: 'jump', kind: 'real', pattern: 'mp', tiles: ['j', 'u', 'mp'], targetTileIdx: 2, options: ['jug', 'jut'], es: 'saltar' },
+  { w: 'bump', kind: 'real', pattern: 'mp', tiles: ['b', 'u', 'mp'], targetTileIdx: 2, options: ['bud', 'bug'], es: 'golpe o bache' },
+  { w: 'ramp', kind: 'real', pattern: 'mp', tiles: ['r', 'a', 'mp'], targetTileIdx: 2, options: ['rap', 'rat'], es: 'rampa', cognate: true },
+];
+
+export const W2_L5_RUNES: WordEntry[] = [
+  { w: 'shib', kind: 'rune', pattern: 'sh', tiles: ['sh', 'i', 'b'], targetTileIdx: 0, options: ['sib', 'chib'], azureRef: 'shibb' },
+  { w: 'shog', kind: 'rune', pattern: 'sh', tiles: ['sh', 'o', 'g'], targetTileIdx: 0, options: ['sog', 'chog'], azureRef: 'shogg' },
+  { w: 'thab', kind: 'rune', pattern: 'th', tiles: ['th', 'a', 'b'], targetTileIdx: 0, options: ['tab', 'fab'], azureRef: 'thabb' },
+  { w: 'thip', kind: 'rune', pattern: 'th', tiles: ['th', 'i', 'p'], targetTileIdx: 0, options: ['tip', 'sip'], azureRef: 'thipp' },
+  { w: 'blap', kind: 'rune', pattern: 'bl', tiles: ['bl', 'a', 'p'], targetTileIdx: 0, options: ['bap', 'lap'], azureRef: 'blapp' },
+  { w: 'bleg', kind: 'rune', pattern: 'bl', tiles: ['bl', 'e', 'g'], targetTileIdx: 0, options: ['beg', 'leg'], azureRef: 'blegg' },
+  { w: 'steb', kind: 'rune', pattern: 'st', tiles: ['st', 'e', 'b'], targetTileIdx: 0, options: ['teb', 'seb'], azureRef: 'stebb' },
+  { w: 'stug', kind: 'rune', pattern: 'st', tiles: ['st', 'u', 'g'], targetTileIdx: 0, options: ['tug', 'sug'], azureRef: 'stugg' },
+  { w: 'bamp', kind: 'rune', pattern: 'mp', tiles: ['b', 'a', 'mp'], targetTileIdx: 2, options: ['bap', 'bam'], azureRef: 'bamp' },
+  { w: 'zump', kind: 'rune', pattern: 'mp', tiles: ['z', 'u', 'mp'], targetTileIdx: 2, options: ['zup', 'zum'], azureRef: 'zump' },
+];
+
+export const W2_L5_CUTSCENES: Record<CutsceneId, CutsceneScript> = {
+  opening: {
+    id: 'opening',
+    title: 'World 2, Level 5: The Furnace Core',
+    subtitle: 'Boss Finale Opening',
+    beats: [
+      {
+        id: 'w2-l05-open-v1-1',
+        image: '/src/assets/images/cutscene_w2_l5_opening_1795713159897.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'We have reached the heart of the Sunken Foundry. Out of the magma rift rises the Iron Warden, armored in furnace steel and backed by Forge Weavers.',
+        captions: [
+          'Boss Finale: The Iron Warden rises from the Furnace Core.',
+          'Armored in furnace steel and backed by Forge Weavers.',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Dramatic, resolute commander standing at the edge of the volcanic boss arena.',
+      },
+      {
+        id: 'w2-l05-open-v1-2',
+        image: '/src/assets/images/cutscene_w2_l5_opening_1795713159897.jpg',
+        motion: 'pan',
+        durationMs: 11000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Combine Gravity Snares, Rail Turrets, and Tesla Spires around the furnace ring. Seal all five digraph and blend locks, shatter the Iron Warden, and close this foundry rift forever.',
+        captions: [
+          'Combine Gravity Snares, Rail Turrets, and Tesla Spires around the molten ring.',
+          'Seal all five World 2 locks and defeat the Iron Warden.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Inspiring, confident field mentor rallying the Runner for the World 2 finale.',
+      },
+    ],
+  },
+  victory: {
+    id: 'victory',
+    title: 'The Sunken Foundry: Rift Sealed',
+    subtitle: 'World 2 Finale Victory',
+    beats: [
+      {
+        id: 'w2-l05-vic-v1-1',
+        image: '/src/assets/images/cutscene_w2_l5_victory_1795713159483.jpg',
+        motion: 'lift',
+        durationMs: 9600,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The Iron Warden is broken, and the Furnace Core grows cool. A pillar of pure Anchor light seals the last volcanic rift above the Sunken Foundry.',
+        captions: [
+          'The Iron Warden is defeated and the Furnace Core grows cool!',
+          'Pure Anchor light seals the last volcanic rift above the Sunken Foundry.',
+        ],
+        accent: 'cyan',
+        voiceStyle:
+          'Triumphant, warm, and deeply proud at the end of World 2.',
+      },
+      {
+        id: 'w2-l05-vic-v1-2',
+        image: '/src/assets/images/cutscene_w2_l5_victory_1795713159483.jpg',
+        motion: 'zoom',
+        durationMs: 10200,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Every digraph and consonant blend in the foundry is yours now, Runner. Step into the silver dawn beyond these iron arches. New skies and stronger magic await ahead.',
+        captions: [
+          'Every World 2 digraph and blend is mastered!',
+          'World 2: The Sunken Foundry Completed.',
+        ],
+        accent: 'violet',
+        voiceStyle:
+          'Hopeful, calm, looking ahead toward World 3.',
+      },
+    ],
+  },
+  defeat: {
+    id: 'defeat',
+    title: 'The Core Overwhelmed the Line',
+    subtitle: 'Defeat Cutscene',
+    beats: [
+      {
+        id: 'w2-l05-def-v1-1',
+        image: '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg',
+        motion: 'zoom',
+        durationMs: 10200,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The Iron Warden takes serious firepower to bring down. Your lock progress is already saved. Crack his armor with a Shatter Coil Rail Turret and hold him inside a Gravity Snare on the next run.',
+        captions: [
+          'The Iron Warden broke through the furnace ring.',
+          'Tip: shatter his armor with a Rail Turret and hold him in a Gravity Snare.',
+        ],
+        accent: 'crimson',
+        voiceStyle:
+          'Steady, encouraging mentor after a tough boss battle.',
+      },
+    ],
+  },
 };
 
 export const W2_LEVEL5: LevelConfig = {
-  ...W2_LEVEL1,
   id: 'w2-l5',
+  worldId: 'w2',
   num: 5,
+  worldName: 'World 2: The Sunken Foundry',
   name: 'The Furnace Core',
   headline: 'Defeat the Iron Warden at the Core',
   description:
-    'The World 2 finale. The towering Iron Warden shields escorts and calls armored waves inside the volcanic core. Deploy the new Gravity Snare alongside Rail Turrets and Tesla Spires across all World 2 digraphs and blends.',
-  enemiesSummary: 'The Iron Warden, Forge Weavers, and Shieldbearers',
-  wordsSummary: 'Boss Finale · all World 2 digraphs & blends',
+    'The World 2 boss finale. The towering Iron Warden fortifies escorts and summons Cinder Imps around the molten ring. Deploy your custom 6-defender loadout across all World 2 digraphs and blends.',
+  enemiesSummary: 'The Iron Warden (Boss), Forge Weavers, Rift Shriekers, and Shieldbearers',
+  wordsSummary: 'Boss Finale · World 2 digraphs & blends (sh, th, bl, st, mp)',
   rewardSummary: 'World 2: The Sunken Foundry Completed',
-  vowels: ['sh', 'ch', 'th', 'ck', 'st'],
-  comingSoon: true,
-  backdropImage: '/src/assets/images/cutscene_w2_l1_opening_1795525103158.jpg',
+  vowels: ['sh', 'th', 'bl', 'st', 'mp'],
+  defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
+  runeRate: 0.34,
+  startCrystals: 280,
+  waveEvery: 10,
+  anchor: 20,
+  minWaves: 4,
+  bonusSurgeWaves: 0,
+  mastery: {
+    window: 7,
+    need: 6,
+  },
+  endless: {
+    hpStep: 0.18,
+    countStep: 0.14,
+  },
+  finalBoost: 1.2,
+  hasWalkthrough: false,
+  backdropImage: '/src/assets/images/cutscene_w2_l5_opening_1795713159897.jpg',
+  pathUv: [
+    [0.095, 0.185],
+    [0.185, 0.265],
+    [0.270, 0.285],
+    [0.380, 0.180],
+    [0.490, 0.145],
+    [0.615, 0.185],
+    [0.640, 0.245],
+    [0.610, 0.295],
+    [0.485, 0.295],
+    [0.365, 0.345],
+    [0.312, 0.465],
+    [0.335, 0.585],
+    [0.440, 0.675],
+    [0.565, 0.670],
+    [0.645, 0.635],
+    [0.715, 0.695],
+    [0.795, 0.755],
+    [0.870, 0.810],
+  ],
+  riverUv: [
+    [0.49, 0.48],
+    [0.54, 0.44],
+    [0.46, 0.52],
+  ],
+  riftUv: [0.085, 0.125],
+  campUv: [0.905, 0.805],
+  wardenUv: [0.835, 0.845],
+  pads: [
+    { id: 'fc_t1', kind: 'tower', u: 0.358, v: 0.212 },
+    { id: 'fc_t2', kind: 'tower', u: 0.483, v: 0.125 },
+    { id: 'fc_t3', kind: 'tower', u: 0.727, v: 0.252 },
+    { id: 'fc_t4', kind: 'tower', u: 0.652, v: 0.388 },
+    { id: 'fc_t5', kind: 'tower', u: 0.665, v: 0.535 },
+    { id: 'fc_t6', kind: 'tower', u: 0.265, v: 0.455 },
+    { id: 'fc_t7', kind: 'tower', u: 0.365, v: 0.725 },
+    { id: 'fc_t8', kind: 'tower', u: 0.560, v: 0.755 },
+    { id: 'fc_t9', kind: 'tower', u: 0.824, v: 0.665 },
+    { id: 'fc_t10', kind: 'tower', u: 0.735, v: 0.825 },
+    { id: 'fc_r1', kind: 'trail', u: 0.255, v: 0.280 },
+    { id: 'fc_r2', kind: 'trail', u: 0.618, v: 0.270 },
+    { id: 'fc_r3', kind: 'trail', u: 0.315, v: 0.495 },
+    { id: 'fc_r4', kind: 'trail', u: 0.708, v: 0.690 },
+  ],
+  waves: [
+    {
+      hp: 1.0,
+      groups: [
+        { type: 'shieldbearer', count: 5, gap: 2.6 },
+        { type: 'weaver', count: 2, gap: 4.0, delay: 3.0 },
+        { type: 'shrieker', count: 6, gap: 2.1, delay: 5.5 },
+      ],
+    },
+    {
+      hp: 1.2,
+      groups: [
+        { type: 'shieldbearer', count: 6, gap: 2.3 },
+        { type: 'weaver', count: 4, gap: 3.4, delay: 2.5 },
+        { type: 'shrieker', count: 8, gap: 1.8, delay: 6.0 },
+        { type: 'cinderimp', count: 14, gap: 0.6, delay: 10.5 },
+      ],
+    },
+    {
+      hp: 1.38,
+      groups: [
+        { type: 'shieldbearer', count: 7, gap: 2.1 },
+        { type: 'weaver', count: 4, gap: 3.0, delay: 2.5 },
+        { type: 'shrieker', count: 10, gap: 1.55, delay: 5.5 },
+        { type: 'brute', count: 3, gap: 3.0, delay: 9.5 },
+      ],
+    },
+    {
+      hp: 1.48,
+      groups: [
+        { type: 'ironwarden', count: 1, gap: 1.0, delay: 4.0 },
+        { type: 'shieldbearer', count: 6, gap: 2.2, delay: 1.0 },
+        { type: 'weaver', count: 4, gap: 3.2, delay: 5.0 },
+        { type: 'shrieker', count: 10, gap: 1.5, delay: 9.5 },
+      ],
+    },
+    {
+      hp: 1.78,
+      groups: [
+        { type: 'ironwarden', count: 1, gap: 1.0, delay: 2.5 },
+        { type: 'shieldbearer', count: 8, gap: 2.0, delay: 1.0 },
+        { type: 'weaver', count: 5, gap: 2.8, delay: 4.5 },
+        { type: 'shrieker', count: 12, gap: 1.35, delay: 8.5 },
+        { type: 'cinderimp', count: 16, gap: 0.5, delay: 13.0 },
+      ],
+    },
+  ],
+  realWords: W2_L5_REAL_WORDS,
+  runes: W2_L5_RUNES,
+  cutscenes: W2_L5_CUTSCENES,
 };
 
 export const LEVELS: Record<string, LevelConfig> = {

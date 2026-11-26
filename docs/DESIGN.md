@@ -29,7 +29,9 @@ This document holds the core game design, pedagogical rules, economy numbers, to
 - **Guided help share**: `0.3` (30% crystal payout when audio help is used)
 - **Word cards displayed**: `3` simultaneous options
 - **Mega Charge**: Triggers at `8` streak pips (`megaPips: 8`), granting `115` crystals plus a `25`-damage battlefield blast (`megaBlast: 25`)
+- **Rift Lock Seal Bonus**: Sealing any Rift Lock immediately awards `+100` bonus crystals (`lockBonus: 100`) with a gold-and-cyan crystal burst at the Anchor, a chime, and a floating bonus badge above the Rift Locks bar
 - **Fast-guess guard**: `1500ms` threshold, cooldown `5s` first / `10s` later
+- **Wave Pacing Cap (`waveEvery <= 15`)**: Every level uses `10` words between waves (strictly `15` maximum) paired with `3` to `4` minimum waves (`minWaves`) and calibrated Rift Lock targets (`9/10` on Level 1, `10/11` on 2-lock stages, `7/8` on 3-lock and 4-lock stages, `5/6` to `6/7` on 5-lock stages) so locks seal naturally right before the Final Wave while keeping gameplay snappy and engaging.
 - **Playtest Simulation Tools**: Keep the 10-word Playtest buttons (`Fluent`, `Steady`, `Guided`) available in the Rune Forge for fast pacing and crystal balance testing.
 
 ## 4. Defenders and Hero Powers
@@ -43,10 +45,7 @@ This document holds the core game design, pedagogical rules, economy numbers, to
 5. **Ember Cannon** (`Inferno Mortar` / `Cinder Repeater`, unlocked after World 1, Level 1)
 6. **Tesla Spire** (`Storm Conduit` / `Overcharge Beam`, unlocked after World 1, Level 4)
 7. **Rail Turret** (`Piercing Rail` / `Shatter Coil`, armor-piercing electromagnetic turret + 6-slot Side Loadout Selector, unlocked in World 2, Level 2)
-
-### Planned World 2 Defenders
-
-- **Gravity Snare** (crowd-control foundry trap, unlocking in World 2, Level 4 / Level 5)
+8. **Gravity Snare** (`Singularity Well` / `Stasis Anchor`, vortex trail trap pulling ground and flying enemies backward, unlocked in World 2, Level 4)
 
 ### Hero Powers
 
@@ -68,15 +67,15 @@ Status: **Complete (Levels 1 to 5 Shipped)**
 
 ## 6. World 2: The Sunken Foundry (Digraphs and Blends)
 
-Status: **Levels 1 and 2 Shipped; Levels 3 to 5 Planned**
+Status: **Complete (Levels 1 to 5 Shipped)**
 
 | Level | ID | Name | Status | Phonics Focus | Enemies | Unlocks / Notes |
 | :---: | :--- | :--- | :---: | :--- | :--- | :--- |
 | 1 | `w2-l1` | Ashgate Outpost | **Shipped** | `sh`, `ch` digraphs + runes | Cinder Imps, Rift Bats, Bramble Stalkers | Playtested and cleared on Hard. Pure Leda `snd:sh` and `snd:ch` phoneme clips shipped; multi-voice Azure calibrated. |
 | 2 | `w2-l2` | Smelter Causeway | **Shipped** | `th` (unvoiced + voiced), `wh`, `-ck` digraphs + runes | Shieldbearers (armored), Cinder Imps, Bramble Stalkers | Unlocks Rail Turret + 6-slot Side Loadout Selector. Leda audio, Spanish ELL support, and multi-voice Azure cutoffs active. |
-| 3 | `w2-l3` | Ironrift Crossing | Planned | Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`) + runes | Rift Shriekers (armored flyers), Shieldbearers, Cinder Imps | Anti-air + armor challenge. Needs blend Azure calibration before ship. |
-| 4 | `w2-l4` | Crucible Bastion | Planned | Initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) + runes | Forge Weavers (healers/shielders), Rift Shriekers, Shieldbearers | Unlocks Furnace Core boss stage + Gravity Snare. Needs S-blend/final-blend Azure calibration. |
-| 5 | `w2-l5` | The Furnace Core | Planned | Boss Finale: all World 2 digraphs and blends | The Iron Warden (Boss), Forge Weavers, Shieldbearers | Full World 2 toolkit finale. |
+| 3 | `w2-l3` | Ironrift Crossing | **Shipped** | Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`) + runes | Rift Shriekers (armored flyers), Shieldbearers, Cinder Imps | Anti-air + armor challenge across all 7 defenders. Multi-voice Azure blend calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
+| 4 | `w2-l4` | Crucible Bastion | **Shipped** | Initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) + runes | Forge Weavers (healers/shielders), Rift Shriekers, Shieldbearers | Unlocks Gravity Snare and The Furnace Core boss finale. Multi-voice Azure S-blend/final-blend calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
+| 5 | `w2-l5` | The Furnace Core | **Shipped** | Boss Finale: World 2 digraphs and blends (`sh`, `th`, `bl`, `st`, `mp`) + runes | The Iron Warden (Boss), Forge Weavers, Rift Shriekers, Shieldbearers | Full 8-defender World 2 toolkit finale with Iron Aegis shield slams and Cinder Imp summons. |
 
 ## 7. Approved Feature Backlog
 

@@ -326,6 +326,26 @@ class SoundManager {
       fab: 'fabb',
       grem: 'gremm',
       grob: 'grahb',
+      spab: 'spabb',
+      spog: 'spahg',
+      steb: 'stebb',
+      stug: 'stugg',
+      fand: 'fannd',
+      rond: 'rahnd',
+      bamp: 'bammpp',
+      zump: 'zummpp',
+      shog: 'shahg',
+      chog: 'chahg',
+      pab: 'pabb',
+      sab: 'sabb',
+      pog: 'pahg',
+      sog: 'sahg',
+      teb: 'tebb',
+      seb: 'sebb',
+      sug: 'sugg',
+      zup: 'zupp',
+      zum: 'zumm',
+      dis: 'diss',
     };
     return runeSpellings[key] || word;
   }
@@ -505,6 +525,10 @@ class SoundManager {
       cl: 'cl',
       fr: 'fr',
       gr: 'gr',
+      sp: 'sp',
+      st: 'st',
+      nd: 'nd',
+      mp: 'mp',
     };
     return fallbackMap[key] || key;
   }

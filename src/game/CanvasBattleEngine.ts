@@ -122,6 +122,7 @@ interface DefenderRuntime {
   pulsePhase: number;
   beamTargetId?: string | null;
   beamStacks?: number;
+  pullCd?: number;
 }
 
 interface CreatureRuntime {
@@ -144,6 +145,9 @@ interface CreatureRuntime {
   slowTimer: number;
   freezeTimer: number;
   armorShredTimer: number;
+  shieldTimer: number;
+  abilityCd: number;
+  summonsUsed: number;
   heldBy: DefenderRuntime | null;
   attackCd: number;
   hitFlash: number;
@@ -357,6 +361,7 @@ export class BattleEngine {
   private powersUsed = 0;
   private upgradedCount = 0;
   private locksReady = false;
+  private rewardedLocks = new Set<string>();
   private paused = false;
   private externalHold = false;
   private speed = 1;
@@ -644,8 +649,15 @@ export class BattleEngine {
     this.emitSnapshot();
   }
 
-  public setLocksReady(val: boolean) {
+  public setLocksReady(val: boolean, clearedPatterns?: string[]) {
     this.locksReady = val;
+    if (!val) {
+      if (clearedPatterns && clearedPatterns.length > 0) {
+        for (const p of clearedPatterns) this.rewardedLocks.delete(p);
+      } else {
+        this.rewardedLocks.clear();
+      }
+    }
     this.emitSnapshot();
   }
 
@@ -681,7 +693,76 @@ export class BattleEngine {
     this.emitSnapshot();
   }
 
-  public onWordRead(allLocksDone: boolean) {
+  public triggerLockSealBonus(
+    newlyLocked: Array<{ vowel: string; label: string }>,
+    allLocksDone: boolean
+  ): number {
+    const fresh = newlyLocked.filter((lk) => !this.rewardedLocks.has(lk.vowel));
+    if (fresh.length === 0) return 0;
+
+    for (const lk of fresh) {
+      this.rewardedLocks.add(lk.vowel);
+    }
+
+    const bonusAmount = fresh.length * FORGE_CONFIG.lockBonus;
+    this.crystals += bonusAmount;
+    this.shards += bonusAmount;
+    this.wardenCastTimer = Math.max(this.wardenCastTimer, 0.85);
+    this.shakeTimer = Math.max(this.shakeTimer, 0.25);
+    this.shakeStrength = Math.max(this.shakeStrength, 5);
+
+    this.rings.push({
+      x: this.campPos.x,
+      y: this.campPos.y,
+      r0: 22,
+      r1: 380,
+      color: '#fbbf24',
+      lineWidth: 7,
+      age: 0,
+      life: 0.65,
+      fillAlpha: 0.14,
+    });
+    this.rings.push({
+      x: this.campPos.x,
+      y: this.campPos.y,
+      r0: 14,
+      r1: 270,
+      color: '#38e0ff',
+      lineWidth: 5,
+      age: 0,
+      life: 0.55,
+    });
+    this.spawnBurst(this.campPos.x, this.campPos.y, '#fbbf24', 22);
+    this.spawnBurst(this.campPos.x, this.campPos.y, '#38e0ff', 14);
+
+    const floatLabel =
+      fresh.length === 1
+        ? `${fresh[0].label.toUpperCase()} LOCKED! +${bonusAmount}`
+        : `${fresh.length} LOCKS SEALED! +${bonusAmount}`;
+    this.spawnFloatingText(this.campPos.x, this.campPos.y - 82, floatLabel, '#fbbf24', 1.4);
+    sound.sfx('power');
+
+    const lockNames = fresh.map((lk) => lk.label).join(' & ');
+    if (allLocksDone && !this.bonusActive && !this.bankedWin) {
+      this.callbacks.onToast(
+        this.wave + 1 >= this.level.minWaves
+          ? `${lockNames} Lock Sealed (+${bonusAmount} bonus crystals)! All Rift Locks filled. The next wave is the Final Wave.`
+          : `${lockNames} Lock Sealed (+${bonusAmount} bonus crystals)! All Rift Locks filled. Clear the next wave to unlock the Final Wave.`
+      );
+    } else {
+      this.callbacks.onToast(
+        `${lockNames} Lock Sealed! +${bonusAmount} bonus crystals awarded.`
+      );
+    }
+
+    this.emitSnapshot();
+    return bonusAmount;
+  }
+
+  public onWordRead(
+    allLocksDone: boolean,
+    newlyLocked: Array<{ vowel: string; label: string }> = []
+  ) {
     const justCompletedLocks = !this.locksReady && allLocksDone;
     this.locksReady = allLocksDone;
     for (const id of ['rally', 'meteor', 'freeze'] as HeroPowerId[]) {
@@ -691,7 +772,9 @@ export class BattleEngine {
       }
     }
 
-    if (justCompletedLocks && !this.bonusActive && !this.bankedWin) {
+    const awardedLockBonus = this.triggerLockSealBonus(newlyLocked, allLocksDone);
+
+    if (justCompletedLocks && awardedLockBonus === 0 && !this.bonusActive && !this.bankedWin) {
       this.callbacks.onToast(
         this.wave + 1 >= this.level.minWaves
           ? 'All Rift Locks filled! The next wave is the Final Wave.'
@@ -720,7 +803,11 @@ export class BattleEngine {
     this.emitSnapshot();
   }
 
-  public onSimulatedRound(wordCount: number, allLocksDone: boolean) {
+  public onSimulatedRound(
+    wordCount: number,
+    allLocksDone: boolean,
+    newlyLocked: Array<{ vowel: string; label: string }> = []
+  ) {
     const justCompletedLocks = !this.locksReady && allLocksDone;
     this.locksReady = allLocksDone;
     for (const id of ['rally', 'meteor', 'freeze'] as HeroPowerId[]) {
@@ -730,7 +817,9 @@ export class BattleEngine {
       }
     }
 
-    if (justCompletedLocks && !this.bonusActive && !this.bankedWin) {
+    const awardedLockBonus = this.triggerLockSealBonus(newlyLocked, allLocksDone);
+
+    if (justCompletedLocks && awardedLockBonus === 0 && !this.bonusActive && !this.bankedWin) {
       this.callbacks.onToast(
         this.wave + 1 >= this.level.minWaves
           ? 'All Rift Locks filled! The next wave is the Final Wave.'
@@ -1107,6 +1196,9 @@ export class BattleEngine {
       slowTimer: 0,
       freezeTimer: 0,
       armorShredTimer: 0,
+      shieldTimer: 0,
+      abilityCd: type === 'weaver' ? 2.4 : type === 'ironwarden' ? 4.8 : 0,
+      summonsUsed: 0,
       heldBy: null,
       attackCd: 0.8,
       hitFlash: 0,
@@ -1126,15 +1218,18 @@ export class BattleEngine {
     if (!cr.alive) return;
     const cfg = CREATURES[cr.type];
     const baseArmor = cfg.armor || 0;
-    const armorActive = baseArmor > 0 && cr.armorShredTimer <= 0;
-    const mitigated = armorActive && !opts?.armorPierce ? dmg * (1 - baseArmor) : dmg;
+    const shieldArmor = cr.shieldTimer > 0 ? 0.25 : 0;
+    const effectiveArmor = cr.armorShredTimer > 0 ? 0 : Math.min(0.65, baseArmor + shieldArmor);
+    const armorActive = effectiveArmor > 0;
+    const mitigated = armorActive && !opts?.armorPierce ? dmg * (1 - effectiveArmor) : dmg;
     const rounded = Math.max(1, Math.round(mitigated));
     cr.hp -= rounded;
     cr.hitFlash = 0.14;
 
     if (opts?.armorShred && opts.armorShred > 0) {
-      const wasIntact = cr.armorShredTimer <= 0 && baseArmor > 0;
+      const wasIntact = cr.armorShredTimer <= 0 && (baseArmor > 0 || cr.shieldTimer > 0);
       cr.armorShredTimer = Math.max(cr.armorShredTimer, opts.armorShred);
+      if (cr.shieldTimer > 0) cr.shieldTimer = 0;
       if (wasIntact) {
         this.spawnFloatingText(cr.x, cr.y - 68, 'ARMOR CRACKED!', '#38e0ff', 1.05);
       }
@@ -1145,7 +1240,7 @@ export class BattleEngine {
     }
 
     if (rounded >= 4 || Math.random() < 0.35) {
-      const dmgColor = opts?.armorPierce && baseArmor > 0
+      const dmgColor = opts?.armorPierce && armorActive
         ? '#38e0ff'
         : armorActive && !opts?.armorPierce
         ? '#cbd5e1'
@@ -1172,19 +1267,19 @@ export class BattleEngine {
       const burstCol =
         cr.type === 'wisp' || cr.type === 'bat'
           ? '#f0abfc'
-          : cr.type === 'shrieker'
+          : cr.type === 'shrieker' || cr.type === 'cinderimp'
           ? '#fb923c'
-          : cr.type === 'cinderimp'
-          ? '#fb923c'
-          : cr.type === 'shieldbearer'
+          : cr.type === 'shieldbearer' || cr.type === 'weaver'
           ? '#f59e0b'
+          : cr.type === 'ironwarden'
+          ? '#fb923c'
           : cr.type === 'splitter'
           ? '#38e0ff'
           : cr.type === 'thornking'
           ? '#c084fc'
           : '#a3e635';
-      this.spawnBurst(cr.x, cr.y - 12, burstCol, cfg.isBoss ? 32 : 14);
-      this.spawnFloatingText(cr.x, cr.y - 52, `+${cr.shards}`, '#38e0ff', cfg.isBoss ? 1.3 : 0.95);
+      this.spawnBurst(cr.x, cr.y - 12, burstCol, cfg.isBoss ? 36 : 14);
+      this.spawnFloatingText(cr.x, cr.y - 52, `+${cr.shards}`, '#38e0ff', cfg.isBoss ? 1.35 : 0.95);
 
       if (cfg.splitsInto) {
         const childHpMult = Math.max(1, cr.maxHp / Math.max(1, cfg.hp));
@@ -1316,10 +1411,91 @@ export class BattleEngine {
       if (cr.armorShredTimer > 0) {
         cr.armorShredTimer = Math.max(0, cr.armorShredTimer - dt);
       }
+      if (cr.shieldTimer > 0) {
+        cr.shieldTimer = Math.max(0, cr.shieldTimer - dt);
+      }
 
       if (cr.freezeTimer > 0) {
         cr.freezeTimer = Math.max(0, cr.freezeTimer - dt);
         continue;
+      }
+
+      // Forge Weaver: periodic Golden Forge Pulse heals & shields up to 3 nearby allies
+      if (cr.type === 'weaver') {
+        cr.abilityCd -= dt;
+        if (cr.abilityCd <= 0) {
+          cr.abilityCd = 3.4;
+          const auraR = 2.9 * this.RANGE_UNIT_PX;
+          const allies = this.creatures
+            .filter(
+              (a) =>
+                a.alive &&
+                a !== cr &&
+                Math.hypot(a.x - cr.x, a.y - cr.y) <= auraR
+            )
+            .sort((a, b) => a.hp / Math.max(1, a.maxHp) - b.hp / Math.max(1, b.maxHp))
+            .slice(0, 3);
+          if (allies.length > 0) {
+            this.rings.push({
+              x: cr.x,
+              y: cr.y - 24,
+              r0: 12,
+              r1: auraR * 0.72,
+              color: '#fbbf24',
+              lineWidth: 3.5,
+              age: 0,
+              life: 0.48,
+              fillAlpha: 0.08,
+            });
+            for (const ally of allies) {
+              const healAmt = Math.max(8, Math.round(ally.maxHp * 0.14));
+              ally.hp = Math.min(ally.maxHp, ally.hp + healAmt);
+              ally.shieldTimer = Math.max(ally.shieldTimer, 3.0);
+              this.spawnBurst(ally.x, ally.y - 28, '#fde047', 6);
+              this.spawnFloatingText(ally.x, ally.y - 54, `+${healAmt}`, '#fde047', 0.9);
+            }
+          }
+        }
+      } else if (cr.type === 'ironwarden') {
+        // The Iron Warden boss: periodic Iron Aegis warhammer slam shields nearby escorts & spawns Cinder Imps
+        cr.abilityCd -= dt;
+        if (cr.abilityCd <= 0) {
+          cr.abilityCd = 6.5;
+          const slamR = 3.4 * this.RANGE_UNIT_PX;
+          this.shakeTimer = Math.max(this.shakeTimer, 0.25);
+          this.shakeStrength = Math.max(this.shakeStrength, 6);
+          this.rings.push({
+            x: cr.x,
+            y: cr.y - 18,
+            r0: 18,
+            r1: slamR,
+            color: '#fb923c',
+            lineWidth: 5,
+            age: 0,
+            life: 0.58,
+            fillAlpha: 0.12,
+          });
+          this.spawnFloatingText(cr.x, cr.y - 96, 'IRON AEGIS!', '#fb923c', 1.25);
+          for (const ally of this.creatures) {
+            if (!ally.alive || ally === cr) continue;
+            if (Math.hypot(ally.x - cr.x, ally.y - cr.y) <= slamR) {
+              ally.shieldTimer = Math.max(ally.shieldTimer, 3.5);
+              this.spawnBurst(ally.x, ally.y - 24, '#fbbf24', 5);
+            }
+          }
+          if (cr.summonsUsed < 6 && cr.s > 0.05 && cr.s < 0.88) {
+            const count = Math.min(2, 6 - cr.summonsUsed);
+            cr.summonsUsed += count;
+            for (let k = 0; k < count; k++) {
+              this.spawnCreature(
+                'cinderimp',
+                1.25,
+                Math.max(0.01, cr.s - 0.015),
+                k === 0 ? -18 : 18
+              );
+            }
+          }
+        }
       }
 
       // Held in melee combat by a Stone Golem
@@ -1388,30 +1564,51 @@ export class BattleEngine {
       cr.vx = cr.x - prevX;
       cr.vy = cr.y - prevY;
 
-      // Subtle arcane/ember spark trail behind ethereal, fiery, flying, splitting, and boss creatures
+      // Subtle arcane/ember spark trail behind ethereal, fiery, flying, splitting, weaver, and boss creatures
       if (
         (cr.type === 'wisp' ||
           cr.type === 'cinderimp' ||
           cr.type === 'bat' ||
           cr.type === 'shrieker' ||
+          cr.type === 'weaver' ||
           cr.type === 'bramble' ||
           cr.type === 'splitter' ||
-          cr.type === 'thornking') &&
+          cr.type === 'thornking' ||
+          cr.type === 'ironwarden') &&
         !this.focusMode &&
         Math.random() <
-          dt * (cr.type === 'wisp' || cr.type === 'cinderimp' || cr.type === 'shrieker' || cr.type === 'thornking' ? 9 : 5)
+          dt *
+            (cr.type === 'wisp' ||
+            cr.type === 'cinderimp' ||
+            cr.type === 'shrieker' ||
+            cr.type === 'thornking' ||
+            cr.type === 'ironwarden'
+              ? 9
+              : 5)
       ) {
         this.particles.push({
-          x: cr.x + (Math.random() - 0.5) * (cr.type === 'thornking' ? 32 : 12),
-          y: cr.y - (cr.type === 'bat' || cr.type === 'shrieker' ? 42 : cr.type === 'cinderimp' ? 18 : 24),
+          x: cr.x + (Math.random() - 0.5) * (cr.type === 'thornking' || cr.type === 'ironwarden' ? 34 : 12),
+          y:
+            cr.y -
+            (cr.type === 'bat' || cr.type === 'shrieker'
+              ? 42
+              : cr.type === 'weaver'
+              ? 36
+              : cr.type === 'cinderimp'
+              ? 18
+              : 24),
           vx: (Math.random() - 0.5) * 18,
           vy: -12 - Math.random() * 14,
           r: 2.2 + Math.random() * 2.2,
           color:
-            cr.type === 'cinderimp'
+            cr.type === 'cinderimp' || cr.type === 'ironwarden'
               ? Math.random() < 0.5
                 ? '#fb923c'
                 : '#fde047'
+              : cr.type === 'weaver'
+              ? Math.random() < 0.5
+                ? '#fbbf24'
+                : '#38e0ff'
               : cr.type === 'shrieker'
               ? Math.random() < 0.5
                 ? '#fb923c'
@@ -1772,6 +1969,99 @@ export class BattleEngine {
             this.spawnBurst(def.pad.x + (Math.random() - 0.5) * 28, def.pad.y, st.slow ? '#a855f7' : '#38e0ff', 3);
           }
         }
+      } else if (def.type === 'gravity') {
+        const rangePx = (st.radius || 2.35) * this.RANGE_UNIT_PX;
+        let hitAny = false;
+        const trapped: CreatureRuntime[] = [];
+        for (const cr of this.creatures) {
+          if (!cr.alive) continue;
+          if (CREATURES[cr.type].flying && !st.hitsAir) continue;
+          if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
+            hitAny = true;
+            trapped.push(cr);
+            this.damageCreature(cr, (st.dps || 14) * rateBoost * dt * 1.25, {
+              armorPierce: Boolean(st.armorPierce),
+            });
+            if (st.slow) {
+              const resist = (CREATURES[cr.type].slowResist || 0) * 0.5;
+              const mult = 1 - st.slow * (1 - resist);
+              if (mult < cr.slowMult) cr.slowMult = mult;
+              cr.slowTimer = Math.max(cr.slowTimer, 0.55);
+            }
+          }
+        }
+
+        // Periodic graviton pull-back pulse (drags enemies back along path + optional armor shred)
+        def.pullCd = (def.pullCd ?? (st.pullEvery || 2.8)) - dt * rateBoost;
+        if (def.pullCd <= 0 && trapped.length > 0) {
+          def.pullCd = st.pullEvery || 2.8;
+          def.recoil = 0.65;
+          this.rings.push({
+            x: def.pad.x,
+            y: def.pad.y,
+            r0: rangePx * 0.85,
+            r1: 18,
+            color: '#a855f7',
+            lineWidth: 4,
+            age: 0,
+            life: 0.44,
+            fillAlpha: 0.14,
+          });
+          this.rings.push({
+            x: def.pad.x,
+            y: def.pad.y,
+            r0: 14,
+            r1: rangePx * 0.65,
+            color: '#38e0ff',
+            lineWidth: 2.5,
+            age: 0,
+            life: 0.36,
+          });
+          for (const cr of trapped) {
+            const pull = (st.pullStrength || 0.02) * (CREATURES[cr.type].isBoss ? 0.45 : 1);
+            cr.s = Math.max(0.01, cr.s - pull);
+            const pt = this.path.pointAt(cr.s);
+            const nx = -pt.ty;
+            const ny = pt.tx;
+            cr.x = pt.x + nx * cr.lane;
+            cr.y = pt.y + ny * cr.lane;
+            if (st.armorShred && st.armorShred > 0) {
+              cr.armorShredTimer = Math.max(cr.armorShredTimer, st.armorShred);
+              cr.shieldTimer = 0;
+            }
+            this.spawnBurst(cr.x, cr.y - 16, '#c084fc', 5);
+          }
+          sound.sfx('frost', 180);
+        }
+
+        // Stasis Anchor specialty: periodic gravity freeze lock
+        if (st.freezeEvery && st.freezeTime) {
+          def.freezeCd -= dt * rateBoost;
+          if (def.freezeCd <= 0 && trapped.length > 0) {
+            def.freezeCd = st.freezeEvery;
+            for (const cr of trapped) {
+              cr.freezeTimer = Math.max(
+                cr.freezeTimer,
+                st.freezeTime * (CREATURES[cr.type].isBoss ? 0.55 : 1)
+              );
+            }
+            this.rings.push({
+              x: def.pad.x,
+              y: def.pad.y,
+              r0: 16,
+              r1: rangePx,
+              color: '#38e0ff',
+              lineWidth: 4.5,
+              age: 0,
+              life: 0.45,
+              fillAlpha: 0.12,
+            });
+          }
+        }
+
+        if (hitAny && Math.random() < dt * 7) {
+          this.spawnBurst(def.pad.x + (Math.random() - 0.5) * 32, def.pad.y, '#c084fc', 3);
+        }
       } else if (def.type === 'golem') {
         if (def.downTimer > 0) {
           def.downTimer = Math.max(0, def.downTimer - dt);
@@ -1958,7 +2248,7 @@ export class BattleEngine {
           sound.setMusic('calm');
           this.callbacks.onToast(
             `Bonus Wave ${this.bonusWave} of ${this.level.bonusSurgeWaves} cleared (+${waveBonus} crystals)! Keep forging or launch the next wave.`,
-            `battle.waveClear.${this.wave}`
+            `battle.waveClear.${this.bonusWave}`
           );
           this.emitSnapshot();
         }
@@ -2436,9 +2726,9 @@ export class BattleEngine {
   }
 
   private drawDepthSortedEntities(ctx: CanvasRenderingContext2D) {
-    // 1. Spike pits lie recessed flat in the trail under walking creatures
+    // 1. Flat trail traps (Spike Pit & Gravity Snare) lie recessed in the trail under walking creatures
     for (const def of this.defenders) {
-      if (def.type === 'spike') {
+      if (def.type === 'spike' || def.type === 'gravity') {
         this.drawDefenderSprite(ctx, def);
       }
     }
@@ -2448,7 +2738,7 @@ export class BattleEngine {
     const items: DrawItem[] = [];
 
     for (const def of this.defenders) {
-      if (def.type === 'spike') continue;
+      if (def.type === 'spike' || def.type === 'gravity') continue;
       items.push({ y: def.pad.y, draw: () => this.drawDefenderSprite(ctx, def) });
     }
 
@@ -2473,9 +2763,20 @@ export class BattleEngine {
     const sprite = this.sprites?.sprites[def.type as SpriteKey];
     const { x, y } = def.pad;
     const isSelected = def === this.selectedDef;
+    const isFlatTrap = def.type === 'spike' || def.type === 'gravity';
 
     ctx.save();
     ctx.translate(x, y);
+
+    // Subtle spinning graviton aura ring for Gravity Snare
+    if (def.type === 'gravity') {
+      const pulse = 0.45 + 0.35 * Math.sin(this.clock * 4.5 + def.pulsePhase);
+      ctx.strokeStyle = `rgba(168, 85, 247, ${pulse.toFixed(2)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 42 + pulse * 8, 24 + pulse * 4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     // Tier & Specialty glowing ground rune rings
     if (def.level >= 2 || def.spec || this.rallyTimer > 0) {
@@ -2501,8 +2802,8 @@ export class BattleEngine {
       ctx.stroke();
     }
 
-    // Grounded contact shadow (except flat spike pits)
-    if (def.type !== 'spike') {
+    // Grounded contact shadow (except flat trail traps)
+    if (!isFlatTrap) {
       ctx.fillStyle = 'rgba(12, 22, 16, 0.44)';
       ctx.beginPath();
       ctx.ellipse(0, 4, def.type === 'golem' ? 32 : 29, 13, 0, 0, Math.PI * 2);
@@ -2533,6 +2834,8 @@ export class BattleEngine {
         ? 102
         : def.type === 'golem'
         ? 86
+        : def.type === 'gravity'
+        ? 66
         : 60;
 
     if (sprite) {
@@ -2541,7 +2844,7 @@ export class BattleEngine {
       const drawW = drawH * aspect;
 
       ctx.save();
-      ctx.translate(0, def.type === 'spike' ? 14 : 6 + idleBob);
+      ctx.translate(0, isFlatTrap ? 14 : 6 + idleBob);
       if (def.facingLeft && (def.type === 'golem' || def.type === 'rail')) {
         ctx.scale(-recoilSquash, recoilStretch);
       } else {
@@ -2550,7 +2853,7 @@ export class BattleEngine {
       ctx.drawImage(
         sprite.canvas,
         -drawW * 0.5,
-        def.type === 'spike' ? -drawH * 0.68 : -drawH * 0.94,
+        isFlatTrap ? -drawH * 0.68 : -drawH * 0.94,
         drawW,
         drawH
       );
@@ -2566,7 +2869,7 @@ export class BattleEngine {
 
     // Level star pips above upgraded towers (Lv 2, Lv 3, or Specialty star)
     if (def.level >= 2 || def.spec) {
-      const pipY = def.type === 'spike' ? -24 : -targetH * tierScale - 2;
+      const pipY = isFlatTrap ? -26 : -targetH * tierScale - 2;
       const count = def.spec ? 4 : def.level;
       const gap = 11;
       const startX = -((count - 1) * gap) / 2;
@@ -2645,12 +2948,14 @@ export class BattleEngine {
     const isSlowed = cr.slowTimer > 0;
 
     const shadowR =
-      cr.type === 'thornking'
-        ? 44
+      cr.type === 'thornking' || cr.type === 'ironwarden'
+        ? 46
         : cr.type === 'brute'
         ? 36
         : cr.type === 'shieldbearer'
         ? 34
+        : cr.type === 'weaver'
+        ? 28
         : cr.type === 'shrieker'
         ? 26
         : cr.type === 'bramble'
@@ -2663,13 +2968,26 @@ export class BattleEngine {
         ? 22
         : 20;
 
-    // Boss arcane aura ring beneath feet
+    // Boss arcane/molten aura ring beneath feet
     if (cfg.isBoss) {
       const pulse = 0.65 + 0.35 * Math.sin(this.clock * 4);
-      ctx.strokeStyle = `rgba(192, 132, 252, ${pulse.toFixed(2)})`;
+      ctx.strokeStyle =
+        cr.type === 'ironwarden'
+          ? `rgba(251, 146, 60, ${pulse.toFixed(2)})`
+          : `rgba(192, 132, 252, ${pulse.toFixed(2)})`;
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.ellipse(0, 4, shadowR + 10, 18, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Forge Weaver / Iron Aegis golden shield ring on buffed allies
+    if (cr.shieldTimer > 0 && cr.armorShredTimer <= 0) {
+      const spulse = 0.55 + 0.3 * Math.sin(this.clock * 6 + cr.animPhase);
+      ctx.strokeStyle = `rgba(251, 191, 36, ${spulse.toFixed(2)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 2, shadowR + 6, 13, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -2679,29 +2997,33 @@ export class BattleEngine {
         ? 'rgba(35, 18, 60, 0.28)'
         : cr.type === 'wisp'
         ? 'rgba(107, 33, 168, 0.4)'
-        : cr.type === 'cinderimp'
+        : cr.type === 'cinderimp' || cr.type === 'ironwarden'
         ? 'rgba(124, 45, 18, 0.48)'
         : 'rgba(12, 22, 16, 0.48)';
     ctx.beginPath();
-    ctx.ellipse(0, 3, shadowR, cr.type === 'thornking' ? 14 : 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, shadowR, cfg.isBoss ? 15 : 10, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Animated locomotion by archetype
     const bobY = isFrozen
       ? cr.type === 'bat' || cr.type === 'shrieker'
         ? -22
+        : cr.type === 'weaver'
+        ? -10
         : 0
       : cr.type === 'bat'
       ? -26 + Math.sin(cr.animPhase * 1.7) * 7
       : cr.type === 'shrieker'
       ? -28 + Math.sin(cr.animPhase * 1.35) * 8
+      : cr.type === 'weaver'
+      ? -12 + Math.sin(cr.animPhase * 1.15) * 5
       : cr.type === 'wisp'
       ? -12 + Math.sin(cr.animPhase) * 6
       : cr.type === 'cinderimp'
       ? -Math.abs(Math.sin(cr.animPhase)) * 9
       : cr.type === 'splitter'
       ? -4 + Math.sin(cr.animPhase * 1.1) * 4
-      : cr.type === 'thornking'
+      : cr.type === 'thornking' || cr.type === 'ironwarden'
       ? -Math.abs(Math.sin(cr.animPhase * 0.65)) * 5
       : cr.type === 'brute' || cr.type === 'shieldbearer'
       ? -Math.abs(Math.sin(cr.animPhase * 0.72)) * 5
@@ -2711,21 +3033,25 @@ export class BattleEngine {
       ? 0
       : cr.type === 'bat' || cr.type === 'shrieker'
       ? Math.sin(cr.animPhase * 0.9) * 0.09
-      : cr.type === 'wisp'
-      ? Math.sin(cr.animPhase * 0.6) * 0.08
+      : cr.type === 'wisp' || cr.type === 'weaver'
+      ? Math.sin(cr.animPhase * 0.6) * 0.06
       : cr.type === 'cinderimp'
       ? Math.sin(cr.animPhase) * 0.11
-      : cr.type === 'thornking' || cr.type === 'shieldbearer'
+      : cr.type === 'thornking' || cr.type === 'ironwarden' || cr.type === 'shieldbearer'
       ? Math.sin(cr.animPhase * 0.65) * 0.04
       : Math.sin(cr.animPhase) * 0.07;
 
     const drawH =
-      cr.type === 'thornking'
+      cr.type === 'ironwarden'
+        ? 136
+        : cr.type === 'thornking'
         ? 124
         : cr.type === 'brute'
         ? 98
         : cr.type === 'shieldbearer'
         ? 90
+        : cr.type === 'weaver'
+        ? 88
         : cr.type === 'splitter'
         ? 84
         : cr.type === 'shrieker'
@@ -2762,9 +3088,9 @@ export class BattleEngine {
       ctx.restore();
     } else {
       ctx.fillStyle =
-        cr.type === 'cinderimp'
+        cr.type === 'cinderimp' || cr.type === 'ironwarden'
           ? '#fb923c'
-          : cr.type === 'shieldbearer' || cr.type === 'shrieker'
+          : cr.type === 'shieldbearer' || cr.type === 'shrieker' || cr.type === 'weaver'
           ? '#f59e0b'
           : cr.type === 'wisp' || cr.type === 'bat'
           ? '#e879f9'
@@ -2791,12 +3117,12 @@ export class BattleEngine {
       ctx.stroke();
     }
 
-    // Crisp HP bar (elevated for flying creatures, wider & golden-rimmed for Thornking boss)
+    // Crisp HP bar (elevated for flying creatures, wider & golden-rimmed for bosses)
     const barW = cfg.isBoss
-      ? 78
+      ? 84
       : cr.type === 'brute' || cr.type === 'shieldbearer'
       ? 60
-      : cr.type === 'shrieker'
+      : cr.type === 'shrieker' || cr.type === 'weaver'
       ? 54
       : cr.type === 'wisp' || cr.type === 'bat'
       ? 44
@@ -2805,18 +3131,25 @@ export class BattleEngine {
     const barY =
       -drawH -
       12 +
-      (cr.type === 'bat' || cr.type === 'shrieker' ? -22 : cr.type === 'wisp' ? -8 : cfg.isBoss ? -6 : 0);
+      (cr.type === 'bat' || cr.type === 'shrieker'
+        ? -22
+        : cr.type === 'wisp' || cr.type === 'weaver'
+        ? -10
+        : cfg.isBoss
+        ? -8
+        : 0);
     const ratio = Math.max(0, Math.min(1, cr.hp / Math.max(1, cr.maxHp)));
 
     if (cfg.isBoss) {
+      const bossTitle = cr.type === 'ironwarden' ? 'IRON WARDEN' : 'THORNKING';
       ctx.font = '800 13px Lexend, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 4;
-      ctx.strokeText('THORNKING', 0, barY - 4);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillText('THORNKING', 0, barY - 4);
+      ctx.strokeText(bossTitle, 0, barY - 4);
+      ctx.fillStyle = cr.type === 'ironwarden' ? '#fb923c' : '#fbbf24';
+      ctx.fillText(bossTitle, 0, barY - 4);
     }
 
     ctx.fillStyle = cfg.isBoss ? '#fbbf24' : '#0f172a';
@@ -2829,14 +3162,21 @@ export class BattleEngine {
       ctx.fill();
     }
 
-    ctx.fillStyle = cfg.isBoss ? '#c084fc' : ratio > 0.35 ? '#fb7185' : '#ef4444';
+    ctx.fillStyle =
+      cr.type === 'ironwarden'
+        ? '#fb923c'
+        : cfg.isBoss
+        ? '#c084fc'
+        : ratio > 0.35
+        ? '#fb7185'
+        : '#ef4444';
     if (ratio > 0) {
       this.roundRect(ctx, -barW / 2, barY, Math.max(4, barW * ratio), barH, 3);
       ctx.fill();
     }
 
-    // Armored shield emblem beside HP bar (glows amber while armored, cyan cracked when shredded)
-    if ((cfg.armor || 0) > 0) {
+    // Armored / Aegis shield emblem beside HP bar (glows amber while protected, cyan cracked when shredded)
+    if ((cfg.armor || 0) > 0 || cr.shieldTimer > 0) {
       const sx = -barW / 2 - 11;
       const sy = barY + barH / 2;
       const shredded = cr.armorShredTimer > 0;

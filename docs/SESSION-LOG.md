@@ -2,6 +2,70 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-26: World 2 Complete (Levels 4 & 5: Crucible Bastion & The Furnace Core Boss Finale)
+
+### Completed
+- **World 2, Level 4: `Crucible Bastion` (`src/data/level1.ts`, `src/game/sprites.ts`, `src/game/CanvasBattleEngine.ts`, `src/components/BattleHUD.tsx`)**:
+  - Shipped playable `w2-l4` teaching initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) with 24 classroom-safe real words, 8 clean nonsense runes (`spab`, `spog`, `steb`, `stug`, `fand`, `rond`, `bamp`, `zump`), 5 balanced waves (`waveEvery: 10`, `minWaves: 4`, `startCrystals: 265`), 11 measured tower pads, and 4 trail pads.
+  - Added the **Forge Weaver** (`weaver`), a support caster (`hp: 155`, `armor: 0.2`) that pulses Golden Forge light to heal up to 3 nearby allies by 14% max HP and grant a 3-second `+25%` damage-reduction shield.
+  - Added the **Gravity Snare** (`gravity`, `cost: 95`), a vortex trail trap targeting both ground and flying foes to pull enemies backward along the road, with Level 3 specialties **Singularity Well** (stronger pull plus 4-second armor shred) and **Stasis Anchor** (periodic complete freeze lock inside the vortex), prioritized alongside Rail Turret in the default 6-slot loadout (`src/App.tsx`).
+- **World 2, Level 5: `The Furnace Core` Boss Finale (`src/data/level1.ts`, `src/game/sprites.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Shipped playable `w2-l5` wrapping all 5 World 2 locks (`sh`, `th`, `bl`, `st`, `mp`) across 25 curated review words, 10 curated runes, 5 finale waves (`waveEvery: 10`, `minWaves: 4`, `startCrystals: 280`, `bonusSurgeWaves: 0`), 10 molten-ring tower pads, and 4 trail pads.
+  - Added **The Iron Warden** (`ironwarden`, World 2 Boss, `hp: 1180`, `armor: 0.45`, `slowResist: 0.35`, `isBoss: true`), featuring a molten furnace aura, `IRON WARDEN` boss nameplate, and periodic `IRON AEGIS!` warhammer slams that shield nearby escorts and summon bonus Cinder Imps.
+- **Visual Assets, Leda Audio Packing, & Bilingual Spanish ELL (`src/assets/images/`, `public/assets/audio/`, `src/data/ellSpanish.ts`, `src/lib/audio.ts`)**:
+  - Generated and web-compressed all 9 visual assets (`740 KB` total): 2.5D hand-inked maps for `Crucible Bastion` and `The Furnace Core`, `#FFFFFF`-keyed sprites for Forge Weaver, The Iron Warden, and Gravity Snare, and 4 painterly cast-locked opening and victory cutscenes anchored to the canonical World 1 Rift Warden reference.
+  - Generated all 10 `w2-l4` and `w2-l5` Leda cutscene narrations as 64 kbps mono `.mp3` clips, packed all 4 remaining Sound Rule narrations (`rule.th.v2`, `rule.wh.v2`, `rule.ck.v2`, `rule.endblend.v2`) into `public/assets/audio/ui/sprite.mp3`, sliced pure zero-schwa blend phonemes (`snd:sp`, `snd:st`, `snd:nd`, `snd:mp`) from Leda's spoken words, and packed all 82 new words/runes/options/phonemes into `public/assets/audio/words/sprite.mp3` (`423` total English keys, `0` missing keys across all 10 levels).
+  - Added Spanish rule bridges (`sp`, `st`, `nd`, `mp`), glosses for all 28 newly introduced real words, bilingual Gravity Snare and specialty translations, and Spanish subtitles for all 10 new cutscene beats.
+- **Multi-Voice Azure S-Blend & Final-Blend Calibration (`src/lib/speech.ts`, `src/components/QuickVoiceCheckModal.tsx`, `BUILD.md`)**:
+  - Added initial S-blend and final blend scoring in `scoreAzureWord()` and contrast calibration profiles (`spin`/`pin`, `stop`/`top`, `hand`/`had`, `camp`/`cap`) in `QuickVoiceCheckModal.tsx`.
+  - Benchmarked live against Azure Speech across four voice and mic profiles (female, male `-4st`, teen `+3st`, Chromebook mic): `16/16` positive matches (`20/20` including `lamp`) and `7/7` adversarial blend drops caught (`pin->spin`, `sin->spin`, `top->stop`, `sop->stop`, `had->hand`, `cap->camp`, `bam->bamp`).
+
+### Next Up
+1. Playtest World 2, Level 4 (`Crucible Bastion`, Forge Weavers, Gravity Snare) and World 2, Level 5 (`The Furnace Core`, The Iron Warden boss finale), then push the completed World 2 milestone to GitHub.
+2. Begin planning World 3 (Silent-E / Long Vowels) or refresh World 2 Level 1 cutscenes to match the painterly cast lock.
+
+## 2026-11-25 (Part 6): Wave Pacing Rebalance (`waveEvery <= 15`, More Waves, Balanced Locks)
+
+### Completed
+- **Fixed `w2-l3` (`Ironrift Crossing`) 30-Word Gap & Starting Crystals (`src/data/level1.ts`)**:
+  - Dropped `w2-l3` `waveEvery` from `30` down to `10` words between waves (establishing a strict `15`-word maximum across the entire game), raised `startCrystals` from `155` to `255` to match World 2 economy, and raised `minWaves` from `2` to `4` so players fight four full waves with `7/8` locks (`32` total reads across 4 blends) sealing naturally right before Wave 4.
+- **Cross-Level Wave Rhythm & Lock Tuning (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Standardized `waveEvery: 10` across all shipped and upcoming levels (`w1-l1` through `w2-l5`) so every wave break stays quick, fun, and well under the 15-word ceiling.
+  - Raised `minWaves` from `2` to `3` on `w1-l1` through `w1-l4`, `w2-l1`, and `w2-l2` (and `4` on `w2-l3` through `w2-l5`), and tuned 2-lock mastery on `w1-l2`, `w1-l3`, and `w2-l1` to `10/11` so Rift Locks seal cleanly right before the Final Wave while delivering more waves and more voice repetition.
+  - Updated Bonus Surge wave-clear audio in `CanvasBattleEngine.ts` to use `battle.waveClear.${this.bonusWave}` so both wave-start and wave-clear announcements match the active bonus wave number.
+- **Rift Lock Seal Bonus (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`, `src/App.tsx`, `src/components/BattleHUD.tsx`)**:
+  - Added `FORGE_CONFIG.lockBonus = 100` so every time a student seals any Rift Lock, they immediately earn `+100` bonus crystals with a gold-and-cyan shockwave burst at the Rift Anchor, floating battlefield callout, chime, toast banner, and a golden `+100` popup badge over the Rift Locks bar (with per-run deduplication so each lock pays once cleanly).
+- **Locked Pacing Rule in Living Docs (`BUILD.md`, `docs/DESIGN.md`)**:
+  - Added the permanent `waveEvery <= 15` (`10` standard, `3` to `4` minimum waves) pacing guardrail to `BUILD.md` and `docs/DESIGN.md`.
+
+### Next Up
+1. Playtest the updated 10-word / multi-wave rhythm across World 2, Level 3 (`Ironrift Crossing`) and earlier levels, then push to GitHub once verified.
+2. Build World 2, Level 4: `Crucible Bastion` (initial S-blends and final blends `sp`, `st`, `nd`, `mp`, Forge Weavers, Gravity Snare, and multi-voice Azure S-blend/final-blend calibration).
+
+## 2026-11-25 (Part 5): World 2, Level 3 (`Ironrift Crossing`), Armored Flying Rift Shriekers, and Live Playtest Fixes
+
+### Completed
+- **World 2, Level 3: `Ironrift Crossing` (`src/data/level1.ts`, `src/game/sprites.ts`, `src/game/CanvasBattleEngine.ts`, `src/components/BattleHUD.tsx`)**:
+  - Shipped playable `w2-l3` teaching initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`) with 24 real words, 8 classroom-safe nonsense runes (`blap`, `bleg`, `clep`, `clug`, `frab`, `frep`, `grem`, `grob`), 5 tuned anti-air plus armor waves, 10 measured tower pads, and 4 bridge trail spots.
+  - Added the **Rift Shrieker** (`shrieker`), an armored flying wyvern-gargoyle (`hp: 105`, `speed: 2.35`, `flying: true`, `armor: 0.4`) with elevated hover bob, banking flight tilt, ember-violet sparks, ground contact shadow, and shield icon beside its elevated HP bar.
+  - Generated and web-compressed the custom 2.5D hand-inked Ironrift Crossing gorge map, pure-white Rift Shrieker sprite, and painterly cast-locked opening and victory cutscenes anchored to the canonical World 1 Rift Warden artwork.
+- **Multi-Voice Azure Blend Calibration (`src/lib/speech.ts`, `src/components/QuickVoiceCheckModal.tsx`, `BUILD.md`)**:
+  - Added initial L-blend and R-blend scoring (`bl`, `cl`, `fr`, `gr`, plus other initial L/R blends) checking both lead consonant and liquid `/l/` or `/ɹ/` while honoring Personal Voice Profiles and Speech Accommodations.
+  - Benchmarked live against Azure Speech across four voice and mic profiles (female, male `-4st`, teen `+3st`, and Chromebook mic) for `black`, `clap`, `frog`, and `grab` (`16/16` matched) plus 6 adversarial single-consonant drops (`back->black`, `cap->clap`, `lock->block`, `fog->frog`, `gab->grab`, `rock->frock`, `6/6` caught).
+  - Added `bl`, `cl`, `fr`, and `gr` contrast calibration profiles (`black`/`back`, `clap`/`cap`, `frog`/`fog`, `grab`/`gab`) to `QuickVoiceCheckModal.tsx`.
+- **Leda Audio Packing & Spanish ELL Support (`public/assets/audio/`, `src/data/ellSpanish.ts`, `src/lib/audio.ts`, `server.ts`)**:
+  - Generated all 5 `w2-l3` Leda cutscene `.mp3` clips plus shared `Leda_rule-rule-blend-v2.mp3`, synthesized zero-schwa blend phonemes (`snd:bl`, `snd:cl`, `snd:fr`, `snd:gr`), and packed all 44 new words/runes/options into `public/assets/audio/words/sprite.mp3` (`341` total keys, `0` missing across all 8 shipped levels).
+  - Added `gemini-3.8-flash-tts` and `gemini-3.8-live` Leda fallbacks in `server.ts` so live TTS stays resilient under free-tier daily caps.
+  - Added Spanish rule bridges (`bl`, `cl`, `fr`, `gr`), glosses for all 24 `w2-l3` words, and Spanish captions for all 5 `w2-l3` cutscene beats in `src/data/ellSpanish.ts`.
+- **Live GitHub Pages Playtest Fixes (`src/lib/assetUrl.ts`, `src/lib/audio.ts`, `src/components/BattleHUD.tsx`, `src/game/CanvasBattleEngine.ts`)**:
+  - **Fixed robotic AI narrator on Sound Rule cards**: Made `assetUrl()` idempotent so pre-cached `Leda_rule-*.mp3` files are never double-prefixed on GitHub Pages (`/rift-runners-studio/rift-runners-studio/...`), fixed concurrent `init()` manifest race loading, and added a Leda static cache fallback when another mentor voice is selected.
+  - **Fixed clipped Level 3 specialty upgrade menu**: Positioned the Level 3 specialty picker vertically centered beside the selected tower with viewport height clamping so both specialties (such as Piercing Rail and Shatter Coil, even with Spanish captions on) and the Sell button remain fully visible.
+  - **Fixed Bonus Surge wave audio announcement**: Switched Bonus Surge announcements in `CanvasBattleEngine.ts` to use `battle.waveStart.${this.bonusWave}` so Bonus Wave 2 of 3 announces Wave 2 instead of the cumulative wave number.
+
+### Next Up
+1. Playtest World 2, Level 3 (`Ironrift Crossing`) and verify the three GitHub Pages playtest fixes, then push to GitHub once verified.
+2. Build World 2, Level 4: `Crucible Bastion` (initial S-blends and final blends `sp`, `st`, `nd`, `mp`, Forge Weavers, Gravity Snare, and multi-voice Azure S-blend/final-blend calibration).
+
 ## 2026-11-25 (Part 4): World 2, Level 2 (`Smelter Causeway`), Shieldbearers, Rail Turret, and Loadout Selector
 
 ### Completed

@@ -93,6 +93,26 @@ export const SPANISH_RULE_TIPS: Record<string, SpanishRuleTip> = {
     tipEs: 'Empieza con una "g" firme atrás de la garganta y deslízala hacia la "r" suave del inglés.',
     bridgeEs: 'Similar a "gr" en "grande", pero con la "r" suave del inglés sin vibración, como en "grab" y "grip".',
   },
+  sp: {
+    labelEs: 'Combinación "sp"',
+    tipEs: 'Empieza directo con una "s" limpia seguida de "p", sin poner una vocal "e" antes.',
+    bridgeEs: 'En español decimos "especial", pero en inglés empieza directo en "s", como en "spin" y "spot".',
+  },
+  st: {
+    labelEs: 'Combinación "st"',
+    tipEs: 'Haz una "s" rápida y toca enseguida con la lengua para la "t", sin agregar "e" al principio.',
+    bridgeEs: 'A diferencia de "estar" en español, aquí empieza directo con "s", como en "stop" y "step".',
+  },
+  nd: {
+    labelEs: 'Combinación final "-nd"',
+    tipEs: 'Deja sonar la "n" al final de la vocal y cierra con una "d" clara.',
+    bridgeEs: 'En inglés pronunciamos ambas letras al final de la sílaba, como en "hand" y "sand".',
+  },
+  mp: {
+    labelEs: 'Combinación final "-mp"',
+    tipEs: 'Cierra los labios para la "m" y ábrelos con un toque rápido de "p" al terminar.',
+    bridgeEs: 'Escucha el cierre completo de "m" seguido de "p" al final, como en "camp" y "lamp".',
+  },
 };
 
 export function getSpanishRuleTip(pattern: string): SpanishRuleTip | null {
@@ -221,6 +241,34 @@ export const WORD_GLOSSES: Record<string, WordGloss> = {
   with: { es: 'con', enDef: 'Together beside someone or using a tool.' },
   zap: { es: 'descarga', enDef: 'A sudden quick burst of electric energy.' },
   zip: { es: 'cierre / pasar rápido', enDef: 'To close a zipper, or move very quickly.' },
+  band: { es: 'banda / cinta', enDef: 'A musical group, or a flat strip wrapped around something.', cognate: true },
+  bend: { es: 'doblar', enDef: 'To curve or fold something out of a straight shape.' },
+  blast: { es: 'explosión / ráfaga', enDef: 'A sudden strong burst of air, sound, or energy.' },
+  blend: { es: 'mezclar / combinar', enDef: 'To mix two or more sounds or things smoothly together.' },
+  blink: { es: 'parpadear', enDef: 'To shut and open your eyes quickly, or flash on and off.' },
+  bump: { es: 'golpe / bache', enDef: 'A light knock against something, or a raised spot on a road.' },
+  camp: { es: 'campamento', enDef: 'An outdoor base with tents or cabins.', cognate: true },
+  hand: { es: 'mano', enDef: 'The end of your arm with fingers and a thumb.' },
+  jump: { es: 'saltar', enDef: 'To push off the ground into the air with your legs.' },
+  lamp: { es: 'lámpara', enDef: 'A device that gives off steady light.', cognate: true },
+  land: { es: 'tierra / aterrizar', enDef: 'Solid ground, or to come down safely from the air.' },
+  pump: { es: 'bomba / bombear', enDef: 'A machine that pushes water, air, or fuel through pipes.' },
+  ramp: { es: 'rampa', enDef: 'A sloped surface linking a lower level to a higher one.', cognate: true },
+  sand: { es: 'arena', enDef: 'Tiny loose grains of rock found on beaches and deserts.' },
+  send: { es: 'enviar', enDef: 'To make a message, item, or unit go somewhere.' },
+  span: { es: 'tramo / alcance', enDef: 'The full distance from one end of a bridge or time period to the other.' },
+  sped: { es: 'aceleró / corrió rápido', enDef: 'Past tense of speed (moved very quickly).' },
+  spin: { es: 'girar', enDef: 'To turn around fast in circles.' },
+  spit: { es: 'escupir', enDef: 'To force liquid or sparks quickly out of the mouth or a nozzle.' },
+  spot: { es: 'punto / lugar', enDef: 'A small round mark, a specific place, or to notice something.' },
+  spun: { es: 'giró / hiló', enDef: 'Past tense of spin (turned rapidly or twisted fibers into thread).' },
+  stag: { es: 'ciervo macho', enDef: 'An adult male deer with branching antlers.' },
+  stem: { es: 'tallo', enDef: 'The main upright stalk that supports a plant or flower.' },
+  step: { es: 'paso / escalón', enDef: 'One movement of your foot when walking, or a flat stair.' },
+  stop: { es: 'parar / alto', enDef: 'To come to a complete halt and stay still.' },
+  stub: { es: 'trozo / talón de boleto', enDef: 'A short leftover end of a pencil or ticket.' },
+  stun: { es: 'aturdir', enDef: 'To shock or freeze someone in place for a brief moment.' },
+  this: { es: 'esto / este', enDef: 'Points to a specific person or object right here.' },
 };
 
 export function getWordGloss(
@@ -336,6 +384,20 @@ export const SPANISH_DEFENDERS: Record<DefenderType, SpanishDefenderInfo> = {
       b: {
         nameEs: 'Bobina Rompeescudos',
         descEs: 'Golpe devastador que rompe la armadura enemiga por 5 segundos para todas tus torres.',
+      },
+    },
+  },
+  gravity: {
+    nameEs: 'Trampa de Gravedad',
+    descEs: 'Vórtice en el sendero que jala hacia atrás a enemigos terrestres y voladores.',
+    spec: {
+      a: {
+        nameEs: 'Pozo Singular',
+        descEs: 'Jala enemigos hacia atrás con fuerza y rompe su armadura durante 4 segundos.',
+      },
+      b: {
+        nameEs: 'Ancla de Estasis',
+        descEs: 'Congela por completo a cada enemigo atrapado dentro del vórtice cada pocos segundos.',
       },
     },
   },
@@ -551,6 +613,46 @@ export const SPANISH_CUTSCENE_CAPTIONS: Record<string, string[]> = {
   'w2-l03-def-v1-1': [
     'Los Chilladores blindados cruzaron el cielo y golpearon el Ancla.',
     'Consejo: coloca Torretas Riel y Agujas Tesla en el centro con un Tótem de Escarcha para frenarlos.',
+  ],
+  'w2-l04-open-v1-1': [
+    'El Bastión del Crisol protege la entrada al Núcleo del Horno.',
+    'Los Tejedores de Forja curan y protegen con escudos dorados a los enemigos cercanos hasta caer.',
+  ],
+  'w2-l04-open-v1-2': [
+    'Nueva trampa desbloqueada: la Trampa de Gravedad jala hacia atrás a enemigos terrestres y voladores.',
+    'Llena los Sellos "sp", "st", "nd" y "mp" en la Forja para abrir la Oleada Final.',
+  ],
+  'w2-l04-vic-v1-1': [
+    '¡Bastión del Crisol asegurado! Todos los Tejedores de Forja cayeron.',
+    'Tus lecturas limpias de "sp", "st", "nd" y "mp" quebraron la línea del bastión.',
+  ],
+  'w2-l04-vic-v1-2': [
+    'Las grandes puertas se abren hacia el Núcleo del Horno.',
+    'Final del Mundo 2 desbloqueado: el Guardián de Hierro te espera adentro.',
+  ],
+  'w2-l04-def-v1-1': [
+    'Los Tejedores de Forja mantuvieron en pie la columna blindada.',
+    'Consejo: coloca una Trampa de Gravedad en la curva con Torretas Riel arriba e inténtalo de nuevo.',
+  ],
+  'w2-l05-open-v1-1': [
+    'Batalla Final: el Guardián de Hierro emerge desde el Núcleo del Horno.',
+    'Blindado con acero volcánico y respaldado por Tejedores de Forja.',
+  ],
+  'w2-l05-open-v1-2': [
+    'Combina Trampas de Gravedad, Torretas Riel y Agujas Tesla alrededor del anillo de lava.',
+    'Sella los cinco Sellos del Mundo 2 y derrota al Guardián de Hierro.',
+  ],
+  'w2-l05-vic-v1-1': [
+    '¡El Guardián de Hierro cayó y el Núcleo del Horno se enfría!',
+    'Un pilar de luz del Ancla sella la última grieta volcánica de la Fundición Hundida.',
+  ],
+  'w2-l05-vic-v1-2': [
+    '¡Dominaste todos los dígrafos y combinaciones del Mundo 2!',
+    'Mundo 2: La Fundición Hundida completado.',
+  ],
+  'w2-l05-def-v1-1': [
+    'El Guardián de Hierro logró abrirse paso por el anillo del horno.',
+    'Consejo: rompe su armadura con una Torreta Riel y retenlo con una Trampa de Gravedad.',
   ],
 };
 

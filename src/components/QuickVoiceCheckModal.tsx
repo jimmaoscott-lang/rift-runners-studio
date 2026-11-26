@@ -150,6 +150,42 @@ const VOICE_CHECK_PROFILES: Record<string, VoiceCheckProfile> = {
     tip: 'Start with a voiced "g" in the back of your mouth and slide directly into a smooth "r".',
     swapHint: 'Keep both the "g" and the "r" steady before moving into the vowel.',
   },
+  sp: {
+    label: 'sp Blend',
+    soundTile: 'sp',
+    anchor: 'spin',
+    contrast: 'pin',
+    contrastPattern: 'p',
+    tip: 'Start with a crisp "s" hiss right before popping your lips for "p", with no vowel sound in front.',
+    swapHint: 'Keep the "s" audible right at the start before the "p".',
+  },
+  st: {
+    label: 'st Blend',
+    soundTile: 'st',
+    anchor: 'stop',
+    contrast: 'top',
+    contrastPattern: 't',
+    tip: 'Hiss a clear "s" and tap your tongue directly into "t" so both sounds ring cleanly.',
+    swapHint: 'Let the "s" and "t" flow together cleanly before the vowel.',
+  },
+  nd: {
+    label: '-nd Blend',
+    soundTile: 'nd',
+    anchor: 'hand',
+    contrast: 'had',
+    contrastPattern: 'd',
+    tip: 'Hum the "n" briefly at the end of the vowel and finish with a clean "d" tap.',
+    swapHint: 'Make sure both the humming "n" and the final "d" come through.',
+  },
+  mp: {
+    label: '-mp Blend',
+    soundTile: 'mp',
+    anchor: 'camp',
+    contrast: 'cap',
+    contrastPattern: 'p',
+    tip: 'Close your lips on "m" and pop them open with a crisp "p" at the end.',
+    swapHint: 'Close into "m" before releasing the final "p" burst.',
+  },
 };
 
 function getProfile(pattern: PatternKey): VoiceCheckProfile {

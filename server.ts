@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -356,14 +356,7 @@ async function startServer() {
                   await sleep(1600);
                   continue;
                 }
-                ttsQuotaCooldownUntil = Date.now() + retryAfterSec * 1000;
-                return {
-                  ok: false,
-                  status: 429,
-                  code: 'QUOTA_EXHAUSTED',
-                  retryAfterSec,
-                  error: 'Voice generation quota temporarily reached. Captions remain active.',
-                };
+                break;
               }
 
               if (isTransient && attempt === 0) {
@@ -386,6 +379,89 @@ async function startServer() {
         }
 
         if (lastQuotaErr) {
+          // Fallback to gemini-3.8-live native 24kHz audio when dedicated TTS models hit quota
+          try {
+            const pcmChunks: Buffer[] = [];
+            const liveBuf = await new Promise<Buffer | null>((resolve) => {
+              let settled = false;
+              let sessionRef: any = null;
+              const finish = (buf: Buffer | null) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                try {
+                  sessionRef?.close?.();
+                } catch {
+                  // ignore
+                }
+                resolve(buf);
+              };
+              const timer = setTimeout(() => {
+                finish(pcmChunks.length > 0 ? Buffer.concat(pcmChunks) : null);
+              }, 35000);
+
+              ai.live
+                .connect({
+                  model: 'gemini-3.8-live',
+                  config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: {
+                      voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName },
+                      },
+                    },
+                    systemInstruction:
+                      `You are a crisp American English reading teacher voice actor. ${style} Speak ONLY the exact words requested by the user verbatim, with zero extra commentary, greetings, or filler.`,
+                  },
+                  callbacks: {
+                    onmessage: (message: LiveServerMessage) => {
+                      const parts = message.serverContent?.modelTurn?.parts ?? [];
+                      for (const part of parts) {
+                        if (part.inlineData?.data) {
+                          pcmChunks.push(Buffer.from(part.inlineData.data, 'base64'));
+                        }
+                      }
+                      if (message.serverContent?.turnComplete) {
+                        finish(pcmChunks.length > 0 ? Buffer.concat(pcmChunks) : null);
+                      }
+                    },
+                    onerror: () => finish(null),
+                    onclose: () => finish(pcmChunks.length > 0 ? Buffer.concat(pcmChunks) : null),
+                  },
+                })
+                .then((session) => {
+                  sessionRef = session;
+                  session.sendClientContent({
+                    turns: [
+                      {
+                        role: 'user',
+                        parts: [
+                          {
+                            text: `Read the following verbatim with a clear full one-second silent pause between each item. Do not add any introduction or extra words:\n\n${text}`,
+                          },
+                        ],
+                      },
+                    ],
+                    turnComplete: true,
+                  });
+                })
+                .catch(() => finish(null));
+            });
+
+            if (liveBuf && liveBuf.length > 1000) {
+              const wavBuffer = ensureWavBuffer(liveBuf, 24000);
+              cutsceneAudioCache.set(cacheKey, { buffer: wavBuffer, contentType: 'audio/wav' });
+              try {
+                fs.writeFileSync(diskPath, wavBuffer);
+              } catch {
+                // ignore
+              }
+              return { ok: true, buffer: wavBuffer, contentType: 'audio/wav' };
+            }
+          } catch {
+            // fall through to 429 response
+          }
+
           ttsQuotaCooldownUntil = Date.now() + lastQuotaErr.retryAfterSec * 1000;
           return {
             ok: false,

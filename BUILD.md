@@ -50,6 +50,7 @@ Follow these rules in all game text, cutscene scripts, UI labels, docs, and chat
 2. **Avoid "not X, it's Y" phrasing**: State what something is directly instead of using "not X, it's Y" contrasts.
 3. **Never begin a paragraph with the word "On"**: Rephrase paragraph openings so none start with "On".
 4. **Classroom-Safe Word Audit**: Review every real word and nonsense rune for unintended slang, profanity, or awkward homophones before shipping (for example, `shid`, `chem`, and `chod` were replaced with `shib`, `chep`, and `chot` in World 2 Level 1).
+5. **Wave Pacing Lock (`waveEvery <= 15`)**: Keep `waveEvery` at `10` words (strictly `15` maximum) between waves across every level so students get fast, fun battle rhythm and frequent voice repetition across `3` to `4` minimum waves (`minWaves`) instead of long worksheet-style word grinds.
 
 ## 4. Speech Verification and Calibration Rules (`src/lib/speech.ts`)
 
@@ -73,6 +74,9 @@ Before marking any new phonics target complete, test spoken words against live A
 - **Voiced `th` (`/ð/`, e.g., `this`)**: Miss if score `< 55`, or if heard as `d`/`z`/`v`/`t` and score `< 75`.
 - **`wh` (`/w/`, e.g., `whip`)**: Miss if score `< 50`, or if heard as anything other than `w` and score `< 70`.
 - **Final `-ck` (`/k/`, e.g., `lock`)**: Miss if score `< 55`, or if heard as `g`/`t`/`p`/`d` and score `< 72`.
+- **Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`, etc.)**: Checks both the opening consonant (`leadFloor: 34`, `24` with grace; `leadSwapFloor: 95`, `84` with grace when top heard consonant differs) and liquid `/l/` or `/ɹ/` (`liqBaseFloor: 42`, `30` with grace; `liqSwapFloor: 92`, `82` with grace when top heard liquid differs; plus dropped-liquid single-consonant transcription catch such as `back` for `black` or `fog` for `frog` when liquid score `< 84`), honoring Personal Voice Profiles and Speech Accommodations.
+- **Initial S-blends (`sp`, `st`, `sc`, `sk`, `sm`, `sn`, `sw`)**: Checks both `/s/` (`sFloor: 40`, `28` with grace) and the second consonant (`secondFloor: 42`, `30` with grace; `swapFloor: 86`, `76` with grace), plus single-consonant drop catches (`pin`/`sin` for `spin`, `top`/`sop` for `stop` when score `< 88`), honoring Spanish L1 epenthesis and Personal Voice Profiles.
+- **Final Blends (`-nd`, `-mp`, `-nt`, `-nk`, `-ft`, `-lt`)**: Checks both the first coda consonant (`firstFloor: 36`, `26` with grace) and final stop (`secondFloor: 28`, `20` with grace; `swapFloor: 84`, `74` with grace), allowing soft unreleased final stops when top-2 NBest matches place of articulation, plus dropped-consonant catches (`had` for `hand`, `cap` for `camp`, `bam` for `bamp`).
 
 ### D. Adaptive Quick Voice Check and Personal Voice Profiles
 

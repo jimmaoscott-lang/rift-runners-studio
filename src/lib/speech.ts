@@ -418,7 +418,15 @@ const DEFAULT_PATTERN_FLOOR: Record<string, { base: number; min: number; forbidd
   th: { base: 48, min: 28, forbiddenSwaps: ['t', 'd'] },
   wh: { base: 50, min: 30, forbiddenSwaps: ['ɹ', 'r'] },
   ck: { base: 55, min: 32, forbiddenSwaps: ['g', 'd'] },
-  a: { base: 52, min: 28, forbiddenSwaps: ['ɪ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
+  bl: { base: 42, min: 26, forbiddenSwaps: [] },
+  cl: { base: 42, min: 26, forbiddenSwaps: [] },
+  fr: { base: 42, min: 26, forbiddenSwaps: ['w'] },
+  gr: { base: 42, min: 26, forbiddenSwaps: ['w'] },
+  sp: { base: 44, min: 26, forbiddenSwaps: [] },
+  st: { base: 44, min: 26, forbiddenSwaps: [] },
+  nd: { base: 42, min: 24, forbiddenSwaps: [] },
+  mp: { base: 42, min: 24, forbiddenSwaps: [] },
+  a: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'].filter((x) => x !== 'æ') },
   e: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
   i: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
   o: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'i', 'eɪ'] },
@@ -553,6 +561,10 @@ function inferWordPatterns(target: string, explicitPattern?: string): string[] {
   if (t.includes('th')) keys.add('th');
   if (t.includes('wh')) keys.add('wh');
   if (t.endsWith('ck')) keys.add('ck');
+  const blendMatch = /^(bl|cl|fl|gl|pl|sl|br|cr|dr|fr|gr|pr|tr|sp|st|sc|sk|sm|sn|sw)/.exec(t);
+  if (blendMatch) keys.add(blendMatch[1]);
+  const endBlendMatch = /(nd|mp|nt|nk|ft|lt)$/.exec(t);
+  if (endBlendMatch) keys.add(endBlendMatch[1]);
   const vm = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(t);
   if (vm && vm[1]) keys.add(vm[1]);
   return Array.from(keys);
@@ -578,12 +590,18 @@ function ipaToPlainSound(ipa?: string | null): string | undefined {
     't': 't',
     'd': 'd',
     'g': 'g',
+    'b': 'b',
+    'p': 'p',
+    'l': 'l',
     'z': 'z',
     'f': 'f',
     'v': 'v',
     'dʒ': 'j',
     'ʒ': 'zh',
     'ɹ': 'r',
+    'n': 'n',
+    'm': 'm',
+    'ŋ': 'ng',
   };
   return map[ipa];
 }
@@ -1047,41 +1065,194 @@ export function scoreAzureWord(
         wordScore: Math.round(w.accuracy || 0),
       };
     }
-    digraphDetail += `, ${blendKey} ${Math.round(leadSc)}/${Math.round(liqSc)}${liqTop ? ` (heard ${liqTop})` : ''}`;
+    digraphDetail += `, ${blendKey} ${Math.round(leadSc)}/${Math.round(liqSc)}${
+      leadTop && leadTop !== leadPh.p ? ` (lead ${leadTop})` : ''
+    }${liqTop ? ` (heard ${liqTop})` : ''}`;
 
     const allowedLiqSig = Boolean(liqTop && blendProfile?.allowedHeard?.includes(liqTop));
     if (blendProfile?.allowContrastOverlap && allowedLiqSig) {
       usedAccommodation = true;
       effectiveCons[1] = Math.max(effectiveCons[1], 76);
     } else {
-      const swappedLiquid = isLBlend
-        ? liqTop === 'ɹ' || liqTop === 'w'
-        : liqTop === 'l' || liqTop === 'w';
+      const mismatchedLiquid = Boolean(liqTop && liqTop !== expectedLiquid);
+      const mismatchedLead = Boolean(leadTop && leadTop !== leadPh.p);
+      const leadSwallowedByLiquid = Boolean(leadTop && leadTop === expectedLiquid && leadTop !== leadPh.p);
       // Check if Azure transcribed the dropped-liquid single-consonant word (e.g., "back" for "black", "fog" for "frog")
       const droppedLiquidWord = blendKey[0] + targetLower.slice(2);
       const heardSingleWord = normTokens(res.heard || '').includes(droppedLiquidWord);
       const liqBaseFloor = blendProfile ? blendProfile.targetFloor : blendGrace ? 30 : 42;
-      const liqSwapFloor = blendGrace ? 64 : 70;
+      const liqSwapFloor = blendGrace ? 82 : 92;
       const leadFloor = blendGrace ? 24 : 34;
+      const leadSwapFloor = blendGrace ? 84 : 95;
 
       if (
         liqSc < liqBaseFloor ||
-        (swappedLiquid && liqSc < liqSwapFloor) ||
-        (heardSingleWord && liqSc < 78)
+        (mismatchedLiquid && liqSc < liqSwapFloor) ||
+        (heardSingleWord && liqSc < 84)
       ) {
         digraphSwapMiss = true;
-        digraphBorderlineMiss = !swappedLiquid && !heardSingleWord && liqSc >= 24;
+        digraphBorderlineMiss = !mismatchedLiquid && !heardSingleWord && liqSc >= 24;
         digraphExpected = blendKey;
         digraphHeard = heardSingleWord
           ? blendKey[0]
           : ipaToPlainSound(liqTop);
         digraphScore = Math.round(liqSc);
-      } else if (leadSc < leadFloor) {
+      } else if (
+        leadSc < leadFloor ||
+        (mismatchedLead && leadSc < leadSwapFloor) ||
+        (leadSwallowedByLiquid && !blendGrace && leadSc < 99)
+      ) {
         digraphSwapMiss = true;
-        digraphBorderlineMiss = leadSc >= 20;
+        digraphBorderlineMiss = !mismatchedLead && leadSc >= 20;
         digraphExpected = blendKey;
         digraphHeard = ipaToPlainSound(leadTop);
         digraphScore = Math.round(leadSc);
+      }
+    }
+  }
+
+  // Catch initial S-blend drops (sp, st, sc, sk, sm, sn, sw -> pin/sin, top/sop) while honoring Spanish L1 & Voice Profiles.
+  const initSBlendMatch = targetLower.match(/^(sp|st|sc|sk|sm|sn|sw)/);
+  if (initSBlendMatch && !digraphSwapMiss && consPh.length >= 2 && vi >= 2) {
+    const blendKey = initSBlendMatch[1];
+    const sPh = consPh[0];
+    const secondPh = consPh[1];
+    const sSc = effectiveCons[0] ?? 0;
+    const secondSc = effectiveCons[1] ?? 0;
+    const sTop = Array.isArray(sPh.best) ? sPh.best[0]?.p : null;
+    const secondTop = Array.isArray(secondPh.best) ? secondPh.best[0]?.p : null;
+    const blendProfile = getDigraphProfile(blendKey);
+    const blendGrace = graceActive || Boolean(blendProfile);
+    const heardTokens = normTokens(res.heard || '');
+    const droppedSWord = targetLower.slice(1); // spin -> pin, stop -> top
+    const droppedSecondWord = 's' + targetLower.slice(2); // spin -> sin, stop -> sop
+    const heardDroppedS = heardTokens.includes(droppedSWord);
+    const heardDroppedSecond = heardTokens.includes(droppedSecondWord);
+
+    if (!observedDigraph || explicitKey === blendKey) {
+      observedDigraph = {
+        targetIpa: sSc <= secondSc ? 's' : secondPh.p,
+        targetScore: Math.round(Math.min(sSc, secondSc)),
+        heardIpa: (sSc <= secondSc ? sTop : secondTop) || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+    }
+    digraphDetail += `, ${blendKey} ${Math.round(sSc)}/${Math.round(secondSc)}${
+      sTop && sTop !== 's' ? ` (s->${sTop})` : ''
+    }${secondTop && secondTop !== secondPh.p ? ` (${secondPh.p}->${secondTop})` : ''}`;
+
+    const allowedSBlendSig = Boolean(
+      (sTop && blendProfile?.allowedHeard?.includes(sTop)) ||
+        (secondTop && blendProfile?.allowedHeard?.includes(secondTop))
+    );
+    if (blendProfile?.allowContrastOverlap && allowedSBlendSig) {
+      usedAccommodation = true;
+      effectiveCons[0] = Math.max(effectiveCons[0], 76);
+      effectiveCons[1] = Math.max(effectiveCons[1], 76);
+    } else {
+      const sFloor = blendProfile ? blendProfile.targetFloor : blendGrace ? 28 : 40;
+      const secondFloor = blendProfile ? blendProfile.targetFloor : blendGrace ? 30 : 42;
+      const sMismatched = Boolean(sTop && sTop !== 's');
+      const secondMismatched = Boolean(secondTop && secondTop !== secondPh.p);
+      const swapFloor = blendGrace ? 76 : 86;
+
+      if (
+        sSc < sFloor ||
+        (sMismatched && sSc < swapFloor) ||
+        (heardDroppedS && sSc < 88)
+      ) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = !sMismatched && !heardDroppedS && sSc >= 22;
+        digraphExpected = blendKey;
+        digraphHeard = heardDroppedS ? blendKey[1] : ipaToPlainSound(sTop);
+        digraphScore = Math.round(sSc);
+      } else if (
+        secondSc < secondFloor ||
+        (secondMismatched && secondSc < swapFloor) ||
+        (heardDroppedSecond && secondSc < 88)
+      ) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = !secondMismatched && !heardDroppedSecond && secondSc >= 22;
+        digraphExpected = blendKey;
+        digraphHeard = heardDroppedSecond ? 's' : ipaToPlainSound(secondTop);
+        digraphScore = Math.round(secondSc);
+      }
+    }
+  }
+
+  // Catch final nasal/stop blend drops (nd, mp, nt, nk, ft, lt -> had/hat, cap/cat) while allowing soft final stop release.
+  const endBlendMatch = targetLower.match(/(nd|mp|nt|nk|ft|lt)$/);
+  if (endBlendMatch && !digraphSwapMiss && consPh.length >= 2 && ph.length - 1 - vi >= 2) {
+    const blendKey = endBlendMatch[1];
+    const firstIdx = consPh.length - 2;
+    const secondIdx = consPh.length - 1;
+    const firstPh = consPh[firstIdx];
+    const secondPh = consPh[secondIdx];
+    const firstSc = effectiveCons[firstIdx] ?? 0;
+    const secondSc = effectiveCons[secondIdx] ?? 0;
+    const firstTop = Array.isArray(firstPh.best) ? firstPh.best[0]?.p : null;
+    const secondTop = Array.isArray(secondPh.best) ? secondPh.best[0]?.p : null;
+    const blendProfile = getDigraphProfile(blendKey);
+    const blendGrace = graceActive || Boolean(blendProfile);
+    const heardTokens = normTokens(res.heard || '');
+    const droppedFirstWord = targetLower.slice(0, -2) + blendKey[1]; // hand -> had, camp -> cap
+    const droppedSecondWord = targetLower.slice(0, -1); // hand -> han, camp -> cam
+    const heardDroppedFirst = heardTokens.includes(droppedFirstWord);
+    const heardDroppedSecond = heardTokens.includes(droppedSecondWord);
+
+    if (!observedDigraph || explicitKey === blendKey) {
+      observedDigraph = {
+        targetIpa: firstSc <= secondSc ? firstPh.p : secondPh.p,
+        targetScore: Math.round(Math.min(firstSc, secondSc)),
+        heardIpa: (firstSc <= secondSc ? firstTop : secondTop) || undefined,
+        wordScore: Math.round(w.accuracy || 0),
+      };
+    }
+    digraphDetail += `, -${blendKey} ${Math.round(firstSc)}/${Math.round(secondSc)}${
+      firstTop && firstTop !== firstPh.p ? ` (${firstPh.p}->${firstTop})` : ''
+    }${secondTop && secondTop !== secondPh.p ? ` (${secondPh.p}->${secondTop})` : ''}`;
+
+    const allowedEndSig = Boolean(
+      (firstTop && blendProfile?.allowedHeard?.includes(firstTop)) ||
+        (secondTop && blendProfile?.allowedHeard?.includes(secondTop))
+    );
+    if (blendProfile?.allowContrastOverlap && allowedEndSig) {
+      usedAccommodation = true;
+      effectiveCons[firstIdx] = Math.max(effectiveCons[firstIdx], 76);
+      effectiveCons[secondIdx] = Math.max(effectiveCons[secondIdx], 76);
+    } else {
+      const firstFloor = blendProfile ? blendProfile.targetFloor : blendGrace ? 26 : 36;
+      const secondFloor = blendProfile ? Math.max(20, blendProfile.targetFloor - 8) : blendGrace ? 20 : 28;
+      const firstMismatched = Boolean(firstTop && firstTop !== firstPh.p);
+      // Allow devoiced /t/ for final /d/ after /n/ or soft unreleased final stop when Azure's top-2 matches
+      const secondNBest = (secondPh.best || []).slice(0, 2).map((b) => b.p);
+      const softFinalStopOK =
+        (secondPh.p === 'd' && secondNBest.some((p) => p === 'd' || p === 't')) ||
+        (secondPh.p === 'p' && secondNBest.some((p) => p === 'p' || p === 'b')) ||
+        (secondPh.p === 't' && secondNBest.some((p) => p === 't' || p === 'd'));
+      const secondMismatched = Boolean(secondTop && secondTop !== secondPh.p && !softFinalStopOK);
+      const swapFloor = blendGrace ? 74 : 84;
+
+      if (
+        firstSc < firstFloor ||
+        (firstMismatched && firstSc < swapFloor) ||
+        (heardDroppedFirst && firstSc < 88)
+      ) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = !firstMismatched && !heardDroppedFirst && firstSc >= 20;
+        digraphExpected = blendKey;
+        digraphHeard = heardDroppedFirst ? blendKey[1] : ipaToPlainSound(firstTop);
+        digraphScore = Math.round(firstSc);
+      } else if (
+        secondSc < secondFloor ||
+        (secondMismatched && secondSc < swapFloor) ||
+        (heardDroppedSecond && secondSc < 84)
+      ) {
+        digraphSwapMiss = true;
+        digraphBorderlineMiss = !secondMismatched && !heardDroppedSecond && secondSc >= 16;
+        digraphExpected = blendKey;
+        digraphHeard = heardDroppedSecond ? blendKey[0] : ipaToPlainSound(secondTop);
+        digraphScore = Math.round(secondSc);
       }
     }
   }

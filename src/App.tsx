@@ -7,6 +7,7 @@ import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
   DifficultyId,
+  FORGE_CONFIG,
   HeroPowerId,
   LevelConfig,
   LevelId,
@@ -248,6 +249,10 @@ export default function App() {
   const [tutorialIdx, setTutorialIdx] = useState<number | null>(0);
   const [forgedCount, setForgedCount] = useState(0);
   const [waveBanner, setWaveBanner] = useState<WaveBannerInfo | null>(null);
+  const [lockBonusFlash, setLockBonusFlash] = useState<{
+    patterns: PatternKey[];
+    amount: number;
+  } | null>(null);
   const [showHalfSpeedTip, setShowHalfSpeedTip] = useState(false);
   const [ellOpen, setEllOpen] = useState(false);
   const [loadoutOpen, setLoadoutOpen] = useState(false);
@@ -258,6 +263,7 @@ export default function App() {
   const forgeStatsRef = useRef<ForgeStats>({ ...EMPTY_FORGE_STATS, practice: [] });
   const toastTimerRef = useRef<number>(0);
   const bannerTimerRef = useRef<number>(0);
+  const lockFlashTimerRef = useRef<number>(0);
   const bannerIdRef = useRef<number>(1);
   const prevWaveRef = useRef<number>(0);
   const progressRef = useRef<StoredProgress>(progress);
@@ -312,8 +318,8 @@ export default function App() {
       if (validPrev.length === 6 && validPrev.includes(newest)) {
         return validPrev;
       }
-      // Smart default: keep archer, spike, frost, ember, tesla + newest unlocked tower(s)
-      const preferred: DefenderType[] = ['archer', 'spike', 'frost', 'ember', 'tesla', newest];
+      // Smart default: keep archer, frost, ember, tesla, rail + newest unlocked tower(s)
+      const preferred: DefenderType[] = ['archer', 'frost', 'ember', 'tesla', 'rail', newest, 'spike'];
       const next: DefenderType[] = [];
       for (const id of preferred) {
         if (unlocked.includes(id) && !next.includes(id) && next.length < 6) {
@@ -657,30 +663,56 @@ export default function App() {
     engineRef.current?.grantCrystals(amount);
   }, []);
 
+  const flashLockBonus = useCallback((patterns: PatternKey[]) => {
+    if (patterns.length === 0) return;
+    window.clearTimeout(lockFlashTimerRef.current);
+    setLockBonusFlash({
+      patterns,
+      amount: patterns.length * FORGE_CONFIG.lockBonus,
+    });
+    lockFlashTimerRef.current = window.setTimeout(() => setLockBonusFlash(null), 2600);
+  }, []);
+
   const handleWordForged = useCallback(
     (pattern: PatternKey, firstTryClean: boolean, stats: ForgeStats) => {
       forgeStatsRef.current = stats;
       setForgedCount(stats.forged);
-      setProgress((prev) => {
-        const next = recordPatternRead(
-          prev,
-          pattern,
-          firstTryClean,
-          activeLevel.id,
-          activeLevel.mastery
-        );
-        const nextLocks = getPatternLocks(
-          next,
-          activeLevel.vowels,
-          activeLevel.mastery.window,
-          activeLevel.mastery.need,
-          activeLevel.id
-        );
-        engineRef.current?.onWordRead(nextLocks.every((l) => l.done));
-        return next;
-      });
+      const prev = progressRef.current;
+      const prevLocks = getPatternLocks(
+        prev,
+        activeLevel.vowels,
+        activeLevel.mastery.window,
+        activeLevel.mastery.need,
+        activeLevel.id
+      );
+      const next = recordPatternRead(
+        prev,
+        pattern,
+        firstTryClean,
+        activeLevel.id,
+        activeLevel.mastery
+      );
+      const nextLocks = getPatternLocks(
+        next,
+        activeLevel.vowels,
+        activeLevel.mastery.window,
+        activeLevel.mastery.need,
+        activeLevel.id
+      );
+      const newlyLocked = nextLocks.filter(
+        (nl) => nl.done && !prevLocks.find((pl) => pl.vowel === nl.vowel)?.done
+      );
+      progressRef.current = next;
+      setProgress(next);
+      if (newlyLocked.length > 0) {
+        flashLockBonus(newlyLocked.map((lk) => lk.vowel));
+      }
+      engineRef.current?.onWordRead(
+        nextLocks.every((l) => l.done),
+        newlyLocked.map((lk) => ({ vowel: lk.vowel, label: lk.label }))
+      );
     },
-    [activeLevel]
+    [activeLevel, flashLockBonus]
   );
 
   const handleClearLocks = useCallback(
@@ -694,7 +726,7 @@ export default function App() {
               singlePattern ? [singlePattern] : activeLevel.vowels,
               activeLevel.id
             );
-        engineRef.current?.setLocksReady(false);
+        engineRef.current?.setLocksReady(false, singlePattern ? [singlePattern] : undefined);
         return next;
       });
       showToast(
@@ -720,26 +752,43 @@ export default function App() {
       if (sim.megas > 0 && snap.phase === 'wave') {
         engineRef.current?.triggerMegaBlast();
       }
-      setProgress((prev) => {
-        let next = prev;
-        const vowels = activeLevel.vowels;
-        for (let i = 0; i < sim.wordCount; i++) {
-          const pattern = vowels[i % vowels.length];
-          const clean = i < sim.cleanCount;
-          next = recordPatternRead(next, pattern, clean, activeLevel.id, activeLevel.mastery);
-        }
-        const nextLocks = getPatternLocks(
-          next,
-          activeLevel.vowels,
-          activeLevel.mastery.window,
-          activeLevel.mastery.need,
-          activeLevel.id
-        );
-        engineRef.current?.onSimulatedRound(sim.wordCount, nextLocks.every((l) => l.done));
-        return next;
-      });
+      const prev = progressRef.current;
+      const prevLocks = getPatternLocks(
+        prev,
+        activeLevel.vowels,
+        activeLevel.mastery.window,
+        activeLevel.mastery.need,
+        activeLevel.id
+      );
+      let next = prev;
+      const vowels = activeLevel.vowels;
+      for (let i = 0; i < sim.wordCount; i++) {
+        const pattern = vowels[i % vowels.length];
+        const clean = i < sim.cleanCount;
+        next = recordPatternRead(next, pattern, clean, activeLevel.id, activeLevel.mastery);
+      }
+      const nextLocks = getPatternLocks(
+        next,
+        activeLevel.vowels,
+        activeLevel.mastery.window,
+        activeLevel.mastery.need,
+        activeLevel.id
+      );
+      const newlyLocked = nextLocks.filter(
+        (nl) => nl.done && !prevLocks.find((pl) => pl.vowel === nl.vowel)?.done
+      );
+      progressRef.current = next;
+      setProgress(next);
+      if (newlyLocked.length > 0) {
+        flashLockBonus(newlyLocked.map((lk) => lk.vowel));
+      }
+      engineRef.current?.onSimulatedRound(
+        sim.wordCount,
+        nextLocks.every((l) => l.done),
+        newlyLocked.map((lk) => ({ vowel: lk.vowel, label: lk.label }))
+      );
     },
-    [activeLevel, snap.phase]
+    [activeLevel, flashLockBonus, snap.phase]
   );
 
   const handleRuleHold = useCallback((hold: boolean) => {
@@ -847,6 +896,7 @@ export default function App() {
                 toast={toast}
                 waveBanner={waveBanner}
                 walkthrough={activeWalkthrough}
+                lockBonusFlash={lockBonusFlash}
                 spanishCaptions={settings.spanishCaptions}
                 onClearLocks={(pattern) => handleClearLocks(false, pattern)}
                 onWalkthroughNext={() => {
