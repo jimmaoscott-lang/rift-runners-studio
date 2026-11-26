@@ -1,7 +1,7 @@
-export type WorldId = 'w1' | 'w2';
+export type WorldId = 'w1' | 'w2' | 'w3';
 export type VowelKey = 'a' | 'e' | 'i' | 'o' | 'u';
 export type PatternKey = VowelKey | (string & {});
-export type LevelId = 'w1-l1' | 'w1-l2' | 'w1-l3' | 'w1-l4' | 'w1-l5' | (string & {});
+export type LevelId = 'w1-l1' | 'w1-l2' | 'w1-l3' | 'w1-l4' | 'w1-l5' | 'w2-l1' | 'w2-l2' | 'w2-l3' | 'w2-l4' | 'w2-l5' | 'w3-l1' | (string & {});
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'expert';
 
 export interface DifficultyConfig {
@@ -137,7 +137,8 @@ export type CreatureType =
   | 'shieldbearer'
   | 'shrieker'
   | 'weaver'
-  | 'ironwarden';
+  | 'ironwarden'
+  | 'galewraith';
 
 export interface CreatureDef {
   id: CreatureType;
@@ -239,6 +240,8 @@ export interface LevelConfig {
   finalBoost: number;
   hasWalkthrough: boolean;
   comingSoon?: boolean;
+  freePlacement?: boolean;
+  noBuildZones?: Array<{ u: number; v: number; r: number; label?: string }>;
   backdropImage: string;
   pathUv: [number, number][];
   riverUv: [number, number][];
@@ -424,6 +427,22 @@ export const PATTERN_RULES: Record<string, PatternRule> = {
     word: 'camp',
     ruleAudioId: 'rule.endblend.v2',
     ruleLine: 'Two consonants blend smoothly together at the end of a word, and you hear both sounds.',
+  },
+  a_e: {
+    label: 'Long a (a_e)',
+    shortLabel: 'a_e',
+    show: '/ā/',
+    word: 'cake',
+    ruleAudioId: 'rule.magice.v1',
+    ruleLine: 'When a silent e sits at the end, it makes the vowel say its long name.',
+  },
+  i_e: {
+    label: 'Long i (i_e)',
+    shortLabel: 'i_e',
+    show: '/ī/',
+    word: 'bike',
+    ruleAudioId: 'rule.magice.v1',
+    ruleLine: 'When a silent e sits at the end, it makes the vowel say its long name.',
   },
 };
 
@@ -908,6 +927,17 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     armor: 0.45,
     slowResist: 0.35,
   },
+  galewraith: {
+    id: 'galewraith',
+    name: 'Gale Wraith',
+    hp: 155,
+    speed: 2.35,
+    anchor: 2,
+    shards: 8,
+    hit: 18,
+    size: 1.08,
+    armor: 0.15,
+  },
 };
 
 export const HERO_POWERS: Record<HeroPowerId, HeroPowerDef> = {
@@ -1029,10 +1059,10 @@ export const CUTSCENES: Record<CutsceneId, CutsceneScript> = {
         durationMs: 11000,
         speaker: 'The Rift Warden',
         voiceText:
-          'You have four defenses ready to deploy. Place Archer Towers and Frost Totems on stone pads beside the trail. Drop Spike Pits and Stone Golems right on the dirt path to hold the line.',
+          'You have four defenses ready to deploy. Place Archer Towers and Frost Totems on any open ground beside the trail. Drop Spike Pits and Stone Golems anywhere along the dirt path to hold the line.',
         captions: [
-          'Four defenses ready: Archer Towers and Frost Totems go on stone pads beside the trail.',
-          'Drop Spike Pits and Stone Golems right on the dirt path to hold the line.',
+          'Four defenses ready: place Archer Towers and Frost Totems on any open ground beside the trail.',
+          'Drop Spike Pits and Stone Golems anywhere along the dirt path to hold the line.',
         ],
         accent: 'cyan',
         voiceStyle:
@@ -1255,6 +1285,15 @@ export const LEVEL1: LevelConfig = {
   },
   finalBoost: 1.2,
   hasWalkthrough: true,
+  freePlacement: true,
+  noBuildZones: [
+    // Far-right deep pine treeline beyond the river
+    { u: 0.93, v: 0.22, r: 0.11, label: 'Dense forest' },
+    { u: 0.94, v: 0.48, r: 0.10, label: 'Dense forest' },
+    { u: 0.94, v: 0.76, r: 0.11, label: 'Dense forest' },
+    // Top-left dark rift cliff
+    { u: 0.08, v: 0.12, r: 0.10, label: 'Rift cliff' },
+  ],
   backdropImage: '/src/assets/images/cutscene_opening_warden_1795457392314.jpg',
   pathUv: [
     [0.19, 0.28],
@@ -1375,6 +1414,13 @@ export const LEVEL2: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Dense bramble thickets & top/bottom forest corners
+    { u: 0.05, v: 0.85, r: 0.12, label: 'Bramble thicket' },
+    { u: 0.70, v: 0.07, r: 0.08, label: 'Bramble thicket' },
+    { u: 0.95, v: 0.28, r: 0.09, label: 'Dense forest' },
+  ],
   backdropImage: '/src/assets/images/cutscene_l2_bramble_opening_1795467449678.jpg',
   pathUv: [
     [0.195, 0.235],
@@ -1644,6 +1690,18 @@ export const LEVEL3: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Distant mountain sky & upper gorge opening
+    { u: 0.56, v: 0.08, r: 0.11, label: 'Deep gorge' },
+    { u: 0.72, v: 0.08, r: 0.11, label: 'Deep gorge' },
+    { u: 0.88, v: 0.08, r: 0.11, label: 'Mountain cliff' },
+    // Canyon river chasm above & below the stone arch bridge
+    { u: 0.65, v: 0.29, r: 0.065, label: 'Deep gorge' },
+    { u: 0.65, v: 0.39, r: 0.055, label: 'Deep gorge' },
+    { u: 0.65, v: 0.68, r: 0.06, label: 'Deep gorge' },
+    { u: 0.60, v: 0.84, r: 0.065, label: 'Deep gorge' },
+  ],
   backdropImage: '/src/assets/images/cutscene_l3_hollow_bridge_v2_1795472155574.jpg',
   pathUv: [
     [0.165, 0.255],
@@ -1914,6 +1972,12 @@ export const LEVEL4: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Tall ruined sanctuary back wall & outer pine perimeter
+    { u: 0.58, v: 0.14, r: 0.08, label: 'Ruin wall' },
+    { u: 0.94, v: 0.22, r: 0.09, label: 'Dense forest' },
+  ],
   backdropImage: '/src/assets/images/cutscene_l4_sunless_ruins_v2_1795472137783.jpg',
   pathUv: [
     [0.235, 0.285],
@@ -2175,6 +2239,13 @@ export const LEVEL5: LevelConfig = {
   },
   finalBoost: 1.2,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Giant gnarled thorn-tree trunk & central crystal chasm
+    { u: 0.41, v: 0.14, r: 0.085, label: 'Ancient trunk' },
+    { u: 0.45, v: 0.45, r: 0.055, label: 'Thorn chasm' },
+    { u: 0.52, v: 0.63, r: 0.065, label: 'Thorn chasm' },
+  ],
   backdropImage: '/src/assets/images/cutscene_l5_thornking_heart_v2_1795472137644.jpg',
   pathUv: [
     [0.195, 0.295],
@@ -2441,6 +2512,15 @@ export const W2_LEVEL1: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Molten lava lake along right edge & upper smelter skyline
+    { u: 0.87, v: 0.20, r: 0.11, label: 'Molten lava' },
+    { u: 0.93, v: 0.46, r: 0.10, label: 'Molten lava' },
+    { u: 0.55, v: 0.06, r: 0.08, label: 'Factory cliff' },
+    // Bottom-left lava drop-off
+    { u: 0.11, v: 0.89, r: 0.09, label: 'Molten lava' },
+  ],
   backdropImage: '/src/assets/images/cutscene_w2_l1_opening_1795525103158.jpg',
   pathUv: [
     [0.215, 0.275],
@@ -2714,6 +2794,15 @@ export const W2_LEVEL2: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Open molten lava basin beneath and right of the viaduct
+    { u: 0.86, v: 0.18, r: 0.11, label: 'Molten lava' },
+    { u: 0.93, v: 0.46, r: 0.09, label: 'Molten lava' },
+    { u: 0.58, v: 0.61, r: 0.075, label: 'Molten lava' },
+    { u: 0.72, v: 0.63, r: 0.075, label: 'Molten lava' },
+    { u: 0.65, v: 0.91, r: 0.085, label: 'Molten lava' },
+  ],
   backdropImage: '/src/assets/images/cutscene_w2_l2_opening_1795606912950.jpg',
   pathUv: [
     [0.215, 0.270],
@@ -2982,6 +3071,16 @@ export const W2_LEVEL3: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Deep molten lava gorge surrounding the central island plateau
+    { u: 0.21, v: 0.53, r: 0.085, label: 'Molten lava' },
+    { u: 0.49, v: 0.23, r: 0.08, label: 'Molten lava' },
+    { u: 0.80, v: 0.59, r: 0.085, label: 'Molten lava' },
+    { u: 0.69, v: 0.90, r: 0.085, label: 'Molten lava' },
+    // Upper background smelters
+    { u: 0.88, v: 0.16, r: 0.12, label: 'Foundry wall' },
+  ],
   backdropImage: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
   pathUv: [
     [0.115, 0.175],
@@ -3260,6 +3359,14 @@ export const W2_LEVEL4: LevelConfig = {
   },
   finalBoost: 1.25,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Central molten crucible cauldron & active lava channels
+    { u: 0.39, v: 0.36, r: 0.055, label: 'Molten lava' },
+    { u: 0.64, v: 0.40, r: 0.055, label: 'Molten crucible' },
+    { u: 0.50, v: 0.84, r: 0.05, label: 'Molten lava' },
+    { u: 0.89, v: 0.60, r: 0.055, label: 'Molten lava' },
+  ],
   backdropImage: '/src/assets/images/cutscene_w2_l4_opening_1795713155111.jpg',
   pathUv: [
     [0.115, 0.195],
@@ -3543,6 +3650,15 @@ export const W2_LEVEL5: LevelConfig = {
   },
   finalBoost: 1.2,
   hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Central blazing molten furnace core cauldron
+    { u: 0.495, v: 0.485, r: 0.12, label: 'Furnace core' },
+    // Deep lava pits flanking the outer furnace bridge
+    { u: 0.74, v: 0.56, r: 0.065, label: 'Molten lava' },
+    { u: 0.16, v: 0.54, r: 0.065, label: 'Molten lava' },
+    { u: 0.54, v: 0.88, r: 0.065, label: 'Molten lava' },
+  ],
   backdropImage: '/src/assets/images/cutscene_w2_l5_opening_1795713159897.jpg',
   pathUv: [
     [0.095, 0.185],
@@ -3640,6 +3756,268 @@ export const W2_LEVEL5: LevelConfig = {
   cutscenes: W2_L5_CUTSCENES,
 };
 
+W2_LEVEL5.nextLevelId = 'w3-l1';
+W2_LEVEL5.rewardSummary = 'World 3: The Silver Spires + Free Placement unlock';
+
+// ---------------------------------------------------------------------------
+// World 3 · Level 1: Dawnbreak Terrace (Silent-E Long a_e & i_e + Free Placement + Gale Wraith)
+// ---------------------------------------------------------------------------
+export const W3_L1_REAL_WORDS: WordEntry[] = [
+  // Long a (a_e)
+  { w: 'cake', kind: 'real', pattern: 'a_e', tiles: ['c', 'a', 'k', 'e'], targetTileIdx: 1, options: ['coke', 'bike'], es: 'pastel' },
+  { w: 'make', kind: 'real', pattern: 'a_e', tiles: ['m', 'a', 'k', 'e'], targetTileIdx: 1, options: ['mike', 'mad'], es: 'hacer' },
+  { w: 'lake', kind: 'real', pattern: 'a_e', tiles: ['l', 'a', 'k', 'e'], targetTileIdx: 1, options: ['like', 'lock'], es: 'lago' },
+  { w: 'tape', kind: 'real', pattern: 'a_e', tiles: ['t', 'a', 'p', 'e'], targetTileIdx: 1, options: ['tap', 'top'], es: 'cinta' },
+  { w: 'cape', kind: 'real', pattern: 'a_e', tiles: ['c', 'a', 'p', 'e'], targetTileIdx: 1, options: ['cap', 'cup'], es: 'capa', cognate: true },
+  { w: 'gate', kind: 'real', pattern: 'a_e', tiles: ['g', 'a', 't', 'e'], targetTileIdx: 1, options: ['got', 'get'], es: 'portón' },
+  { w: 'late', kind: 'real', pattern: 'a_e', tiles: ['l', 'a', 't', 'e'], targetTileIdx: 1, options: ['let', 'lot'], es: 'tarde' },
+  { w: 'game', kind: 'real', pattern: 'a_e', tiles: ['g', 'a', 'm', 'e'], targetTileIdx: 1, options: ['gum', 'gem'], es: 'juego' },
+  { w: 'name', kind: 'real', pattern: 'a_e', tiles: ['n', 'a', 'm', 'e'], targetTileIdx: 1, options: ['nine', 'nap'], es: 'nombre' },
+  { w: 'made', kind: 'real', pattern: 'a_e', tiles: ['m', 'a', 'd', 'e'], targetTileIdx: 1, options: ['mad', 'mud'], es: 'hizo' },
+  // Long i (i_e)
+  { w: 'bike', kind: 'real', pattern: 'i_e', tiles: ['b', 'i', 'k', 'e'], targetTileIdx: 1, options: ['bake', 'back'], es: 'bicicleta' },
+  { w: 'hike', kind: 'real', pattern: 'i_e', tiles: ['h', 'i', 'k', 'e'], targetTileIdx: 1, options: ['hate', 'hit'], es: 'caminata' },
+  { w: 'like', kind: 'real', pattern: 'i_e', tiles: ['l', 'i', 'k', 'e'], targetTileIdx: 1, options: ['lake', 'lick'], es: 'gustar' },
+  { w: 'time', kind: 'real', pattern: 'i_e', tiles: ['t', 'i', 'm', 'e'], targetTileIdx: 1, options: ['tame', 'tin'], es: 'tiempo' },
+  { w: 'dime', kind: 'real', pattern: 'i_e', tiles: ['d', 'i', 'm', 'e'], targetTileIdx: 1, options: ['dim', 'dam'], es: 'moneda de diez centavos' },
+  { w: 'line', kind: 'real', pattern: 'i_e', tiles: ['l', 'i', 'n', 'e'], targetTileIdx: 1, options: ['lane', 'lip'], es: 'línea', cognate: true },
+  { w: 'pine', kind: 'real', pattern: 'i_e', tiles: ['p', 'i', 'n', 'e'], targetTileIdx: 1, options: ['pin', 'pan'], es: 'pino', cognate: true },
+  { w: 'kite', kind: 'real', pattern: 'i_e', tiles: ['k', 'i', 't', 'e'], targetTileIdx: 1, options: ['kit', 'cat'], es: 'cometa' },
+  { w: 'bite', kind: 'real', pattern: 'i_e', tiles: ['b', 'i', 't', 'e'], targetTileIdx: 1, options: ['bit', 'bat'], es: 'morder' },
+  { w: 'ride', kind: 'real', pattern: 'i_e', tiles: ['r', 'i', 'd', 'e'], targetTileIdx: 1, options: ['rid', 'red'], es: 'montar' },
+];
+
+export const W3_L1_RUNES: WordEntry[] = [
+  { w: 'bape', kind: 'rune', pattern: 'a_e', tiles: ['b', 'a', 'p', 'e'], targetTileIdx: 1, options: ['bipe', 'bap'], azureRef: 'bape' },
+  { w: 'dake', kind: 'rune', pattern: 'a_e', tiles: ['d', 'a', 'k', 'e'], targetTileIdx: 1, options: ['dike', 'dak'], azureRef: 'dake' },
+  { w: 'zate', kind: 'rune', pattern: 'a_e', tiles: ['z', 'a', 't', 'e'], targetTileIdx: 1, options: ['zite', 'zat'], azureRef: 'zate' },
+  { w: 'mave', kind: 'rune', pattern: 'a_e', tiles: ['m', 'a', 'v', 'e'], targetTileIdx: 1, options: ['mive', 'mav'], azureRef: 'mave' },
+  { w: 'bipe', kind: 'rune', pattern: 'i_e', tiles: ['b', 'i', 'p', 'e'], targetTileIdx: 1, options: ['bape', 'bip'], azureRef: 'bipe' },
+  { w: 'zime', kind: 'rune', pattern: 'i_e', tiles: ['z', 'i', 'm', 'e'], targetTileIdx: 1, options: ['zame', 'zim'], azureRef: 'zime' },
+  { w: 'tibe', kind: 'rune', pattern: 'i_e', tiles: ['t', 'i', 'b', 'e'], targetTileIdx: 1, options: ['tabe', 'tib'], azureRef: 'tibe' },
+  { w: 'kide', kind: 'rune', pattern: 'i_e', tiles: ['k', 'i', 'd', 'e'], targetTileIdx: 1, options: ['kade', 'kid'], azureRef: 'kide' },
+];
+
+export const W3_L1_CUTSCENES: Record<CutsceneId, CutsceneScript> = {
+  opening: {
+    id: 'opening',
+    title: 'Dawnbreak Terrace',
+    subtitle: 'World 3 · Level 1 Opening',
+    beats: [
+      {
+        id: 'w3-l01-open-v1-1',
+        image: '/src/assets/images/cutscene_w3_l1_opening_1795720712774.jpg',
+        motion: 'zoom',
+        durationMs: 10000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Welcome to the Silver Spires, Runner. High above the clouds, Dawnbreak Terrace is under attack by Gale Wraiths that ride bursts of wind straight down the mountain road.',
+        captions: [
+          'Welcome to World 3: The Silver Spires.',
+          'Gale Wraiths surge forward on sudden bursts of wind.',
+        ],
+        voiceStyle: 'Calm, inspiring veteran guardian surveying high mountain spires at sunrise.',
+        accent: 'cyan',
+      },
+      {
+        id: 'w3-l01-open-v1-2',
+        image: '/src/assets/images/cutscene_w3_l1_opening_1795720712774.jpg',
+        motion: 'pan',
+        durationMs: 11000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'You earned Free Placement here. Set towers anywhere on the open grass and snap road traps anywhere along the stone trail. Watch for silent e in the Rune Forge to lock in long a and long i.',
+        captions: [
+          'Free Placement unlocked! Build towers anywhere on open grass and traps anywhere on the road.',
+          'Master silent-e long vowels (a_e and i_e) to seal Dawnbreak Terrace.',
+        ],
+        voiceStyle: 'Encouraging, energetic mentor unlocking a major new tactical ability.',
+        accent: 'violet',
+      },
+    ],
+  },
+  victory: {
+    id: 'victory',
+    title: 'Terrace Cleared',
+    subtitle: 'World 3 · Level 1 Victory',
+    beats: [
+      {
+        id: 'w3-l01-vic-v1-1',
+        image: '/src/assets/images/cutscene_w3_l1_victory_1795720712044.jpg',
+        motion: 'lift',
+        durationMs: 9500,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Dawnbreak Terrace is clear! Your custom tower layout broke every Gale Wraith wind dash, and your silent-e readings locked in long a and long i.',
+        captions: [
+          'Dawnbreak Terrace secured! Every Gale Wraith dash was stopped cold.',
+          'Long a (a_e) and long i (i_e) locks sealed.',
+        ],
+        voiceStyle: 'Warm, proud veteran guardian celebrating a crisp victory.',
+        accent: 'cyan',
+      },
+      {
+        id: 'w3-l01-vic-v1-2',
+        image: '/src/assets/images/cutscene_w3_l1_victory_1795720712044.jpg',
+        motion: 'zoom',
+        durationMs: 9500,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'The upper bridges of the Silver Spires gleam ahead in the morning sun. Rest your voice, Runner. Even higher peaks await.',
+        captions: [
+          'The upper Silver Spires stand open ahead.',
+          'World 3 · Level 1 Complete!',
+        ],
+        voiceStyle: 'Hopeful, poised veteran mentor looking up toward alpine citadels.',
+        accent: 'violet',
+      },
+    ],
+  },
+  defeat: {
+    id: 'defeat',
+    title: 'Terrace Breached',
+    subtitle: 'World 3 · Level 1 Defeat',
+    beats: [
+      {
+        id: 'w3-l01-def-v1-1',
+        image: '/src/assets/images/cutscene_defeat_breach_1795457392970.jpg',
+        motion: 'zoom',
+        durationMs: 9000,
+        speaker: 'The Rift Warden',
+        voiceText:
+          'Those Gale Wraiths dashed right past our outer bend. With Free Placement, cluster a Frost Totem and Gravity Snare right on the hairpin curve to shut down their wind bursts.',
+        captions: [
+          'The Gale Wraith wind dashes slipped past the terrace defense.',
+          'Tip: cluster a Frost Totem and Gravity Snare near the middle bend and try again.',
+        ],
+        voiceStyle: 'Calm, supportive mentor offering tactical advice after a defeat.',
+        accent: 'crimson',
+      },
+    ],
+  },
+};
+
+export const W3_LEVEL1: LevelConfig = {
+  id: 'w3-l1',
+  num: 1,
+  worldId: 'w3',
+  worldName: 'World 3: The Silver Spires',
+  name: 'Dawnbreak Terrace',
+  headline: 'Free Placement at Dawnbreak Terrace',
+  description:
+    'Place towers anywhere on the open alpine terraces and snap trail traps anywhere along the mountain road. Slow down dashing Gale Wraiths while mastering silent-e long vowels (a_e and i_e).',
+  enemiesSummary: 'Gale Wraiths, Shieldbearers, Rift Shriekers, and Forge Weavers',
+  wordsSummary: 'silent-e long a (a_e) & long i (i_e), plus runes',
+  rewardSummary: 'Free Placement unlocked for World 3',
+  vowels: ['a_e', 'i_e'],
+  defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
+  runeRate: 0.25,
+  startCrystals: 260,
+  waveEvery: 10,
+  anchor: 20,
+  minWaves: 3,
+  bonusSurgeWaves: 3,
+  mastery: {
+    window: 10,
+    need: 9,
+  },
+  endless: {
+    hpStep: 0.16,
+    countStep: 0.14,
+  },
+  finalBoost: 1.25,
+  hasWalkthrough: false,
+  freePlacement: true,
+  noBuildZones: [
+    // Right sky clouds & outer cliff drop
+    { u: 0.92, v: 0.12, r: 0.16 },
+    { u: 0.96, v: 0.32, r: 0.14 },
+    { u: 0.96, v: 0.50, r: 0.12 },
+    { u: 0.97, v: 0.65, r: 0.08 },
+    // Bottom-left cliff drop & clouds
+    { u: 0.06, v: 0.88, r: 0.15 },
+    { u: 0.05, v: 0.68, r: 0.10 },
+    // Top-left fortress masonry & upper cliff rim
+    { u: 0.06, v: 0.12, r: 0.14 },
+    { u: 0.24, v: 0.08, r: 0.12 },
+    { u: 0.42, v: 0.06, r: 0.10 },
+    { u: 0.60, v: 0.04, r: 0.08 },
+  ],
+  backdropImage: '/src/assets/images/cutscene_w3_l1_opening_1795720712774.jpg',
+  pathUv: [
+    [0.175, 0.235],
+    [0.225, 0.295],
+    [0.285, 0.355],
+    [0.345, 0.378],
+    [0.415, 0.355],
+    [0.475, 0.290],
+    [0.535, 0.235],
+    [0.610, 0.215],
+    [0.695, 0.250],
+    [0.735, 0.315],
+    [0.700, 0.390],
+    [0.630, 0.445],
+    [0.568, 0.515],
+    [0.555, 0.595],
+    [0.590, 0.670],
+    [0.665, 0.720],
+    [0.745, 0.750],
+    [0.805, 0.770],
+  ],
+  riverUv: [],
+  riftUv: [0.165, 0.165],
+  campUv: [0.848, 0.775],
+  wardenUv: [0.775, 0.875],
+  pads: [],
+  waves: [
+    {
+      hp: 1.0,
+      groups: [
+        { type: 'galewraith', count: 5, gap: 2.4 },
+        { type: 'shieldbearer', count: 3, gap: 3.1, delay: 4.5 },
+      ],
+    },
+    {
+      hp: 1.18,
+      groups: [
+        { type: 'galewraith', count: 7, gap: 1.9 },
+        { type: 'shrieker', count: 6, gap: 2.1, delay: 3.5 },
+        { type: 'shieldbearer', count: 4, gap: 2.7, delay: 7.5 },
+      ],
+    },
+    {
+      hp: 1.35,
+      groups: [
+        { type: 'galewraith', count: 9, gap: 1.65 },
+        { type: 'weaver', count: 3, gap: 3.5, delay: 3.0 },
+        { type: 'shrieker', count: 8, gap: 1.8, delay: 6.5 },
+      ],
+    },
+    {
+      hp: 1.52,
+      groups: [
+        { type: 'shieldbearer', count: 6, gap: 2.2 },
+        { type: 'galewraith', count: 10, gap: 1.45, delay: 2.5 },
+        { type: 'weaver', count: 4, gap: 3.1, delay: 5.5 },
+        { type: 'shrieker', count: 9, gap: 1.6, delay: 9.0 },
+      ],
+    },
+    {
+      hp: 1.75,
+      groups: [
+        { type: 'galewraith', count: 12, gap: 1.25 },
+        { type: 'shieldbearer', count: 7, gap: 2.0, delay: 2.0 },
+        { type: 'weaver', count: 4, gap: 2.9, delay: 5.0 },
+        { type: 'shrieker', count: 11, gap: 1.4, delay: 8.5 },
+        { type: 'brute', count: 2, gap: 3.4, delay: 12.0 },
+      ],
+    },
+  ],
+  realWords: W3_L1_REAL_WORDS,
+  runes: W3_L1_RUNES,
+  cutscenes: W3_L1_CUTSCENES,
+};
+
 export const LEVELS: Record<string, LevelConfig> = {
   'w1-l1': LEVEL1,
   'w1-l2': LEVEL2,
@@ -3651,6 +4029,7 @@ export const LEVELS: Record<string, LevelConfig> = {
   'w2-l3': W2_LEVEL3,
   'w2-l4': W2_LEVEL4,
   'w2-l5': W2_LEVEL5,
+  'w3-l1': W3_LEVEL1,
 };
 
 export const LEVEL_ORDER: LevelId[] = [
@@ -3664,6 +4043,7 @@ export const LEVEL_ORDER: LevelId[] = [
   'w2-l3',
   'w2-l4',
   'w2-l5',
+  'w3-l1',
 ];
 
 export interface WorldDef {
@@ -3689,6 +4069,13 @@ export const WORLDS: Record<string, WorldDef> = {
     subtitle: 'Digraphs & Blends (sh, ch, th, ck, blends)',
     levelIds: ['w2-l1', 'w2-l2', 'w2-l3', 'w2-l4', 'w2-l5'],
   },
+  w3: {
+    id: 'w3',
+    num: 3,
+    name: 'World 3: The Silver Spires',
+    subtitle: 'Silent-E Long Vowels (a_e, i_e) · Free Placement',
+    levelIds: ['w3-l1'],
+  },
 };
 
-export const WORLD_ORDER: WorldId[] = ['w1', 'w2'];
+export const WORLD_ORDER: WorldId[] = ['w1', 'w2', 'w3'];

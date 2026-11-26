@@ -32,10 +32,10 @@ Every opening, victory, and defeat cutscene must match the canonical World 1 pai
 
 ### B. Battlefield Maps (2.5D Hand-Inked Illustrated)
 
-- **Format**: 16:9 widescreen top-down 2.5D hand-inked illustrated battlefield matching the active biome (lush dark forest for World 1, glowing volcanic iron foundry and lava channels for World 2).
-- **Road and Tower Pads**: Clear winding path from Rift Spawn to the Rift Anchor, with painted flat stone tower pads beside the road.
+- **Format**: 16:9 widescreen top-down 2.5D hand-inked illustrated battlefield matching the active biome (lush dark forest for World 1, glowing volcanic iron foundry and lava channels for World 2, sunlit alpine emerald terraces for World 3).
+- **Road and Free Placement (`freePlacement: true`)**: Clear winding path from Rift Spawn to the Rift Anchor. All levels across Worlds 1, 2, and 3 use open-terrain Free Placement so ranged towers can be built anywhere on valid off-road ground (respecting `riverUv` and per-level `noBuildZones`) and trail defenders snap smoothly anywhere along the path. New maps from World 3 onward should be illustrated with open buildable terrain and zero painted stone pads.
 - **HUD Clearance**: Leave the bottom-left area free of key road curves or tower pads so the horizontal Rift Locks bar stays clear.
-- **Letterbox Color**: Match the outer canvas letterbox in `src/App.tsx` to the active biome (`#07100c` for World 1, `#1c1210` for World 2).
+- **Letterbox Color**: Match the outer canvas letterbox in `src/App.tsx` to the active biome (`#1b3a22` for World 1, `#1c1210` for World 2, `#0e1c2b` for World 3).
 
 ### C. Battlefield Sprites (Enemies and Towers)
 
@@ -77,6 +77,7 @@ Before marking any new phonics target complete, test spoken words against live A
 - **Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`, etc.)**: Checks both the opening consonant (`leadFloor: 34`, `24` with grace; `leadSwapFloor: 95`, `84` with grace when top heard consonant differs) and liquid `/l/` or `/ɹ/` (`liqBaseFloor: 42`, `30` with grace; `liqSwapFloor: 92`, `82` with grace when top heard liquid differs; plus dropped-liquid single-consonant transcription catch such as `back` for `black` or `fog` for `frog` when liquid score `< 84`), honoring Personal Voice Profiles and Speech Accommodations.
 - **Initial S-blends (`sp`, `st`, `sc`, `sk`, `sm`, `sn`, `sw`)**: Checks both `/s/` (`sFloor: 40`, `28` with grace) and the second consonant (`secondFloor: 42`, `30` with grace; `swapFloor: 86`, `76` with grace), plus single-consonant drop catches (`pin`/`sin` for `spin`, `top`/`sop` for `stop` when score `< 88`), honoring Spanish L1 epenthesis and Personal Voice Profiles.
 - **Final Blends (`-nd`, `-mp`, `-nt`, `-nk`, `-ft`, `-lt`)**: Checks both the first coda consonant (`firstFloor: 36`, `26` with grace) and final stop (`secondFloor: 28`, `20` with grace; `swapFloor: 84`, `74` with grace), allowing soft unreleased final stops when top-2 NBest matches place of articulation, plus dropped-consonant catches (`had` for `hand`, `cap` for `camp`, `bam` for `bamp`).
+- **Silent-E Long Vowels (`a_e`, `i_e`, `o_e`, `u_e`)**: Maps VCe targets directly to long-vowel IPA (`eɪ`, `aɪ`, `oʊ`, `u`), forbids short-vowel swaps (`æ`, `ɪ`, `ɑ`, `ʌ`), and explicitly catches dropped-e short-vowel transcriptions (`cap` for `cape`, `tap` for `tape`, `bit` for `bite`, `pin` for `pine`, `kit` for `kite`, `mad` for `made`) when the long vowel scores `< 84` (`< 74` with grace).
 
 ### D. Adaptive Quick Voice Check and Personal Voice Profiles
 

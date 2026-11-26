@@ -346,6 +346,26 @@ class SoundManager {
       zup: 'zupp',
       zum: 'zumm',
       dis: 'diss',
+      bape: 'bayp',
+      dake: 'dayk',
+      zate: 'zayt',
+      mave: 'mayv',
+      bipe: 'bype',
+      zime: 'zyme',
+      tibe: 'tybe',
+      kide: 'kyde',
+      dike: 'dyke',
+      zite: 'zyte',
+      mive: 'myve',
+      zame: 'zaym',
+      tabe: 'tayb',
+      kade: 'kayd',
+      dak: 'dakk',
+      zat: 'zatt',
+      mav: 'mavv',
+      bip: 'bipp',
+      zim: 'zimm',
+      tib: 'tibb',
     };
     return runeSpellings[key] || word;
   }
@@ -453,14 +473,31 @@ class SoundManager {
     this.stopSpeaking();
     const myToken = this.seqToken;
     const parts = this.splitBlendTiles(word, tiles);
+    const isSilentEVce =
+      parts.length >= 4 &&
+      parts[parts.length - 1].toLowerCase() === 'e' &&
+      /^[aiou]$/.test(parts[parts.length - 3].toLowerCase()) &&
+      !/^[aeiou]$/.test(parts[parts.length - 2].toLowerCase());
+    const vceVowelIdx = isSilentEVce ? parts.length - 3 : -1;
 
     try {
       for (let i = 0; i < parts.length; i++) {
         if (myToken !== this.seqToken) return;
+        if (isSilentEVce && i === parts.length - 1) continue;
         onTileIdx?.(i);
         const rawKey = parts[i].toLowerCase();
         const key =
-          rawKey === 'll' ? 'l' : rawKey === 'ss' ? 's' : rawKey === 'ff' ? 'f' : rawKey === 'zz' ? 'z' : rawKey;
+          isSilentEVce && i === vceVowelIdx
+            ? `${rawKey}_e`
+            : rawKey === 'll'
+            ? 'l'
+            : rawKey === 'ss'
+            ? 's'
+            : rawKey === 'ff'
+            ? 'f'
+            : rawKey === 'zz'
+            ? 'z'
+            : rawKey;
         const rel = this.wordManifest.en[`snd:${key}`];
         if (rel) {
           await this.playManifestEntry(this.wordManifest, '/assets/audio/words', rel);
@@ -475,7 +512,8 @@ class SoundManager {
           );
         }
         if (myToken !== this.seqToken) return;
-        if (i < parts.length - 1) {
+        const lastSpokenIdx = isSilentEVce ? parts.length - 2 : parts.length - 1;
+        if (i < lastSpokenIdx) {
           await new Promise((r) => setTimeout(r, 175));
         }
       }
@@ -529,6 +567,10 @@ class SoundManager {
       st: 'st',
       nd: 'nd',
       mp: 'mp',
+      a_e: 'ay',
+      i_e: 'eye',
+      o_e: 'oh',
+      u_e: 'oo',
     };
     return fallbackMap[key] || key;
   }

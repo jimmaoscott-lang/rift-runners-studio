@@ -75,9 +75,18 @@ Status: **Complete (Levels 1 to 5 Shipped)**
 | 2 | `w2-l2` | Smelter Causeway | **Shipped** | `th` (unvoiced + voiced), `wh`, `-ck` digraphs + runes | Shieldbearers (armored), Cinder Imps, Bramble Stalkers | Unlocks Rail Turret + 6-slot Side Loadout Selector. Leda audio, Spanish ELL support, and multi-voice Azure cutoffs active. |
 | 3 | `w2-l3` | Ironrift Crossing | **Shipped** | Initial L-blends and R-blends (`bl`, `cl`, `fr`, `gr`) + runes | Rift Shriekers (armored flyers), Shieldbearers, Cinder Imps | Anti-air + armor challenge across all 7 defenders. Multi-voice Azure blend calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
 | 4 | `w2-l4` | Crucible Bastion | **Shipped** | Initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) + runes | Forge Weavers (healers/shielders), Rift Shriekers, Shieldbearers | Unlocks Gravity Snare and The Furnace Core boss finale. Multi-voice Azure S-blend/final-blend calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
-| 5 | `w2-l5` | The Furnace Core | **Shipped** | Boss Finale: World 2 digraphs and blends (`sh`, `th`, `bl`, `st`, `mp`) + runes | The Iron Warden (Boss), Forge Weavers, Rift Shriekers, Shieldbearers | Full 8-defender World 2 toolkit finale with Iron Aegis shield slams and Cinder Imp summons. |
+| 5 | `w2-l5` | The Furnace Core | **Shipped** | Boss Finale: World 2 digraphs and blends (`sh`, `th`, `bl`, `st`, `mp`) + runes | The Iron Warden (Boss), Forge Weavers, Rift Shriekers, Shieldbearers | Full 8-defender World 2 toolkit finale with Iron Aegis shield slams and Cinder Imp summons. Unlocks World 3: The Silver Spires. |
 
-## 7. Approved Feature Backlog
+## 7. World 3: The Silver Spires (Silent-E Long Vowels & Free Placement)
+
+Status: **In Progress (Level 1 Shipped)**
+
+| Level | ID | Name | Status | Phonics Focus | Enemies | Unlocks / Notes |
+| :---: | :--- | :--- | :---: | :--- | :--- | :--- |
+| 1 | `w3-l1` | Dawnbreak Terrace | **Shipped** | Silent-E long vowels (`a_e`, `i_e`) + VCe runes | Gale Wraiths (Wind Dash), Shieldbearers, Rift Shriekers, Forge Weavers | Introduces **Free Placement** (`freePlacement: true`): place ranged towers anywhere on open grass with live range/footprint preview and snap road traps anywhere along the stone trail. Multi-voice Azure Silent-E calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
+
+## 8. Approved Feature Backlog
 
 1. **World 2, Level 1 Painterly Cutscene Refresh**: Regenerate the `w2-l1` opening, victory, and defeat cutscenes using `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` as the visual anchor so they match World 1's painterly style and canonical Rift Warden/Runner cast.
 2. **Optional World 1 Level 1 Word Voice Refresh**: Because Mr. Scott prefers the Leda voice used in World 2 word readings, World 1 Level 1's older recorded words can be refreshed to Leda in a future pass if desired.
+3. **Free Placement Rollout Decision**: After playtesting World 3, Level 1 (`Dawnbreak Terrace`), decide whether Free Placement stays a signature World 3 reward or expands into earlier worlds.

@@ -83,14 +83,14 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
     canManualNext: false,
   },
   {
-    title: 'Place Your Tower',
-    body: 'Click any glowing hexagonal stone pad beside the brown trail.',
+    title: 'Place Anywhere on Open Ground',
+    body: 'Move across any open grass beside the trail until the ring turns green, then click to build. Right-click cancels.',
     highlight: 'pad',
     canManualNext: false,
   },
   {
     title: 'Guard the Trail',
-    body: 'You have 40 crystals left. Click Spike Pit below and place it on a dashed circle right on the trail.',
+    body: 'You have 45 crystals left. Click Spike Pit below, move onto the glowing trail until it turns green, and click to snap it in place.',
     highlight: 'spike',
     canManualNext: true,
   },
@@ -107,14 +107,14 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
     canManualNext: false,
   },
   {
-    title: 'Upgrade Any Defender',
-    body: 'Click any tower you built on the map to see its range, upgrade it, or pick a specialty at Level 3.',
+    title: 'Upgrade or Reposition',
+    body: 'Click any defender you placed to check its range, upgrade it to Level 3, or sell it to rebuild somewhere else.',
     highlight: 'tower',
     canManualNext: true,
   },
   {
     title: 'Rift Locks & Hero Powers',
-    body: 'Fill both vertical Rift Locks (a and i) on the left with clean reads to unlock the Final Wave. Use Rally, Meteor, and Freeze on the top bar when charged.',
+    body: 'Fill both vertical Rift Locks (a and i) on the left with clean reads to earn +100 bonus crystals and unlock the Final Wave. Use Rally, Meteor, and Freeze when charged.',
     highlight: 'locks',
     canManualNext: true,
   },
@@ -885,7 +885,11 @@ export default function App() {
           <div className="flex flex-1 min-h-0 overflow-hidden">
             <div
               className={`relative flex-1 min-w-0 h-full overflow-hidden ${
-                activeLevel.worldId === 'w2' ? 'bg-[#1c1210]' : 'bg-[#1b3a22]'
+                activeLevel.worldId === 'w2'
+                  ? 'bg-[#1c1210]'
+                  : activeLevel.worldId === 'w3'
+                  ? 'bg-[#0e1c2b]'
+                  : 'bg-[#1b3a22]'
               }`}
             >
               <div ref={canvasMountRef} className="h-full w-full" />
@@ -1055,8 +1059,8 @@ export default function App() {
                 <span className={`text-[11px] ${isLastWordBeforeWave && !snap.buildSel ? 'text-amber-200/90' : 'text-purple-300/80'}`}>
                   {snap.buildSel
                     ? DEFENDERS[snap.buildSel].kind === 'tower'
-                      ? 'Click a glowing stone pad beside the trail'
-                      : 'Click a glowing spot right on the dirt trail'
+                      ? 'Click any open ground beside the trail (right-click to cancel)'
+                      : 'Click anywhere along the trail (right-click to cancel)'
                     : isLastWordBeforeWave
                     ? 'The wave launches right after your next word guess'
                     : 'Tap any placed defender to upgrade or sell'}
@@ -1065,7 +1069,7 @@ export default function App() {
                   <span className="text-[10px] font-medium text-cyan-200/90">
                     {snap.buildSel
                       ? DEFENDERS[snap.buildSel].kind === 'tower'
-                        ? `Colocando ${SPANISH_DEFENDERS[snap.buildSel].nameEs} en una base de piedra`
+                        ? `Colocando ${SPANISH_DEFENDERS[snap.buildSel].nameEs} en terreno abierto`
                         : `Colocando ${SPANISH_DEFENDERS[snap.buildSel].nameEs} sobre el sendero`
                       : isLastWordBeforeWave
                       ? 'La oleada inicia con la siguiente palabra'
@@ -1239,7 +1243,7 @@ export default function App() {
                         </span>
                         <span className="text-slate-400">·</span>
                         <span className="text-purple-200/85">
-                          {def.kind === 'tower' ? 'Stone pad' : 'Trail spot'}
+                          {def.kind === 'tower' ? 'Open ground' : 'On trail'}
                         </span>
                       </div>
                       <p className="mt-1 text-[11px] leading-snug text-slate-300">{def.desc}</p>

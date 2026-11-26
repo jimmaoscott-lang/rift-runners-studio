@@ -22,6 +22,7 @@ export type SpriteKey =
   | 'shrieker'
   | 'weaver'
   | 'ironwarden'
+  | 'galewraith'
   | 'warden';
 
 export interface SpriteAsset {
@@ -50,6 +51,7 @@ export const MAP_URLS: Record<LevelId, string> = {
   'w2-l3': '/src/assets/images/map_w2_l3_ironrift_crossing_1795608963074.jpg',
   'w2-l4': '/src/assets/images/map_w2_l4_crucible_bastion_1795713145019.jpg',
   'w2-l5': '/src/assets/images/map_w2_l5_furnace_core_1795713148001.jpg',
+  'w3-l1': '/src/assets/images/map_w3_l1_dawnbreak_terrace_1795720704325.jpg',
 };
 
 export const SPRITE_URLS: Record<SpriteKey, string> = {
@@ -73,6 +75,7 @@ export const SPRITE_URLS: Record<SpriteKey, string> = {
   shrieker: '/src/assets/images/sprite_rift_shrieker_1795608970938.jpg',
   weaver: '/src/assets/images/sprite_forge_weaver_1795713147323.jpg',
   ironwarden: '/src/assets/images/sprite_iron_warden_boss_1795713149232.jpg',
+  galewraith: '/src/assets/images/sprite_gale_wraith_1795720707207.jpg',
   warden: '/src/assets/images/sprite_rift_warden_1795459980237.jpg',
 };
 

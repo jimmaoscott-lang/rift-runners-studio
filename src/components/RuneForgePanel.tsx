@@ -864,26 +864,43 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
 
           {showTiles ? (
             <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-              {(cur.tiles || cur.w.split('')).map((tile, idx) => {
-                const isTarget = idx === (cur.targetTileIdx ?? 1);
-                const isBlendingNow = blendTileIdx === idx;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => sound.speakPhoneme(tile)}
-                    className={`flex h-12 min-w-12 px-2 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold transition-transform cursor-pointer ${
-                      isBlendingNow
-                        ? 'scale-105 border-cyan-300 bg-cyan-400/30 text-white shadow-[0_0_12px_rgba(34,211,238,0.55)]'
-                        : isTarget
-                        ? 'border-amber-400 bg-amber-500/20 text-amber-200'
-                        : 'border-purple-400/60 bg-[#130e2b] text-white'
-                    }`}
-                  >
-                    {tile}
-                  </button>
-                );
-              })}
+              {(() => {
+                const tileArr = cur.tiles || cur.w.split('');
+                const curPat = String(cur.pattern || '');
+                const isSilentEPattern = /^[aiou]_e$/.test(curPat);
+                return tileArr.map((tile, idx) => {
+                  const isTarget = idx === (cur.targetTileIdx ?? 1);
+                  const isSilentE = isSilentEPattern && idx === tileArr.length - 1 && tile.toLowerCase() === 'e';
+                  const isBlendingNow = blendTileIdx === idx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() =>
+                        sound.speakPhoneme(
+                          isSilentEPattern && (isTarget || isSilentE) ? curPat : tile
+                        )
+                      }
+                      title={
+                        isSilentE
+                          ? 'Silent e makes the vowel say its long name'
+                          : 'Tap to hear this sound'
+                      }
+                      className={`flex h-12 min-w-12 px-2 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold transition-transform cursor-pointer ${
+                        isBlendingNow
+                          ? 'scale-105 border-cyan-300 bg-cyan-400/30 text-white shadow-[0_0_12px_rgba(34,211,238,0.55)]'
+                          : isSilentE
+                          ? 'border-dashed border-amber-400/75 bg-amber-500/10 text-amber-200/80'
+                          : isTarget
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                          : 'border-purple-400/60 bg-[#130e2b] text-white'
+                      }`}
+                    >
+                      {tile}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           ) : (
             <div className={`mt-1.5 font-reading ${textScaleClass} font-bold tracking-wider text-white leading-tight`}>

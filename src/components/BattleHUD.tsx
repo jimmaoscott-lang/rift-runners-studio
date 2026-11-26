@@ -118,6 +118,10 @@ const VOWEL_LOCK_STYLES: Record<string, { icon: string; filled: string; btn: str
   i: LOCK_STYLE_PALETTE[2],
   o: LOCK_STYLE_PALETTE[3],
   u: LOCK_STYLE_PALETTE[4],
+  a_e: LOCK_STYLE_PALETTE[4],
+  i_e: LOCK_STYLE_PALETTE[2],
+  o_e: LOCK_STYLE_PALETTE[3],
+  u_e: LOCK_STYLE_PALETTE[1],
   sh: LOCK_STYLE_PALETTE[3],
   ch: LOCK_STYLE_PALETTE[4],
   th: LOCK_STYLE_PALETTE[0],
@@ -448,7 +452,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               type="button"
               onClick={() =>
                 sound.speakNarration(
-                  `walkthrough-step-${walkthrough.stepNum}`,
+                  `walkthrough-free-step-${walkthrough.stepNum}`,
                   `${walkthrough.title}. ${walkthrough.body}`
                 )
               }

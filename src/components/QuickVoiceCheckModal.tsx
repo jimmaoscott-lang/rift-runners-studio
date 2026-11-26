@@ -186,6 +186,24 @@ const VOICE_CHECK_PROFILES: Record<string, VoiceCheckProfile> = {
     tip: 'Close your lips on "m" and pop them open with a crisp "p" at the end.',
     swapHint: 'Close into "m" before releasing the final "p" burst.',
   },
+  a_e: {
+    label: 'Long a (a_e)',
+    soundTile: 'a_e',
+    anchor: 'cape',
+    contrast: 'cap',
+    contrastPattern: 'a',
+    tip: 'Let the silent e make the vowel say its long name, "ay", smoothly before the final consonant.',
+    swapHint: 'Stretch the vowel to say its name ("ay") instead of the short "a" sound.',
+  },
+  i_e: {
+    label: 'Long i (i_e)',
+    soundTile: 'i_e',
+    anchor: 'bite',
+    contrast: 'bit',
+    contrastPattern: 'i',
+    tip: 'Let the silent e make the vowel say its long name, "eye", clearly before the final consonant.',
+    swapHint: 'Glide the vowel up to its name ("eye") instead of stopping on short "i".',
+  },
 };
 
 function getProfile(pattern: PatternKey): VoiceCheckProfile {

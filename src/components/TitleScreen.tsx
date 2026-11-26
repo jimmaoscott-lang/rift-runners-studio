@@ -51,6 +51,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   const activeWorld = WORLDS[activeLevel.worldId] || WORLDS.w1;
   const worldLevelIds = activeWorld.levelIds;
   const isWorld2 = activeWorld.id === 'w2';
+  const isWorld3 = activeWorld.id === 'w3';
   const playableWorldLevelId =
     worldLevelIds.find((id) => !LEVELS[id]?.comingSoon) || worldLevelIds[0];
 
@@ -163,6 +164,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                           isCurrent
                             ? wid === 'w2'
                               ? 'bg-amber-400 text-slate-950'
+                              : wid === 'w3'
+                              ? 'bg-sky-300 text-slate-950'
                               : 'bg-cyan-400 text-slate-950'
                             : 'text-slate-300 hover:text-white'
                         }`}
@@ -189,7 +192,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               <div
                 aria-hidden="true"
                 className={`pointer-events-none hidden sm:block absolute left-8 right-8 top-5 h-0.5 ${
-                  isWorld2 ? 'bg-amber-500/40' : 'bg-slate-700/80'
+                  isWorld2 ? 'bg-amber-500/40' : isWorld3 ? 'bg-sky-400/40' : 'bg-slate-700/80'
                 }`}
               />
               {worldLevelIds.map((id) => {
@@ -220,6 +223,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       selected
                         ? isWorld2
                           ? 'border-amber-300 bg-[#2d1812]/95 text-white shadow-[0_0_20px_rgba(251,146,60,0.26)]'
+                          : isWorld3
+                          ? 'border-sky-300 bg-[#10263f]/95 text-white shadow-[0_0_20px_rgba(125,211,252,0.28)]'
                           : 'border-cyan-300 bg-[#122645]/95 text-white shadow-[0_0_20px_rgba(56,224,255,0.22)]'
                         : isUpcoming
                         ? 'border-slate-700/65 bg-[#0b0f1b]/78 text-slate-300 hover:border-amber-400/50 hover:bg-[#1a1314]/88'
@@ -232,6 +237,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                           selected
                             ? isWorld2
                               ? 'bg-amber-400 text-slate-950'
+                              : isWorld3
+                              ? 'bg-sky-300 text-slate-950'
                               : 'bg-cyan-400 text-slate-950'
                             : lvStars > 0
                             ? 'bg-amber-400/20 text-amber-300 border border-amber-400/50'
@@ -265,6 +272,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         selected
                           ? isWorld2
                             ? 'text-amber-300'
+                            : isWorld3
+                            ? 'text-sky-300'
                             : 'text-cyan-300'
                           : 'text-slate-400'
                       }`}

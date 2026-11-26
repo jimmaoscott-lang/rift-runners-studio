@@ -113,6 +113,16 @@ export const SPANISH_RULE_TIPS: Record<string, SpanishRuleTip> = {
     tipEs: 'Cierra los labios para la "m" y ábrelos con un toque rápido de "p" al terminar.',
     bridgeEs: 'Escucha el cierre completo de "m" seguido de "p" al final, como en "camp" y "lamp".',
   },
+  a_e: {
+    labelEs: 'Vocal larga "a_e" (e muda)',
+    tipEs: 'La "e" al final no suena, pero hace que la "a" diga su nombre en inglés: "ei".',
+    bridgeEs: 'Compara "cap" (a corta) con "cape" (a larga /ei/). Practica con "cake", "lake" y "tape".',
+  },
+  i_e: {
+    labelEs: 'Vocal larga "i_e" (e muda)',
+    tipEs: 'La "e" al final es muda y hace que la "i" diga su nombre en inglés: "ai".',
+    bridgeEs: 'Compara "bit" (i corta) con "bite" (i larga /ai/). Practica con "bike", "time" y "kite".',
+  },
 };
 
 export function getSpanishRuleTip(pattern: string): SpanishRuleTip | null {
@@ -269,6 +279,26 @@ export const WORD_GLOSSES: Record<string, WordGloss> = {
   stub: { es: 'trozo / talón de boleto', enDef: 'A short leftover end of a pencil or ticket.' },
   stun: { es: 'aturdir', enDef: 'To shock or freeze someone in place for a brief moment.' },
   this: { es: 'esto / este', enDef: 'Points to a specific person or object right here.' },
+  cake: { es: 'pastel', enDef: 'A sweet baked dessert often served at celebrations.' },
+  make: { es: 'hacer / crear', enDef: 'To build, create, or put something together.' },
+  lake: { es: 'lago', enDef: 'A large body of fresh water surrounded by land.' },
+  tape: { es: 'cinta adhesiva', enDef: 'A sticky strip used to hold paper or boxes together.' },
+  cape: { es: 'capa', enDef: 'A sleeveless cloak worn over the shoulders.', cognate: true },
+  gate: { es: 'portón / puerta', enDef: 'A hinged barrier that opens an entry through a fence or wall.' },
+  late: { es: 'tarde', enDef: 'Arriving or happening after the expected time.' },
+  game: { es: 'juego', enDef: 'An activity or contest with rules and a goal.' },
+  name: { es: 'nombre', enDef: 'The word used to identify a person, place, or thing.' },
+  made: { es: 'hizo / fabricó', enDef: 'Past tense of make (built or created something).' },
+  bike: { es: 'bicicleta', enDef: 'A two-wheeled vehicle powered by pedals.' },
+  hike: { es: 'caminata', enDef: 'A long walk outdoors along a mountain or forest trail.' },
+  like: { es: 'gustar / como', enDef: 'To enjoy something, or similar to something else.' },
+  time: { es: 'tiempo / hora', enDef: 'Minutes and hours on a clock, or a moment in a day.' },
+  dime: { es: 'moneda de 10 centavos', enDef: 'A small silver U.S. coin worth ten cents.' },
+  line: { es: 'línea / fila', enDef: 'A straight mark, or a row of people waiting in order.', cognate: true },
+  pine: { es: 'pino', enDef: 'A tall evergreen tree with needles and cones.', cognate: true },
+  kite: { es: 'cometa / papalote', enDef: 'A light frame flown in the wind on a long string.' },
+  bite: { es: 'morder', enDef: 'To grip or cut into food with your teeth.' },
+  ride: { es: 'montar / viajar', enDef: 'To travel on a bike, horse, bus, or train.' },
 };
 
 export function getWordGloss(
@@ -424,12 +454,12 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
     bodyEs: 'Haz clic en Torre de Arqueros en la barra inferior (60 cristales).',
   },
   {
-    titleEs: 'Coloca tu torre',
-    bodyEs: 'Haz clic en cualquier plataforma hexagonal de piedra junto al camino.',
+    titleEs: 'Coloca tu torre en terreno abierto',
+    bodyEs: 'Mueve el cursor por cualquier terreno abierto junto al camino hasta que el aro se ponga verde y haz clic para construir. Clic derecho cancela.',
   },
   {
     titleEs: 'Protege el sendero',
-    bodyEs: 'Te quedan 40 cristales. Haz clic en Foso de Púas abajo y colócalo en un círculo sobre el camino.',
+    bodyEs: 'Te quedan 45 cristales. Haz clic en Foso de Púas abajo, muévelo sobre el camino iluminado hasta que se ponga verde y haz clic para colocarlo.',
   },
   {
     titleEs: 'Forja palabras para ganar cristales',
@@ -440,12 +470,12 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
     bodyEs: 'Haz clic en Send now en la barra superior (o forja 10 palabras) para iniciar la Oleada 1.',
   },
   {
-    titleEs: 'Mejora cualquier defensor',
-    bodyEs: 'Haz clic en una torre del mapa para ver su alcance, mejorarla o elegir especialidad en Nivel 3.',
+    titleEs: 'Mejora o reubica defensores',
+    bodyEs: 'Haz clic en cualquier defensor del mapa para ver su alcance, mejorarlo a Nivel 3 o venderlo para construir en otro lugar.',
   },
   {
     titleEs: 'Sellos de Grieta y Poderes',
-    bodyEs: 'Llena los Sellos de Grieta (a e i) a la izquierda con lecturas limpias para abrir la Oleada Final. Usa Impulso, Meteoro y Congelar arriba.',
+    bodyEs: 'Llena los Sellos de Grieta (a e i) a la izquierda con lecturas limpias para ganar +100 cristales extra y abrir la Oleada Final. Usa Impulso, Meteoro y Congelar arriba.',
   },
 ];
 
@@ -455,8 +485,8 @@ export const SPANISH_CUTSCENE_CAPTIONS: Record<string, string[]> = {
     'Lee palabras en la Forja de Runas para cargar nuestros cristales.',
   ],
   'l01-open-v2-2': [
-    'Cuatro defensas listas: coloca Torres de Arqueros y Tótems de Escarcha en las bases de piedra.',
-    'Pon Fosos de Púas y Gólems de Piedra directo en el camino para detener la oleada.',
+    'Cuatro defensas listas: coloca Torres de Arqueros y Tótems de Escarcha en cualquier terreno abierto junto al camino.',
+    'Pon Fosos de Púas y Gólems de Piedra en cualquier parte del camino para detener la oleada.',
   ],
   'l01-open-v2-3': [
     'Llena los dos Sellos de Grieta a la izquierda con lecturas claras de "a" e "i" cortas.',
@@ -653,6 +683,26 @@ export const SPANISH_CUTSCENE_CAPTIONS: Record<string, string[]> = {
   'w2-l05-def-v1-1': [
     'El Guardián de Hierro logró abrirse paso por el anillo del horno.',
     'Consejo: rompe su armadura con una Torreta Riel y retenlo con una Trampa de Gravedad.',
+  ],
+  'w3-l01-open-v1-1': [
+    'Bienvenido al Mundo 3: Las Agujas de Plata.',
+    'Espectros de Vendaval avanzan con ráfagas súbitas de viento por el sendero de montaña.',
+  ],
+  'w3-l01-open-v1-2': [
+    '¡Colocación Libre desbloqueada! Construye torres en cualquier zona de pasto y trampas en cualquier punto del camino.',
+    'Domina las vocales largas con e muda ("a_e" e "i_e") para sellar la Terraza del Alba.',
+  ],
+  'w3-l01-vic-v1-1': [
+    '¡Terraza del Alba asegurada! Tu diseño libre frenó cada ráfaga de los Espectros de Vendaval.',
+    'Sellos de vocal larga "a_e" e "i_e" completados.',
+  ],
+  'w3-l01-vic-v1-2': [
+    'Los puentes superiores de las Agujas de Plata brillan frente a ti.',
+    '¡Mundo 3 · Nivel 1 completado!',
+  ],
+  'w3-l01-def-v1-1': [
+    'Los Espectros de Vendaval cruzaron la curva exterior con su impulso de viento.',
+    'Consejo: agrupa un Tótem de Escarcha y una Trampa de Gravedad en la curva central.',
   ],
 };
 

@@ -2,6 +2,45 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-26 (Part 3): Game-Wide Free Tower Placement & Rebuilt Level 1 Walkthrough
+
+### Completed
+- **Free Placement Across All 11 Levels (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`, `src/components/TitleScreen.tsx`, `src/App.tsx`)**:
+  - Enabled `freePlacement: true` across all 10 World 1 and World 2 levels (`w1-l1` through `w2-l5`) so every level in the game uses unified open-terrain ranged placement and smooth road snapping for trail defenders (`Spike Pit`, `Stone Golem`, `Gravity Snare`).
+  - Audited all 10 World 1 and World 2 maps visually and configured biome-labeled `noBuildZones` (`Dense forest`, `Bramble thicket`, `Deep gorge`, `Ruin wall`, `Thorn chasm`, `Molten lava`, `Furnace core`) alongside automatic `riverPath` water and lava checks (`38px` clearance) and tuned trail clearance (`36px`).
+  - Updated `CanvasBattleEngine.ts` to highlight the glowing cyan trail immediately as soon as a trail defender is selected (before hovering onto the canvas), use biome-neutral placement hints across all worlds, and skip legacy static pads whenever `freePlacement` is active.
+  - Updated bottom-bar placement prompts, Spanish placement hints, Battle Loadout labels (`Open ground` / `On trail`), and level card skill tags across `App.tsx` and `TitleScreen.tsx`.
+- **Rebuilt Level 1 Tutorial Walkthrough & Opening Briefing (`src/App.tsx`, `src/components/BattleHUD.tsx`, `src/data/level1.ts`, `src/data/ellSpanish.ts`, `public/assets/audio/tts-cache/`)**:
+  - Rewrote Level 1 walkthrough Steps 2, 3, 6, and 7 (plus Spanish translations in `SPANISH_WALKTHROUGH_STEPS`) to teach green-ring open-ground placement, right-click cancel, trail snapping with the remaining `45` crystals, selling to reposition, and the `+100` Rift Lock crystal bonus.
+  - Bumped the walkthrough audio cache key (`walkthrough-free-step-${stepNum}`) in `BattleHUD.tsx` so voiced walkthrough tips read the new steps cleanly.
+  - Updated Level 1 opening briefing beat 2 (`l01-open-v2-2`, English and Spanish) and refreshed `Leda_l01-open-v2-2.mp3` so the Rift Warden directs recruits to open ground beside the trail.
+
+### Next Up
+1. Playtest the rebuilt Level 1 walkthrough and Free Placement across World 1, World 2, and World 3, then push the verified milestone to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 2): World 3, Level 1 (`Dawnbreak Terrace`) & Free Tower Placement
+
+### Completed
+- **Free Tower Placement System (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`, `src/App.tsx`, `src/components/TitleScreen.tsx`)**:
+  - Added `freePlacement?: boolean` and `noBuildZones` to `LevelConfig` so World 3 levels allow open-terrain placement while World 1 and World 2 pad-based levels remain untouched.
+  - Implemented live placement previews in `CanvasBattleEngine.ts` with a translucent defender ghost sprite, emerald or rose attack-range circle, oval ground footprint ring, invalid-spot reason badge (`On road`, `Too close`, `Cliff`, `Off terrace`), and right-click placement cancel.
+  - Added smooth road-polyline snapping (`SmoothPath.nearestPoint()`) for trail defenders (`Spike Pit`, `Stone Golem`, `Gravity Snare`), dynamic build-pad creation on placement, and automatic pad cleanup when selling towers.
+- **World 3, Level 1: `Dawnbreak Terrace` (`src/data/level1.ts`, `src/game/sprites.ts`, `src/game/CanvasBattleEngine.ts`, `src/components/BattleHUD.tsx`)**:
+  - Launched **World 3: The Silver Spires** with playable `w3-l1` (`Dawnbreak Terrace`, `freePlacement: true`), teaching Silent-E long vowels (`a_e`, `i_e`) across 20 classroom-safe real words, 8 clean VCe nonsense runes (`bape`, `dake`, `zate`, `mave`, `bipe`, `zime`, `tibe`, `kide`), 5 balanced waves (`waveEvery: 10`, `minWaves: 3`, `startCrystals: 260`), and sky-indigo World 3 UI styling (`#0e1c2b` letterbox).
+  - Added the **Gale Wraith** (`galewraith`, `hp: 96`, `speed: 2.05`, `armor: 0.1`), a wind-cloaked alpine spirit that surges forward with a periodic `GALE DASH!` (`1.85x` speed for `1.15s` every `4.8s` unless slowed, frozen, or held) with cyan slipstream particles.
+  - Generated and web-compressed all 4 visual assets (`437 KB` total): open-terrain 2.5D Dawnbreak Terrace alpine map (zero painted stone pads), pure-white Gale Wraith sprite, and painterly cast-locked opening and victory cutscenes.
+- **Silent-E Phonics Teaching, Multi-Voice Azure Calibration, Leda Audio, & Spanish ELL (`src/lib/speech.ts`, `src/lib/audio.ts`, `src/components/RuneForgePanel.tsx`, `src/components/SoundRuleModal.tsx`, `src/components/QuickVoiceCheckModal.tsx`, `src/data/ellSpanish.ts`, `public/assets/audio/`)**:
+  - Added paired Silent-E tile highlighting (`a` + silent `e`, `i` + silent `e`) and slow-blend audio skipping of the silent `e` across `RuneForgePanel.tsx`, `SoundRuleModal.tsx`, and `audio.ts`.
+  - Added Silent-E (`a_e`, `i_e`, `o_e`, `u_e`) vowel scoring and dropped-e short-vowel rejection in `scoreAzureWord()`, plus `cape`/`cap` and `bite`/`bit` calibration profiles in `QuickVoiceCheckModal.tsx`.
+  - Benchmarked live against Azure Speech across four voice and mic profiles (female, male `-4st`, teen `+3st`, Chromebook mic): `16/16` positive matches (`cape`, `tape`, `bite`, `pine`) and `6/6` adversarial short-vowel drops caught (`cap->cape`, `tap->tape`, `bit->bite`, `pin->pine`, `kit->kite`, `mad->made`).
+  - Generated all 5 `w3-l1` Leda cutscene `.mp3` clips, packed missing Sound Rule clips (`rule.magice.v1`, `rule.sh.v2`, `rule.ch.v2`, `rule.blend.v2`) into `ui/sprite.mp3`, and packed all 53 new words/runes/options plus pure long-vowel phonemes (`snd:a_e`, `snd:i_e`) into `words/sprite.mp3` at 48 kbps mono (`478` total English keys, `0` missing across all 11 levels).
+  - Added Spanish Silent-E tips (`a_e`, `i_e`), glosses for all 20 `w3-l1` real words, and Spanish captions for all 5 `w3-l1` cutscene beats in `src/data/ellSpanish.ts`.
+
+### Next Up
+1. Playtest World 3, Level 1 (`Dawnbreak Terrace`) Free Placement, Gale Wraith dashes, and Silent-E voice checks, then push to GitHub once verified.
+2. Decide whether Free Placement stays a World 3 unlockable reward or expands to World 1 and World 2, then build World 3, Level 2 (`o_e`, `u_e`).
+
 ## 2026-11-26: World 2 Complete (Levels 4 & 5: Crucible Bastion & The Furnace Core Boss Finale)
 
 ### Completed

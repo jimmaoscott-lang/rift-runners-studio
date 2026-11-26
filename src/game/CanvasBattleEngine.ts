@@ -147,6 +147,7 @@ interface CreatureRuntime {
   armorShredTimer: number;
   shieldTimer: number;
   abilityCd: number;
+  dashTimer: number;
   summonsUsed: number;
   heldBy: DefenderRuntime | null;
   attackCd: number;
@@ -307,18 +308,28 @@ class SmoothPath {
   }
 
   nearestS(x: number, y: number): number {
+    return this.nearestPoint(x, y).s;
+  }
+
+  nearestPoint(x: number, y: number): { x: number; y: number; s: number; dist: number } {
     let bestIdx = 0;
-    let bestD = Infinity;
+    let bestD2 = Infinity;
     for (let i = 0; i < this.samples.length; i++) {
       const dx = this.samples[i].x - x;
       const dy = this.samples[i].y - y;
-      const d = dx * dx + dy * dy;
-      if (d < bestD) {
-        bestD = d;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
         bestIdx = i;
       }
     }
-    return this.cumLen[bestIdx] / this.totalLen;
+    const pt = this.samples[bestIdx];
+    return {
+      x: pt.x,
+      y: pt.y,
+      s: this.cumLen[bestIdx] / this.totalLen,
+      dist: Math.sqrt(bestD2),
+    };
   }
 }
 
@@ -393,6 +404,15 @@ export class BattleEngine {
   private buildSel: DefenderType | null = null;
   private selectedDef: DefenderRuntime | null = null;
   private hoverPad: PadRuntime | null = null;
+  private pointerWorld: Vec2 | null = null;
+  private freePreview: {
+    x: number;
+    y: number;
+    s: number;
+    valid: boolean;
+    reason?: string;
+    kind: 'tower' | 'trail';
+  } | null = null;
   private idCounter = 1;
 
   private rafId = 0;
@@ -451,6 +471,10 @@ export class BattleEngine {
   }
 
   private initPads() {
+    if (this.level.freePlacement) {
+      this.pads = [];
+      return;
+    }
     this.pads = this.level.pads.map((p) => {
       const x = p.u * MAP_W;
       const y = p.v * MAP_H;
@@ -489,6 +513,8 @@ export class BattleEngine {
   private bindEvents() {
     this.canvas.addEventListener('pointermove', this.onPointerMove);
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.canvas.addEventListener('pointerleave', this.onPointerLeave);
+    this.canvas.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('resize', this.handleResize);
   }
 
@@ -539,10 +565,121 @@ export class BattleEngine {
     return best;
   }
 
+  private evaluateFreePlacement(
+    wx: number,
+    wy: number,
+    type: DefenderType
+  ): { x: number; y: number; s: number; valid: boolean; reason?: string; kind: 'tower' | 'trail' } {
+    const cfg = DEFENDERS[type];
+    const nearest = this.path.nearestPoint(wx, wy);
+
+    if (cfg.kind === 'trail') {
+      const px = nearest.x;
+      const py = nearest.y;
+      const u = px / MAP_W;
+      const v = py / MAP_H;
+      if (nearest.dist > 68) {
+        return { x: wx, y: wy, s: nearest.s, valid: false, reason: 'Place on trail', kind: 'trail' };
+      }
+      if (u < 0.36 && v > 0.81) {
+        return { x: px, y: py, s: nearest.s, valid: false, reason: 'Keep HUD clear', kind: 'trail' };
+      }
+      if (Math.hypot(px - this.riftPos.x, py - this.riftPos.y) < 70) {
+        return { x: px, y: py, s: nearest.s, valid: false, reason: 'Too close to Rift', kind: 'trail' };
+      }
+      if (Math.hypot(px - this.campPos.x, py - this.campPos.y) < 76) {
+        return { x: px, y: py, s: nearest.s, valid: false, reason: 'Too close to Anchor', kind: 'trail' };
+      }
+      for (const def of this.defenders) {
+        if (def.pad.kind === 'trail' && Math.hypot(px - def.pad.x, py - def.pad.y) < 46) {
+          return { x: px, y: py, s: nearest.s, valid: false, reason: 'Space occupied', kind: 'trail' };
+        }
+      }
+      return { x: px, y: py, s: nearest.s, valid: true, kind: 'trail' };
+    }
+
+    // Open-terrain ranged tower validation
+    const u = wx / MAP_W;
+    const v = wy / MAP_H;
+    if (u < 0.045 || u > 0.945 || v < 0.095 || v > 0.905) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Outside map', kind: 'tower' };
+    }
+    if ((u < 0.36 && v > 0.79) || (u < 0.24 && v < 0.12)) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Keep HUD clear', kind: 'tower' };
+    }
+    if (nearest.dist < 36) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Too close to trail', kind: 'tower' };
+    }
+    if (this.riverPath && this.riverPath.nearestPoint(wx, wy).dist < 38) {
+      return {
+        x: wx,
+        y: wy,
+        s: 0,
+        valid: false,
+        reason: this.level.worldId === 'w2' ? 'Molten lava' : 'Over water',
+        kind: 'tower',
+      };
+    }
+    if (Math.hypot(wx - this.riftPos.x, wy - this.riftPos.y) < 72) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Too close to Rift', kind: 'tower' };
+    }
+    if (Math.hypot(wx - this.campPos.x, wy - this.campPos.y) < 78) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Too close to Anchor', kind: 'tower' };
+    }
+    if (Math.hypot(wx - this.wardenPos.x, wy - this.wardenPos.y) < 48) {
+      return { x: wx, y: wy, s: 0, valid: false, reason: 'Too close to Warden', kind: 'tower' };
+    }
+    if (this.level.noBuildZones) {
+      for (const z of this.level.noBuildZones) {
+        if (Math.hypot(wx - z.u * MAP_W, wy - z.v * MAP_H) < z.r * MAP_W) {
+          return {
+            x: wx,
+            y: wy,
+            s: 0,
+            valid: false,
+            reason: z.label || 'Blocked terrain',
+            kind: 'tower',
+          };
+        }
+      }
+    }
+    for (const def of this.defenders) {
+      if (Math.hypot(wx - def.pad.x, wy - def.pad.y) < 48) {
+        return { x: wx, y: wy, s: 0, valid: false, reason: 'Space occupied', kind: 'tower' };
+      }
+    }
+    return { x: wx, y: wy, s: 0, valid: true, kind: 'tower' };
+  }
+
+  private onPointerLeave = () => {
+    this.pointerWorld = null;
+    this.freePreview = null;
+    this.hoverPad = null;
+  };
+
+  private onContextMenu = (ev: MouseEvent) => {
+    if (this.buildSel || this.selectedDef) {
+      ev.preventDefault();
+      this.buildSel = null;
+      this.selectedDef = null;
+      this.freePreview = null;
+      this.emitSnapshot();
+    }
+  };
+
   private onPointerMove = (ev: PointerEvent) => {
     const rect = this.canvas.getBoundingClientRect();
     const pt = this.screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+    this.pointerWorld = pt;
     this.hoverPad = this.findPadAt(pt.x, pt.y);
+
+    if (this.level.freePlacement && this.buildSel) {
+      this.freePreview = this.evaluateFreePlacement(pt.x, pt.y, this.buildSel);
+      this.canvas.style.cursor = this.freePreview.valid ? 'crosshair' : 'not-allowed';
+      return;
+    }
+
+    this.freePreview = null;
     this.canvas.style.cursor = this.hoverPad ? 'pointer' : 'default';
   };
 
@@ -551,6 +688,54 @@ export class BattleEngine {
     const rect = this.canvas.getBoundingClientRect();
     const pt = this.screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
     const pad = this.findPadAt(pt.x, pt.y);
+
+    // Free Placement flow (World 3 open terrain)
+    if (this.level.freePlacement) {
+      if (pad && pad.def && !this.buildSel) {
+        this.selectedDef = this.selectedDef === pad.def ? null : pad.def;
+        sound.sfx('tap');
+        this.emitSnapshot();
+        return;
+      }
+
+      if (this.buildSel) {
+        const cfg = DEFENDERS[this.buildSel];
+        const check = this.evaluateFreePlacement(pt.x, pt.y, this.buildSel);
+        this.freePreview = check;
+        if (!check.valid) {
+          this.callbacks.onToast(
+            check.reason === 'Place on trail'
+              ? `${cfg.name} snaps right onto the trail.`
+              : `${check.reason || 'Cannot build here'}. Try another spot.`
+          );
+          sound.sfx('soft');
+          return;
+        }
+        if (this.crystals < cfg.cost) {
+          this.callbacks.onToast(`Need ${cfg.cost} crystals for ${cfg.name}. Forge words to earn more.`);
+          sound.sfx('soft');
+          return;
+        }
+        const dynPad: PadRuntime = {
+          id: `free-${this.idCounter++}`,
+          kind: check.kind,
+          x: check.x,
+          y: check.y,
+          s: check.kind === 'trail' ? check.s : 0,
+          def: null,
+        };
+        this.pads.push(dynPad);
+        this.freePreview = null;
+        this.placeDefender(dynPad, this.buildSel);
+        return;
+      }
+
+      if (this.selectedDef) {
+        this.selectedDef = null;
+        this.emitSnapshot();
+      }
+      return;
+    }
 
     if (!pad) {
       if (this.selectedDef || this.buildSel) {
@@ -611,9 +796,22 @@ export class BattleEngine {
     if (this.buildSel) {
       const cfg = DEFENDERS[this.buildSel];
       sound.sfx('tap');
-      this.callbacks.onToast(
-        `${cfg.name} (${cfg.cost} crystals): tap a glowing ${cfg.kind === 'tower' ? 'stone pad' : 'trail spot'}.`
-      );
+      if (this.level.freePlacement) {
+        this.freePreview = this.pointerWorld
+          ? this.evaluateFreePlacement(this.pointerWorld.x, this.pointerWorld.y, this.buildSel)
+          : null;
+        this.callbacks.onToast(
+          cfg.kind === 'tower'
+            ? `${cfg.name} (${cfg.cost} crystals): click any open ground beside the trail to place.`
+            : `${cfg.name} (${cfg.cost} crystals): click anywhere along the glowing trail to place.`
+        );
+      } else {
+        this.callbacks.onToast(
+          `${cfg.name} (${cfg.cost} crystals): tap a glowing ${cfg.kind === 'tower' ? 'stone pad' : 'trail spot'}.`
+        );
+      }
+    } else {
+      this.freePreview = null;
     }
     this.emitSnapshot();
   }
@@ -621,6 +819,7 @@ export class BattleEngine {
   public clearSelection() {
     this.buildSel = null;
     this.selectedDef = null;
+    this.freePreview = null;
     this.emitSnapshot();
   }
 
@@ -1029,6 +1228,9 @@ export class BattleEngine {
       cr.heldBy = null;
     }
     def.pad.def = null;
+    if (this.level.freePlacement) {
+      this.pads = this.pads.filter((p) => p !== def.pad);
+    }
     this.defenders = this.defenders.filter((d) => d !== def);
     this.selectedDef = null;
     this.spawnBurst(def.pad.x, def.pad.y - 12, '#38e0ff', 10);
@@ -1197,7 +1399,8 @@ export class BattleEngine {
       freezeTimer: 0,
       armorShredTimer: 0,
       shieldTimer: 0,
-      abilityCd: type === 'weaver' ? 2.4 : type === 'ironwarden' ? 4.8 : 0,
+      abilityCd: type === 'weaver' ? 2.4 : type === 'ironwarden' ? 4.8 : type === 'galewraith' ? 3.2 : 0,
+      dashTimer: 0,
       summonsUsed: 0,
       heldBy: null,
       attackCd: 0.8,
@@ -1498,6 +1701,44 @@ export class BattleEngine {
         }
       }
 
+      if (cr.dashTimer > 0) {
+        cr.dashTimer = Math.max(0, cr.dashTimer - dt);
+        if (Math.random() < dt * 16) {
+          this.particles.push({
+            x: cr.x - cr.vx * 18 + (Math.random() - 0.5) * 14,
+            y: cr.y - 26 + (Math.random() - 0.5) * 16,
+            vx: -cr.vx * 45,
+            vy: -cr.vy * 45 - 8,
+            r: 2.8 + Math.random() * 2.2,
+            color: '#67e8f9',
+            age: 0,
+            life: 0.32,
+            glow: true,
+          });
+        }
+      }
+
+      if (cr.type === 'galewraith' && !cr.heldBy) {
+        cr.abilityCd -= dt;
+        // Gale Wraith triggers a Wind Dash speed burst unless chilled/snared
+        if (cr.abilityCd <= 0 && cr.slowTimer <= 0 && cr.s > 0.04 && cr.s < 0.9) {
+          cr.abilityCd = 4.8;
+          cr.dashTimer = 1.15;
+          this.rings.push({
+            x: cr.x,
+            y: cr.y - 24,
+            r0: 10,
+            r1: 48,
+            color: '#67e8f9',
+            lineWidth: 3.5,
+            age: 0,
+            life: 0.4,
+          });
+          this.spawnBurst(cr.x, cr.y - 24, '#a5f3fc', 8);
+          this.spawnFloatingText(cr.x, cr.y - 62, 'GALE DASH!', '#67e8f9', 0.92);
+        }
+      }
+
       // Held in melee combat by a Stone Golem
       if (cr.heldBy) {
         const golem = cr.heldBy;
@@ -1524,7 +1765,8 @@ export class BattleEngine {
 
       const prevX = cr.x;
       const prevY = cr.y;
-      cr.s += cr.speed * cr.slowMult * pathUnitFactor * dt;
+      const dashMult = cr.dashTimer > 0 ? 1.85 : 1;
+      cr.s += cr.speed * cr.slowMult * dashMult * pathUnitFactor * dt;
 
       if (cr.s >= 1) {
         cr.alive = false;
@@ -2617,6 +2859,102 @@ export class BattleEngine {
       } else if (this.selectedDef.type === 'golem') {
         this.drawRangeCircle(ctx, this.selectedDef.pad.x, this.selectedDef.pad.y, 68, '#38e0ff');
       }
+    } else if (this.level.freePlacement && this.buildSel) {
+      const cfg = DEFENDERS[this.buildSel];
+
+      // Always illuminate the trail immediately when a trail defender is picked
+      if (cfg.kind === 'trail') {
+        ctx.save();
+        ctx.strokeStyle = `rgba(56, 224, 255, ${(0.22 + pulse * 0.16).toFixed(2)})`;
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i <= 50; i++) {
+          const p = this.path.pointAt(i / 50);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (this.freePreview) {
+      const fp = this.freePreview;
+      const rUnits = cfg.levels[0].range || cfg.levels[0].radius;
+      const previewColor = fp.valid ? '#34d399' : '#fb7185';
+
+      if (rUnits) {
+        this.drawRangeCircle(ctx, fp.x, fp.y, rUnits * this.RANGE_UNIT_PX, previewColor);
+      } else if (this.buildSel === 'golem') {
+        this.drawRangeCircle(ctx, fp.x, fp.y, 68, previewColor);
+      }
+
+      // Ground footprint ring
+      ctx.save();
+      ctx.translate(fp.x, fp.y);
+      ctx.fillStyle = fp.valid ? 'rgba(52, 211, 153, 0.24)' : 'rgba(251, 113, 133, 0.26)';
+      ctx.strokeStyle = previewColor;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 30, 19, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Ghost preview sprite of the defender being placed
+      const ghostSprite = this.sprites?.sprites[this.buildSel as SpriteKey];
+      if (ghostSprite) {
+        const isFlatTrap = this.buildSel === 'spike' || this.buildSel === 'gravity';
+        const targetH =
+          this.buildSel === 'archer'
+            ? 106
+            : this.buildSel === 'rail'
+            ? 104
+            : this.buildSel === 'tesla'
+            ? 108
+            : this.buildSel === 'ember'
+            ? 104
+            : this.buildSel === 'frost'
+            ? 102
+            : this.buildSel === 'golem'
+            ? 86
+            : this.buildSel === 'gravity'
+            ? 66
+            : 60;
+        const aspect = ghostSprite.width / Math.max(1, ghostSprite.height);
+        const drawW = targetH * aspect;
+        ctx.globalAlpha = fp.valid ? 0.78 : 0.45;
+        if (!fp.valid) {
+          ctx.filter = 'hue-rotate(300deg) saturate(1.8) brightness(0.92)';
+        }
+        ctx.drawImage(
+          ghostSprite.canvas,
+          -drawW * 0.5,
+          isFlatTrap ? 14 - targetH * 0.68 : 6 - targetH * 0.94,
+          drawW,
+          targetH
+        );
+        ctx.filter = 'none';
+        ctx.globalAlpha = 1;
+      }
+
+      if (!fp.valid && fp.reason) {
+        ctx.font = '700 13px system-ui, -apple-system, sans-serif';
+        const tw = ctx.measureText(fp.reason).width;
+        const bw = tw + 18;
+        const bh = 24;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = '#fb7185';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, -bw / 2, 24, bw, bh, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#fecdd3';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(fp.reason, 0, 36);
+      }
+      ctx.restore();
+      }
     } else if (this.buildSel && this.hoverPad && !this.hoverPad.def) {
       const cfg = DEFENDERS[this.buildSel];
       const rUnits = cfg.levels[0].range || cfg.levels[0].radius;
@@ -2635,6 +2973,22 @@ export class BattleEngine {
       const isHovered = this.hoverPad === pad;
       const isValidTarget = !pad.def && wantKind === pad.kind;
       const isSelected = Boolean(pad.def && pad.def === this.selectedDef);
+
+      // On Free Placement levels, placed defenders sit directly on the open grass/road with a sleek rune rim
+      if (this.level.freePlacement) {
+        if (!pad.def) continue;
+        ctx.save();
+        ctx.translate(pad.x, pad.y);
+        ctx.fillStyle = pad.kind === 'tower' ? 'rgba(15, 23, 42, 0.34)' : 'rgba(56, 224, 255, 0.14)';
+        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(56, 224, 255, 0.55)';
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 3, pad.kind === 'tower' ? 28 : 26, pad.kind === 'tower' ? 16 : 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
 
       ctx.save();
       ctx.translate(pad.x, pad.y);
@@ -2713,7 +3067,14 @@ export class BattleEngine {
 
   private drawRangeCircle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
     ctx.save();
-    ctx.fillStyle = color === '#fbbf24' ? 'rgba(251, 191, 36, 0.12)' : 'rgba(56, 224, 255, 0.12)';
+    ctx.fillStyle =
+      color === '#fbbf24'
+        ? 'rgba(251, 191, 36, 0.12)'
+        : color === '#34d399'
+        ? 'rgba(52, 211, 153, 0.13)'
+        : color === '#fb7185'
+        ? 'rgba(251, 113, 133, 0.14)'
+        : 'rgba(56, 224, 255, 0.12)';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.setLineDash([10, 8]);
@@ -2956,6 +3317,8 @@ export class BattleEngine {
         ? 34
         : cr.type === 'weaver'
         ? 28
+        : cr.type === 'galewraith'
+        ? 26
         : cr.type === 'shrieker'
         ? 26
         : cr.type === 'bramble'
@@ -2981,6 +3344,15 @@ export class BattleEngine {
       ctx.stroke();
     }
 
+    // Gale Wraith active Wind Dash cyan slipstream ring
+    if (cr.type === 'galewraith' && cr.dashTimer > 0) {
+      ctx.strokeStyle = 'rgba(103, 232, 249, 0.85)';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 2, shadowR + 9, 14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     // Forge Weaver / Iron Aegis golden shield ring on buffed allies
     if (cr.shieldTimer > 0 && cr.armorShredTimer <= 0) {
       const spulse = 0.55 + 0.3 * Math.sin(this.clock * 6 + cr.animPhase);
@@ -2995,6 +3367,8 @@ export class BattleEngine {
     ctx.fillStyle =
       cr.type === 'bat' || cr.type === 'shrieker'
         ? 'rgba(35, 18, 60, 0.28)'
+        : cr.type === 'galewraith'
+        ? 'rgba(14, 116, 144, 0.35)'
         : cr.type === 'wisp'
         ? 'rgba(107, 33, 168, 0.4)'
         : cr.type === 'cinderimp' || cr.type === 'ironwarden'
@@ -3008,13 +3382,15 @@ export class BattleEngine {
     const bobY = isFrozen
       ? cr.type === 'bat' || cr.type === 'shrieker'
         ? -22
-        : cr.type === 'weaver'
-        ? -10
+        : cr.type === 'weaver' || cr.type === 'galewraith'
+        ? -12
         : 0
       : cr.type === 'bat'
       ? -26 + Math.sin(cr.animPhase * 1.7) * 7
       : cr.type === 'shrieker'
       ? -28 + Math.sin(cr.animPhase * 1.35) * 8
+      : cr.type === 'galewraith'
+      ? -14 + Math.sin(cr.animPhase * 1.4) * 6
       : cr.type === 'weaver'
       ? -12 + Math.sin(cr.animPhase * 1.15) * 5
       : cr.type === 'wisp'
@@ -3031,9 +3407,11 @@ export class BattleEngine {
 
     const tilt = isFrozen
       ? 0
+      : cr.type === 'galewraith' && cr.dashTimer > 0
+      ? (facingLeft ? -0.18 : 0.18)
       : cr.type === 'bat' || cr.type === 'shrieker'
       ? Math.sin(cr.animPhase * 0.9) * 0.09
-      : cr.type === 'wisp' || cr.type === 'weaver'
+      : cr.type === 'wisp' || cr.type === 'weaver' || cr.type === 'galewraith'
       ? Math.sin(cr.animPhase * 0.6) * 0.06
       : cr.type === 'cinderimp'
       ? Math.sin(cr.animPhase) * 0.11
@@ -3054,7 +3432,7 @@ export class BattleEngine {
         ? 88
         : cr.type === 'splitter'
         ? 84
-        : cr.type === 'shrieker'
+        : cr.type === 'shrieker' || cr.type === 'galewraith'
         ? 82
         : cr.type === 'bramble'
         ? 80
@@ -3081,6 +3459,8 @@ export class BattleEngine {
         ctx.filter = 'hue-rotate(155deg) brightness(1.35) saturate(1.5)';
       } else if (isSlowed) {
         ctx.filter = 'hue-rotate(115deg) brightness(1.12)';
+      } else if (cr.type === 'galewraith' && cr.dashTimer > 0) {
+        ctx.filter = 'brightness(1.28) saturate(1.35)';
       }
 
       ctx.drawImage(sprite.canvas, -drawW * 0.5, -drawH * 0.9, drawW, drawH);
@@ -3090,6 +3470,8 @@ export class BattleEngine {
       ctx.fillStyle =
         cr.type === 'cinderimp' || cr.type === 'ironwarden'
           ? '#fb923c'
+          : cr.type === 'galewraith'
+          ? '#67e8f9'
           : cr.type === 'shieldbearer' || cr.type === 'shrieker' || cr.type === 'weaver'
           ? '#f59e0b'
           : cr.type === 'wisp' || cr.type === 'bat'
@@ -3564,6 +3946,8 @@ export class BattleEngine {
     cancelAnimationFrame(this.rafId);
     this.canvas.removeEventListener('pointermove', this.onPointerMove);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('resize', this.handleResize);
     this.container.innerHTML = '';
   }

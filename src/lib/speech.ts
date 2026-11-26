@@ -431,6 +431,10 @@ const DEFAULT_PATTERN_FLOOR: Record<string, { base: number; min: number; forbidd
   i: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɑ', 'ɔ', 'ʌ', 'u', 'oʊ'] },
   o: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'i', 'eɪ'] },
   u: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'i', 'eɪ'] },
+  a_e: { base: 52, min: 28, forbiddenSwaps: ['æ', 'ɪ', 'ɛ', 'ɑ', 'ɔ', 'ʌ', 'aɪ', 'oʊ'] },
+  i_e: { base: 52, min: 28, forbiddenSwaps: ['ɪ', 'æ', 'ɛ', 'ɑ', 'ɔ', 'ʌ', 'eɪ', 'oʊ'] },
+  o_e: { base: 52, min: 28, forbiddenSwaps: ['ɑ', 'ɔ', 'æ', 'ɪ', 'ɛ', 'ʌ', 'eɪ', 'aɪ'] },
+  u_e: { base: 52, min: 28, forbiddenSwaps: ['ʌ', 'æ', 'ɪ', 'ɛ', 'ɑ', 'eɪ', 'aɪ'] },
 };
 
 export function calibratePatternFromSamples(
@@ -565,8 +569,13 @@ function inferWordPatterns(target: string, explicitPattern?: string): string[] {
   if (blendMatch) keys.add(blendMatch[1]);
   const endBlendMatch = /(nd|mp|nt|nk|ft|lt)$/.exec(t);
   if (endBlendMatch) keys.add(endBlendMatch[1]);
-  const vm = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(t);
-  if (vm && vm[1]) keys.add(vm[1]);
+  const vceMatch = /^[bcdfghjklmnpqrstvwxyz]+([aiou])[bcdfghjklmnpqrstvwxyz]e$/.exec(t);
+  if (vceMatch && vceMatch[1]) {
+    keys.add(`${vceMatch[1]}_e`);
+  } else {
+    const vm = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(t);
+    if (vm && vm[1]) keys.add(vm[1]);
+  }
   return Array.from(keys);
 }
 
@@ -580,6 +589,10 @@ function ipaToPlainSound(ipa?: string | null): string | undefined {
     'ɔ': 'short o',
     'ʌ': 'short u',
     'ə': 'short u',
+    'eɪ': 'long a',
+    'aɪ': 'long i',
+    'oʊ': 'long o',
+    'u': 'long u',
     'ʃ': 'sh',
     'tʃ': 'ch',
     'θ': 'th',
@@ -618,13 +631,21 @@ const SAME: Record<string, string[]> = {
   'ɑ': ['ɑ', 'ɔ'],
   'ɔ': ['ɔ', 'ɑ'],
   'ʌ': ['ʌ', 'ə'],
+  'eɪ': ['eɪ', 'e'],
+  'aɪ': ['aɪ'],
+  'oʊ': ['oʊ', 'o'],
+  'u': ['u'],
 };
 
 const NASAL = ['m', 'n', 'ŋ'];
 const SHORT: Record<string, string> = { a: 'æ', e: 'ɛ', i: 'ɪ', o: 'ɑ', u: 'ʌ' };
+const LONG_VCE: Record<string, string> = { a: 'eɪ', i: 'aɪ', o: 'oʊ', u: 'u' };
 
 function shortVowel(w: string): string | null {
-  const m = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(String(w || '').toLowerCase());
+  const s = String(w || '').toLowerCase();
+  const vce = /^[bcdfghjklmnpqrstvwxyz]+([aiou])[bcdfghjklmnpqrstvwxyz]e$/.exec(s);
+  if (vce && LONG_VCE[vce[1]]) return LONG_VCE[vce[1]];
+  const m = /^[^aeiou]*([aeiou])[^aeiouy]*$/.exec(s);
   return m ? SHORT[m[1]] || null : null;
 }
 
@@ -707,7 +728,7 @@ export function scoreAzureWord(
       : Boolean(activeProfile) || inferredPatterns.some((k) => getMicGraceStore().has(k));
 
   const profileForVowel =
-    activeProfile && ['a', 'e', 'i', 'o', 'u'].includes(activeProfile.pattern)
+    activeProfile && ['a', 'e', 'i', 'o', 'u', 'a_e', 'i_e', 'o_e', 'u_e'].includes(activeProfile.pattern)
       ? activeProfile
       : null;
 
@@ -800,12 +821,25 @@ export function scoreAzureWord(
     (v.score || 0) >= (graceActive ? 20 : 25);
 
   const vs = v.score || 0;
-  const vowelPass = offGuess
-    ? topOK || runeSecondOK || spanishShortIOK
-    : spanishShortIOK ||
-      (topOK && vs >= 10) ||
-      relaxedShortIOK ||
-      (vs >= vowelMin && !(topOther && vs < vowelClearMiss));
+  // For Silent-E (VCe) words, explicitly reject when Azure transcribed the dropped-e short-vowel word
+  // (e.g., "cap" for "cape", "tap" for "tape", "bit" for "bite", "pin" for "pine") unless the long vowel scored strongly.
+  const targetCleanLower = String(target || '').toLowerCase();
+  const isVceTarget = /^[bcdfghjklmnpqrstvwxyz]+[aiou][bcdfghjklmnpqrstvwxyz]e$/.test(targetCleanLower);
+  const droppedSilentEWord = isVceTarget ? targetCleanLower.slice(0, -1) : '';
+  const heardDroppedSilentE =
+    isVceTarget &&
+    Boolean(droppedSilentEWord) &&
+    normTokens(res.heard || '').includes(droppedSilentEWord) &&
+    vs < (graceActive ? 74 : 84);
+
+  const vowelPass =
+    !heardDroppedSilentE &&
+    (offGuess
+      ? topOK || runeSecondOK || spanishShortIOK
+      : spanishShortIOK ||
+        (topOK && vs >= 10) ||
+        relaxedShortIOK ||
+        (vs >= vowelMin && !(topOther && vs < vowelClearMiss)));
 
   const consPh = ph.filter((_p, k) => k !== vi);
   const cons = consPh.map((p) => p.score || 0);

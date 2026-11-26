@@ -59,8 +59,12 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
       steps.push({ pause: 240 });
     }
 
+    const isSilentEPattern = /^[aiou]_e$/.test(String(pattern));
     soundTiles.forEach((tile, idx) => {
-      steps.push({ snd: tile, on: () => setLitTarget(idx) });
+      const isSilentE = isSilentEPattern && idx === soundTiles.length - 1 && tile.toLowerCase() === 'e';
+      if (isSilentE) return;
+      const sndKey = isSilentEPattern && idx === highlightIdx ? String(pattern) : tile;
+      steps.push({ snd: sndKey, on: () => setLitTarget(idx) });
       steps.push({ pause: 130 });
     });
 
@@ -165,10 +169,13 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
                 <span className="text-xs font-medium text-slate-400">Key word</span>
                 <span className="flex gap-1">
                   {rule.word.split('').map((ch, idx) => {
-                    const inChunk =
-                      keywordMatchIdx >= 0 &&
-                      idx >= keywordMatchIdx &&
-                      idx < keywordMatchIdx + keywordClean.length;
+                    const isSilentEPat = /^[aiou]_e$/.test(String(pattern));
+                    const inChunk = isSilentEPat
+                      ? (idx === rule.word.length - 3 && ch.toLowerCase() === String(pattern)[0]) ||
+                        (idx === rule.word.length - 1 && ch.toLowerCase() === 'e')
+                      : keywordMatchIdx >= 0 &&
+                        idx >= keywordMatchIdx &&
+                        idx < keywordMatchIdx + keywordClean.length;
                     return (
                       <span
                         key={idx}
@@ -218,17 +225,23 @@ export const SoundRuleModal: React.FC<SoundRuleModalProps> = ({
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <div className="flex flex-wrap items-center justify-center gap-2.5">
             {soundTiles.map((tile, idx) => {
+              const isSilentEPat = /^[aiou]_e$/.test(String(pattern));
               const isTarget = idx === highlightIdx;
-              const isLit = litTarget === idx || litTarget === 'whole';
+              const isSilentE = isSilentEPat && idx === soundTiles.length - 1 && tile.toLowerCase() === 'e';
+              const isLit = litTarget === idx || litTarget === 'whole' || (isSilentE && litTarget === highlightIdx);
               return (
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => ready && sound.speakPhoneme(tile)}
-                  title="Tap to hear this sound"
+                  onClick={() =>
+                    ready && sound.speakPhoneme(isSilentEPat && (isTarget || isSilentE) ? String(pattern) : tile)
+                  }
+                  title={isSilentE ? 'Silent e makes the vowel say its long name' : 'Tap to hear this sound'}
                   className={`flex h-14 min-w-14 sm:h-16 sm:min-w-16 px-2.5 items-center justify-center rounded-xl border-2 font-reading text-2xl sm:text-3xl font-bold transition-transform cursor-pointer ${
                     isLit
                       ? 'scale-105 border-amber-300 bg-amber-400/25 text-white'
+                      : isSilentE
+                      ? 'border-dashed border-amber-400/75 bg-amber-500/10 text-amber-200/80'
                       : isTarget
                       ? 'border-amber-400/70 bg-amber-500/15 text-amber-200'
                       : 'border-slate-600 bg-slate-900 text-slate-100'
