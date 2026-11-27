@@ -2,6 +2,28 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-11): Word List Fixes (Tap Choices, Runes, and Pattern Cleanup)
+
+### Completed
+- **Word List & Tap Choice Updates (`src/data/level1.ts`)**:
+  - `LEVEL1_RUNES` and `LEVEL5_RUNES`: replaced `fim` with `{ w: 'zim', kind: 'rune', options: ['zam', 'zum'] }`.
+  - `LEVEL2_REAL_WORDS` and `LEVEL4_REAL_WORDS`: updated `fog` options to `['fig', 'dog']`.
+  - `LEVEL2_RUNES`: updated `fum` options to `['fam', 'fub']`.
+  - `LEVEL3_REAL_WORDS`: replaced `hem`, `pen`, `men`, `den`, `ten` in place with `bed`, `leg`, `set`, `beg`, `let` (with Spanish translations and updated choices), and updated options for `net`, `pin`, `fit`, `mix`, and `win`.
+  - `LEVEL3_RUNES`: replaced `tev` with `{ w: 'teb', kind: 'rune', options: ['tab', 'tib'] }` and updated `zem` options to `['zum', 'zam']`.
+  - `LEVEL4_REAL_WORDS`: updated options for `net`, `pen`, `pin`, `win`, and `sun` (`['sin', 'san']`).
+  - `LEVEL5_REAL_WORDS` and `LEVEL5_RUNES`: updated options for `hem`, `den`, `fit`, `pin`, and `zem`.
+  - `W2_L3_REAL_WORDS` and `W2_L3_RUNES`: deleted `frost` and `frill`; updated `frab` options to `['frib', 'frop']`.
+  - `W2_L5_REAL_WORDS` and `W2_L5_RUNES`: replaced `blink` with `blip` (`options: ['lip', 'blob']`, `es: 'señal breve'`); updated `thab` options to `['tab', 'shab']`.
+  - `W3_L1_REAL_WORDS` and `W3_L1_RUNES`: updated `cake` options to `['cap', 'bike']` and `dake` options to `['dak', 'dime']`.
+  - Verified every updated word and tap choice exists in `public/assets/audio/words/manifest.json` so zero computer-voice fallback occurs.
+  - Left placement probe words, speech checking, voice fits, audio sprites/manifests, Spanish supports, save data, difficulty, waves, and defenders untouched.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Nov 27 word list rules decision to `"Mr. Scott's decisions"`.
+
+### Next Up
+1. Spot-check World 1 Level 3 in tap mode (`bed`, `leg`, `set`, `beg`, `let`) and sync to GitHub for Claude's automated word check.
+
 ## 2026-11-27 (S-09): Expert Grace Part 1 (Half Crystals on Second Try)
 
 ### Completed
