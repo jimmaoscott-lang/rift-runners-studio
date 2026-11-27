@@ -466,16 +466,16 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
     bodyEs: 'Mira la Forja de Runas a la derecha. Presiona SAY IT o escucha las opciones 1, 2, 3 y pulsa Forge.',
   },
   {
-    titleEs: 'Lanza la Oleada 1',
-    bodyEs: 'Haz clic en Send now en la barra superior (o forja 8 palabras) para iniciar la Oleada 1.',
-  },
-  {
     titleEs: 'Mejora o reubica defensores',
     bodyEs: 'Haz clic en cualquier defensor del mapa para ver su alcance, mejorarlo a Nivel 3 o venderlo para construir en otro lugar.',
   },
   {
     titleEs: 'Sellos de Grieta y Poderes',
-    bodyEs: 'Llena los Sellos de Grieta (a e i) a la izquierda con lecturas limpias para ganar +100 cristales extra y abrir la Oleada Final. Usa Impulso, Meteoro y Congelar arriba.',
+    bodyEs: 'Llena los Sellos de Grieta (a e i) abajo a la izquierda con lecturas limpias para ganar +100 cristales extra y abrir la Oleada Final. Usa Impulso, Meteoro y Congelar arriba.',
+  },
+  {
+    titleEs: 'Listo para la Oleada 1',
+    bodyEs: '¡Todo listo! Pulsa Finish para cerrar esta guía y sigue forjando palabras o haz clic en Send now en la barra superior cuando estés listo para la Oleada 1.',
   },
 ];
 

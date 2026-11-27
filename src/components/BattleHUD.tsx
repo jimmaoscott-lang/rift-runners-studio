@@ -70,6 +70,8 @@ interface BattleHUDProps {
   walkthrough: WalkthroughInfo | null;
   lockBonusFlash?: { patterns: PatternKey[]; amount: number } | null;
   spanishCaptions?: boolean;
+  teacherMode?: boolean;
+  onTurnOffTeacherMode?: () => void;
   onWalkthroughNext: () => void;
   onWalkthroughSkip: () => void;
   onToggleWalkthrough: () => void;
@@ -162,6 +164,8 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
   walkthrough,
   lockBonusFlash = null,
   spanishCaptions = false,
+  teacherMode = false,
+  onTurnOffTeacherMode,
   onWalkthroughNext,
   onWalkthroughSkip,
   onToggleWalkthrough,
@@ -365,6 +369,23 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
 
         {/* Right-aligned Utility Controls */}
         <div className="flex items-center gap-1 shrink-0">
+          {teacherMode && (
+            <div className="flex h-8 items-center gap-1.5 rounded-xl border-2 border-amber-400/85 bg-amber-950/90 px-2 text-[11px] font-bold text-amber-200 shadow-md whitespace-nowrap shrink-0">
+              <span>Teacher Mode on</span>
+              {onTurnOffTeacherMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('tap');
+                    onTurnOffTeacherMode();
+                  }}
+                  className="rounded-md bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Turn off
+                </button>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={onTogglePause}
@@ -465,7 +486,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               type="button"
               onClick={() =>
                 sound.speakNarration(
-                  `walkthrough-free-step-${walkthrough.stepNum}`,
+                  `walkthrough-free-v2-step-${walkthrough.stepNum}`,
                   `${walkthrough.title}. ${walkthrough.body}`
                 )
               }
@@ -654,15 +675,25 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               <span>Lock Sealed! +{lockBonusFlash.amount} Crystals</span>
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => onClearLocks()}
-            title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals. Click to clear all Level ${level.num} Rift Locks.`}
-            className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase hover:text-rose-200 cursor-pointer transition-colors shrink-0"
-          >
-            <Lock className="h-3 w-3 text-cyan-300" />
-            <span>Locks</span>
-          </button>
+          {teacherMode ? (
+            <button
+              type="button"
+              onClick={() => onClearLocks()}
+              title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals. Click to clear all Level ${level.num} Rift Locks.`}
+              className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase hover:text-rose-200 cursor-pointer transition-colors shrink-0"
+            >
+              <Lock className="h-3 w-3 text-cyan-300" />
+              <span>Locks</span>
+            </button>
+          ) : (
+            <div
+              title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals.`}
+              className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase shrink-0"
+            >
+              <Lock className="h-3 w-3 text-cyan-300" />
+              <span>Locks</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5">
             {locks.map((lk, idx) => {
@@ -670,6 +701,32 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               const fillCount = lk.done ? lk.need : Math.min(lk.need, lk.recentCorrect);
               const shortTag = getPatternRule(lk.vowel).shortLabel || lk.vowel;
               const justSealed = Boolean(lockBonusFlash?.patterns.includes(lk.vowel));
+              const statusContent = (
+                <>
+                  <div className="flex items-center gap-0.5 font-tabular text-[10px] font-extrabold leading-none text-slate-200 group-hover:text-rose-200">
+                    {lk.done ? (
+                      <>
+                        <Lock className={`h-2.5 w-2.5 ${st.icon} group-hover:text-rose-300`} />
+                        <span className={st.icon}>Done</span>
+                      </>
+                    ) : (
+                      <span>
+                        {fillCount}/{lk.need}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-[2px]">
+                    {Array.from({ length: lk.need }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 ${lk.need > 6 ? 'w-1' : 'w-1.5'} rounded-[1px] border ${
+                          i < fillCount ? st.filled : 'border-purple-700/80 bg-[#0d0920]'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
+              );
               return (
                 <div
                   key={lk.vowel}
@@ -689,55 +746,49 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                     {shortTag}
                   </button>
 
-                  {/* Clickable status + compact horizontal pip bar to clear ONLY this lock on the active level */}
-                  <button
-                    type="button"
-                    onClick={() => onClearLocks(lk.vowel)}
-                    title={
-                      lk.done
-                        ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)! Click to clear only this lock on Level ${level.num}`
-                        : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked). Click to clear on Level ${level.num}`
-                    }
-                    className="group flex flex-col items-start gap-0.5 rounded px-0.5 hover:bg-rose-500/20 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-center gap-0.5 font-tabular text-[10px] font-extrabold leading-none text-slate-200 group-hover:text-rose-200">
-                      {lk.done ? (
-                        <>
-                          <Lock className={`h-2.5 w-2.5 ${st.icon} group-hover:text-rose-300`} />
-                          <span className={st.icon}>Done</span>
-                        </>
-                      ) : (
-                        <span>
-                          {fillCount}/{lk.need}
-                        </span>
-                      )}
+                  {/* Status + compact horizontal pip bar (clickable to clear in Teacher Mode only) */}
+                  {teacherMode ? (
+                    <button
+                      type="button"
+                      onClick={() => onClearLocks(lk.vowel)}
+                      title={
+                        lk.done
+                          ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)! Click to clear only this lock on Level ${level.num}`
+                          : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked). Click to clear on Level ${level.num}`
+                      }
+                      className="group flex flex-col items-start gap-0.5 rounded px-0.5 hover:bg-rose-500/20 cursor-pointer transition-colors"
+                    >
+                      {statusContent}
+                    </button>
+                  ) : (
+                    <div
+                      title={
+                        lk.done
+                          ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)`
+                          : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked)`
+                      }
+                      className="flex flex-col items-start gap-0.5 rounded px-0.5"
+                    >
+                      {statusContent}
                     </div>
-                    <div className="flex items-center gap-[2px]">
-                      {Array.from({ length: lk.need }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`h-1.5 ${lk.need > 6 ? 'w-1' : 'w-1.5'} rounded-[1px] border ${
-                            i < fillCount ? st.filled : 'border-purple-700/80 bg-[#0d0920]'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </button>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* Testing utility: one-click Clear Level Locks reset */}
-          <button
-            type="button"
-            onClick={() => onClearLocks()}
-            title={`Reset only Level ${level.num} Rift Locks to 0`}
-            className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-rose-400/55 bg-rose-950/55 px-2 text-[10px] font-bold text-rose-200 hover:border-rose-300 hover:bg-rose-500/25 hover:text-white cursor-pointer shrink-0"
-          >
-            <RotateCcw className="h-3 w-3" />
-            <span>Clear</span>
-          </button>
+          {/* Testing utility: one-click Clear Level Locks reset (Teacher Mode only) */}
+          {teacherMode && (
+            <button
+              type="button"
+              onClick={() => onClearLocks()}
+              title={`Reset only Level ${level.num} Rift Locks to 0`}
+              className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-rose-400/55 bg-rose-950/55 px-2 text-[10px] font-bold text-rose-200 hover:border-rose-300 hover:bg-rose-500/25 hover:text-white cursor-pointer shrink-0"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Clear</span>
+            </button>
+          )}
         </div>
       )}
 

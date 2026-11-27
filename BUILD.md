@@ -37,7 +37,7 @@ Rift Runners uses two intentional visual styles. Keep cutscenes and battlefield 
 
 ### A. Story Cutscenes (Paused Until Final Static Pass)
 
-**Cutscene Pause (Nov 27)**: Do not create or regenerate any cutscene images, narration, or story scripts until the rest of the build is finished. All story scripts and cutscenes will be redone as static files as the last step.
+**Cutscene pause**: do not create or regenerate any cutscene images, narration or scripts until Mr. Scott says the rest of the build is finished. Cutscenes will be redone as static files as the last step.
 
 Reference art lock for that final cutscene pass (anchored by `/src/assets/images/cutscene_opening_warden_1795457392314.jpg`):
 
@@ -71,6 +71,7 @@ Follow these rules in all game text, cutscene scripts, UI labels, docs, and chat
 3. **Never begin a paragraph with the word "On"**: Rephrase paragraph openings so none start with "On".
 4. **Classroom-Safe Word Audit**: Review every real word and nonsense rune for unintended slang, profanity, or awkward homophones before shipping (for example, `shid`, `chem`, and `chod` were replaced with `shib`, `chep`, and `chot` in World 2 Level 1).
 5. **Wave Pacing Lock (`waveEvery <= 15`)**: Keep `waveEvery` at `7` to `8` words (strictly `15` maximum) between waves across campaign levels across `5` to `7` escalating waves (`minWaves`), with one-third slower attacker speeds and matching one-third lower defender weapon damage so students get time to build up Free Placement defenses while keeping reading momentum brisk.
+6. **Teacher Mode Lock**: Student screens show no test or setup tools. Every new test, preview or unlock tool goes behind Teacher Mode.
 
 ## 4. Speech Verification and Calibration Rules (`src/lib/speech.ts`)
 

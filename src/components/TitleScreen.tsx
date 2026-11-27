@@ -38,6 +38,8 @@ interface TitleScreenProps {
   progress: StoredProgress;
   locks: PatternLockStatus[];
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
+  teacherMode?: boolean;
+  onTurnOffTeacherMode?: () => void;
   onSelectLevel: (id: LevelId) => void;
   onChangeDifficulty: (diff: DifficultyId) => void;
   onStartBasicTraining: () => void;
@@ -54,6 +56,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   progress,
   locks,
   azureStatus,
+  teacherMode = false,
+  onTurnOffTeacherMode,
   onSelectLevel,
   onChangeDifficulty,
   onStartBasicTraining,
@@ -103,31 +107,50 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           Rift Runners
         </span>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('opening')}
-            className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            Opening Scene
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('victory')}
-            className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            Victory Scene
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('defeat')}
-            className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            Defeat Scene
-          </button>
-        </nav>
+        {teacherMode && (
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('opening')}
+              className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              Opening Scene
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('victory')}
+              className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              Victory Scene
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('defeat')}
+              className="hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              Defeat Scene
+            </button>
+          </nav>
+        )}
 
         <div className="flex items-center gap-2 shrink-0">
+          {teacherMode && (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-amber-400/80 bg-amber-950/85 px-2.5 py-1.5 text-xs font-bold text-amber-200 whitespace-nowrap shrink-0">
+              <span>Teacher Mode on</span>
+              {onTurnOffTeacherMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('tap');
+                    onTurnOffTeacherMode();
+                  }}
+                  className="rounded-md bg-amber-400 px-2 py-0.5 text-[11px] font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Turn off
+                </button>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -184,7 +207,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       <span className="font-tabular text-cyan-200">
                         {unlockedCampaignCount} of {LEVEL_ORDER.length} levels open
                       </span>
-                      {progress.settings.unlockAllLevels && (
+                      {teacherMode && progress.settings.unlockAllLevels && (
                         <>
                           <span className="text-slate-500" aria-hidden="true">·</span>
                           <span className="text-amber-300">Teacher Unlock All active</span>
@@ -368,7 +391,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                         {lv.num}
                       </span>
                       {isUpcoming ? (
-                        <span className="text-[10px] font-semibold text-amber-300/85">Preview</span>
+                        teacherMode ? (
+                          <span className="text-[10px] font-semibold text-amber-300/85">Preview</span>
+                        ) : (
+                          <Lock className="h-3.5 w-3.5 text-slate-500" aria-label="Coming soon" />
+                        )
                       ) : !isUnlocked ? (
                         <Lock className="h-3.5 w-3.5 text-slate-500" aria-label="Locked" />
                       ) : isRecommended && lvStars === 0 ? (
@@ -511,17 +538,19 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                   Start Runner Basic Training
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    sound.sfx('tap');
-                    onOpenSettings();
-                  }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/90 px-5 py-4 text-sm font-semibold text-slate-100 hover:border-emerald-400 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <Settings className="h-4 w-4 text-emerald-300" />
-                  Teacher: Unlock All in Settings
-                </button>
+                {teacherMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.sfx('tap');
+                      onOpenSettings();
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/90 px-5 py-4 text-sm font-semibold text-slate-100 hover:border-emerald-400 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <Settings className="h-4 w-4 text-emerald-300" />
+                    Teacher: Unlock All in Settings
+                  </button>
+                )}
 
                 <p className="w-full text-xs text-slate-300">
                   Pass earlier skills in Runner Basic Training or seal the prior level to open {activeLevel.worldName}, Level {activeLevel.num}: {activeLevel.name}.
@@ -565,7 +594,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <div>
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <span>Level {activeLevel.num} Rift Locks</span>
-                {locks.some((l) => l.recentCount > 0) && (
+                {teacherMode && locks.some((l) => l.recentCount > 0) && (
                   <button
                     type="button"
                     onClick={() => onClearLocks()}
@@ -578,22 +607,36 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 )}
               </div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-tabular text-sm font-semibold text-white">
-                {locks.map((l) => (
-                  <button
-                    key={l.vowel}
-                    type="button"
-                    onClick={() => onClearLocks(l.vowel)}
-                    title={`Click to reset ${l.label} on Level ${activeLevel.num}`}
-                    className={`inline-flex items-center gap-1 hover:text-rose-300 transition-colors cursor-pointer ${
-                      l.done ? 'text-emerald-300' : 'text-slate-200'
-                    }`}
-                  >
-                    {l.done && <Lock className="h-3 w-3" />}
-                    <span>
-                      {locks.length > 2 ? l.vowel : l.label}: {l.recentCorrect}/{l.need}
+                {locks.map((l) =>
+                  teacherMode ? (
+                    <button
+                      key={l.vowel}
+                      type="button"
+                      onClick={() => onClearLocks(l.vowel)}
+                      title={`Click to reset ${l.label} on Level ${activeLevel.num}`}
+                      className={`inline-flex items-center gap-1 hover:text-rose-300 transition-colors cursor-pointer ${
+                        l.done ? 'text-emerald-300' : 'text-slate-200'
+                      }`}
+                    >
+                      {l.done && <Lock className="h-3 w-3" />}
+                      <span>
+                        {locks.length > 2 ? l.vowel : l.label}: {l.recentCorrect}/{l.need}
+                      </span>
+                    </button>
+                  ) : (
+                    <span
+                      key={l.vowel}
+                      className={`inline-flex items-center gap-1 ${
+                        l.done ? 'text-emerald-300' : 'text-slate-200'
+                      }`}
+                    >
+                      {l.done && <Lock className="h-3 w-3" />}
+                      <span>
+                        {locks.length > 2 ? l.vowel : l.label}: {l.recentCorrect}/{l.need}
+                      </span>
                     </span>
-                  </button>
-                ))}
+                  )
+                )}
               </div>
             </div>
 
@@ -650,32 +693,34 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           <span aria-hidden="true">·</span>
           <span>Progress stays on this device</span>
         </div>
-        <div className="flex items-center gap-3">
-          <Film className="h-3.5 w-3.5 text-cyan-300" />
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('opening')}
-            className="hover:text-white transition-colors cursor-pointer"
-          >
-            Preview Opening
-          </button>
-          <span aria-hidden="true">/</span>
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('victory')}
-            className="hover:text-white transition-colors cursor-pointer"
-          >
-            Victory
-          </button>
-          <span aria-hidden="true">/</span>
-          <button
-            type="button"
-            onClick={() => onOpenCutscene('defeat')}
-            className="hover:text-white transition-colors cursor-pointer"
-          >
-            Defeat
-          </button>
-        </div>
+        {teacherMode && (
+          <div className="flex items-center gap-3">
+            <Film className="h-3.5 w-3.5 text-cyan-300" />
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('opening')}
+              className="hover:text-white transition-colors cursor-pointer"
+            >
+              Preview Opening
+            </button>
+            <span aria-hidden="true">/</span>
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('victory')}
+              className="hover:text-white transition-colors cursor-pointer"
+            >
+              Victory
+            </button>
+            <span aria-hidden="true">/</span>
+            <button
+              type="button"
+              onClick={() => onOpenCutscene('defeat')}
+              className="hover:text-white transition-colors cursor-pointer"
+            >
+              Defeat
+            </button>
+          </div>
+        )}
       </footer>
     </div>
   );

@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import {
   Check,
   ClipboardCopy,
+  KeyRound,
   Languages,
+  Lock,
   Mic,
   Play,
   RotateCcw,
@@ -43,6 +45,9 @@ interface SettingsModalProps {
   progress: StoredProgress;
   settings: GameSettings;
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
+  teacherMode: boolean;
+  onEnterTeacherMode: () => void;
+  onExitTeacherMode: () => void;
   onChange: (next: GameSettings) => void;
   onClearActiveLocks: () => void;
   onClearAllLocks: () => void;
@@ -57,6 +62,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   progress,
   settings,
   azureStatus,
+  teacherMode,
+  onEnterTeacherMode,
+  onExitTeacherMode,
   onChange,
   onClearActiveLocks,
   onClearAllLocks,
@@ -86,6 +94,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     heard: string;
     heardIpa?: string;
   } | null>(null);
+  const [showTeacherPrompt, setShowTeacherPrompt] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [newCodeInput, setNewCodeInput] = useState(settings.teacherCode || 'rift2026');
+  const [changeCodeMsg, setChangeCodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const refreshVoiceAdaptations = () => {
     setGraceList(speech.getAllPatternGrace());
@@ -250,6 +263,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="mt-4 space-y-5">
+          {/* Teacher Mode Only: Testing Tools (Clear Rift Locks) & Level Access */}
+          {teacherMode && (
+            <>
           {/* Testing Tools: Clear Rift Locks */}
           <section className="space-y-2.5 rounded-xl border border-rose-500/45 bg-rose-950/25 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -350,6 +366,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               );
             })()}
           </section>
+            </>
+          )}
 
           {/* Rift Warden Voice Audition */}
           <section className="space-y-3 rounded-xl border border-purple-500/40 bg-[#141130] p-4">
@@ -998,9 +1016,173 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             ))}
           </section>
+          {/* Teacher Tools Unlock & Code Management */}
+          {(teacherMode || showTeacherPrompt) && (
+            <section className="space-y-3 pt-4 border-t border-slate-800">
+              {teacherMode ? (
+              <div className="space-y-3 rounded-xl border border-amber-400/50 bg-amber-950/25 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
+                    <KeyRound className="h-4 w-4 text-amber-300" />
+                    <span>Teacher Mode on</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.sfx('tap');
+                      onExitTeacherMode();
+                      setShowTeacherPrompt(false);
+                      setCodeInput('');
+                      setCodeError('');
+                      setChangeCodeMsg(null);
+                    }}
+                    className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    Turn off
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const cleaned = newCodeInput.trim();
+                    if (!/^[A-Za-z0-9]{4,20}$/.test(cleaned)) {
+                      setChangeCodeMsg({
+                        ok: false,
+                        text: 'Use 4 to 20 letters or numbers.',
+                      });
+                      return;
+                    }
+                    sound.sfx('select');
+                    update('teacherCode', cleaned);
+                    setNewCodeInput(cleaned);
+                    setChangeCodeMsg({ ok: true, text: 'Teacher code saved.' });
+                  }}
+                  className="space-y-2 pt-2 border-t border-amber-400/20"
+                >
+                  <label
+                    htmlFor="change-teacher-code-input"
+                    className="block text-xs font-semibold text-amber-100"
+                  >
+                    Change teacher code
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      id="change-teacher-code-input"
+                      type="text"
+                      value={newCodeInput}
+                      onChange={(e) => {
+                        setNewCodeInput(e.target.value);
+                        if (changeCodeMsg) setChangeCodeMsg(null);
+                      }}
+                      minLength={4}
+                      maxLength={20}
+                      placeholder="4 to 20 letters or numbers"
+                      autoComplete="off"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-amber-400/70 bg-amber-500/20 px-3.5 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/30 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      Save code
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">4 to 20 letters or numbers.</p>
+                  {changeCodeMsg && (
+                    <p
+                      className={`text-xs font-semibold ${
+                        changeCodeMsg.ok ? 'text-emerald-300' : 'text-rose-300'
+                      }`}
+                    >
+                      {changeCodeMsg.text}
+                    </p>
+                  )}
+                </form>
+              </div>
+            ) : showTeacherPrompt ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const expected = settings.teacherCode || 'rift2026';
+                  if (codeInput.trim() === expected) {
+                    sound.sfx('select');
+                    setCodeInput('');
+                    setCodeError('');
+                    setShowTeacherPrompt(false);
+                    setNewCodeInput(expected);
+                    onEnterTeacherMode();
+                  } else {
+                    sound.sfx('tap');
+                    setCodeError('That code did not work.');
+                  }
+                }}
+                className="space-y-2.5 rounded-xl border border-slate-700 bg-slate-900/80 p-4"
+              >
+                <label
+                  htmlFor="teacher-code-input"
+                  className="flex items-center gap-1.5 text-xs font-bold text-slate-200"
+                >
+                  <Lock className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Enter teacher code</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    id="teacher-code-input"
+                    type="password"
+                    value={codeInput}
+                    onChange={(e) => {
+                      setCodeInput(e.target.value);
+                      if (codeError) setCodeError('');
+                    }}
+                    placeholder="Teacher code"
+                    autoComplete="off"
+                    autoFocus
+                    className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-[#0b1122] px-3 py-2 text-xs font-semibold text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-amber-400 px-3.5 py-2 text-xs font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    Unlock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.sfx('tap');
+                      setShowTeacherPrompt(false);
+                      setCodeInput('');
+                      setCodeError('');
+                    }}
+                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {codeError && <p className="text-xs font-semibold text-rose-300">{codeError}</p>}
+              </form>
+            ) : null}
+            </section>
+          )}
         </div>
 
-        <div className="mt-6 flex justify-end pt-4 border-t border-slate-800">
+        <div className="mt-6 flex items-center justify-between gap-3 pt-4 border-t border-slate-800">
+          {!teacherMode ? (
+            <button
+              type="button"
+              onClick={() => {
+                sound.sfx('tap');
+                setShowTeacherPrompt((prev) => !prev);
+                setCodeError('');
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:border-amber-400/70 hover:text-amber-200 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Teacher Tools</span>
+            </button>
+          ) : (
+            <span className="text-xs font-semibold text-amber-300">Teacher Mode on</span>
+          )}
           <button
             type="button"
             onClick={onClose}

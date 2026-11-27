@@ -117,12 +117,6 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
     canManualNext: false,
   },
   {
-    title: 'Launch Wave 1',
-    body: 'Click Send now on the top bar (or keep forging 8 words) to face Wave 1 from the Rift.',
-    highlight: 'wave',
-    canManualNext: false,
-  },
-  {
     title: 'Upgrade or Reposition',
     body: 'Click any defender you placed to check its range, upgrade it to Level 3, or sell it to rebuild somewhere else.',
     highlight: 'tower',
@@ -130,8 +124,14 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
   },
   {
     title: 'Rift Locks & Hero Powers',
-    body: 'Fill both vertical Rift Locks (a and i) on the left with clean reads to earn +100 bonus crystals and unlock the Final Wave. Use Rally, Meteor, and Freeze when charged.',
+    body: 'Fill both Rift Locks (a and i) at the bottom-left with clean reads to earn +100 bonus crystals and unlock the Final Wave. Use Rally, Meteor, and Freeze on the top bar when charged.',
     highlight: 'locks',
+    canManualNext: true,
+  },
+  {
+    title: 'Ready for Wave 1',
+    body: 'You are all set! Click Finish to close this guide, then keep forging words or click Send now on the top bar whenever you are ready for Wave 1.',
+    highlight: 'wave',
     canManualNext: true,
   },
 ];
@@ -281,6 +281,7 @@ export default function App() {
   const [activeLoadout, setActiveLoadout] = useState<DefenderType[]>([]);
   const [placementRun, setPlacementRun] = useState<PlacementRunState | null>(null);
   const [lastPlacementReport, setLastPlacementReport] = useState<PlacementReport | null>(null);
+  const [teacherMode, setTeacherMode] = useState(false);
 
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
@@ -648,11 +649,11 @@ export default function App() {
     } else if (tutorialIdx === 2 && (snap.defendersCount >= 2 || snap.crystals < DEFENDERS.spike.cost)) {
       setTutorialIdx(3);
     } else if (tutorialIdx === 3 && forgedCount >= 1) {
-      setTutorialIdx(snap.wave >= 1 ? 5 : 4);
-    } else if (tutorialIdx === 4 && snap.wave >= 1) {
+      setTutorialIdx(4);
+    } else if (tutorialIdx === 4 && (snap.selectedDef !== null || snap.upgradedCount >= 1)) {
       setTutorialIdx(5);
-    } else if (tutorialIdx === 5 && (snap.selectedDef !== null || snap.upgradedCount >= 1)) {
-      setTutorialIdx(6);
+    } else if (tutorialIdx === 6 && snap.wave >= 1) {
+      setTutorialIdx(null);
     }
   }, [
     state.scene,
@@ -1057,6 +1058,8 @@ export default function App() {
           progress={progress}
           locks={locks}
           azureStatus={azureStatus}
+          teacherMode={teacherMode}
+          onTurnOffTeacherMode={() => setTeacherMode(false)}
           onSelectLevel={(levelId) => dispatch({ type: 'SELECT_LEVEL', levelId })}
           onChangeDifficulty={handleChangeDifficulty}
           onStartBasicTraining={() =>
@@ -1078,10 +1081,11 @@ export default function App() {
           customVideoUrl={customVideos[`${activeLevel.id}:${state.activeCutscene}`] || null}
           reducedMotion={settings.reducedMotion}
           spanishCaptions={settings.spanishCaptions}
+          teacherMode={teacherMode}
           onComplete={() => dispatch({ type: 'CUTSCENE_DONE' })}
           onOpenVoicePicker={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
           onOpenEll={openEllModal}
-          onUploadCustomVideo={handleUploadCustomVideo}
+          onUploadCustomVideo={teacherMode ? handleUploadCustomVideo : undefined}
         />
       )}
 
@@ -1111,6 +1115,8 @@ export default function App() {
                 walkthrough={activeWalkthrough}
                 lockBonusFlash={lockBonusFlash}
                 spanishCaptions={settings.spanishCaptions}
+                teacherMode={teacherMode}
+                onTurnOffTeacherMode={() => setTeacherMode(false)}
                 onClearLocks={(pattern) => handleClearLocks(false, pattern)}
                 onWalkthroughNext={() => {
                   sound.sfx('tap');
@@ -1169,6 +1175,7 @@ export default function App() {
               azureStatus={azureStatus}
               tutorialHighlight={activeWalkthrough?.highlight === 'forge'}
               lastWordWarning={lastWordWarning}
+              teacherMode={teacherMode}
               onPay={handlePayCrystals}
               onWordForged={handleWordForged}
               onMegaForge={handleMegaForge}
@@ -1354,6 +1361,9 @@ export default function App() {
           progress={progress}
           settings={settings}
           azureStatus={azureStatus}
+          teacherMode={teacherMode}
+          onEnterTeacherMode={() => setTeacherMode(true)}
+          onExitTeacherMode={() => setTeacherMode(false)}
           onChange={handleSettingsChange}
           onClearActiveLocks={() => handleClearLocks(false)}
           onClearAllLocks={() => handleClearLocks(true)}

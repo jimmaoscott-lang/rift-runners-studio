@@ -28,6 +28,7 @@ export interface GameSettings {
   effectsVol: number;
   wardenVoice: WardenVoiceId;
   unlockAllLevels: boolean;
+  teacherCode: string;
 }
 
 export interface PatternHistory {
@@ -111,6 +112,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   effectsVol: 8,
   wardenVoice: 'Leda',
   unlockAllLevels: false,
+  teacherCode: 'rift2026',
 };
 
 export function countActiveEllSupports(s: GameSettings): number {
@@ -388,6 +390,12 @@ export function loadProgress(): StoredProgress {
     if (!raw) return defaultProgress();
     const parsed = JSON.parse(raw);
     const mergedSettings: GameSettings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
+    if (
+      typeof mergedSettings.teacherCode !== 'string' ||
+      !/^[A-Za-z0-9]{4,20}$/.test(mergedSettings.teacherCode)
+    ) {
+      mergedSettings.teacherCode = DEFAULT_SETTINGS.teacherCode;
+    }
     // One-time migration so all nonsense runes turn on for spoken testing
     const migKey = `${STORAGE_KEY}_runes_speak_v2`;
     if (!localStorage.getItem(migKey)) {

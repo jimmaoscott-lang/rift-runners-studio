@@ -2,6 +2,40 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (Part 2): Level 1 Walkthrough Finishes Before Wave 1
+
+### Completed
+- **Reordered Level 1 Walkthrough Steps (`src/App.tsx`, `src/data/ellSpanish.ts`, `src/components/BattleHUD.tsx`)**:
+  - Moved `Upgrade or Reposition` (now Step 5) and `Rift Locks & Hero Powers` (now Step 6) ahead of `Ready for Wave 1` (now Step 7) so students can finish the entire tutorial calmly before Wave 1 starts.
+  - Enabled `Finish` (`canManualNext: true`) on Step 7 so players can close the walkthrough before launching Wave 1, and auto-dismissed the guide if they click `Send now` or trigger Wave 1 while on Step 7.
+  - Updated matching Spanish walkthrough steps in `SPANISH_WALKTHROUGH_STEPS` and bumped the runtime narration key (`walkthrough-free-v2-step-*`) so audio matches the new order.
+
+### Next Up
+1. Playtest the Level 1 walkthrough to confirm it finishes cleanly before Wave 1 starts, then sync to GitHub.
+
+## 2026-11-27 (S-01): Teacher Lock for Test and Setup Tools
+
+### Completed
+- **Ephemeral Teacher Mode (`src/lib/metrics.ts`, `src/App.tsx`, `src/components/SettingsModal.tsx`)**:
+  - Added `teacherCode` (default `"rift2026"`, validated 4 to 20 letters or numbers) to `GameSettings` without renaming any `localStorage` key and without saving any Teacher Mode active flag.
+  - Stored `teacherMode` solely in React state in `src/App.tsx` (always starts off on page load).
+  - Added a `Teacher Tools` button at the bottom of `SettingsModal.tsx` that asks for the teacher code, turns Teacher Mode on when matched, and displays `"That code did not work."` and nothing else on a wrong code.
+  - Added a `Change teacher code` field (4 to 20 letters or numbers) and `Turn off` button inside Settings while Teacher Mode is on, plus a compact amber `Teacher Mode on` badge with a `Turn off` button in the top bar of both `TitleScreen.tsx` and `BattleHUD.tsx`.
+- **Gated Test, Preview, and Unlock Controls (Removed from DOM Unless Teacher Mode Is On)**:
+  - `src/components/RuneForgePanel.tsx`: Playtest economy simulator panel (`Fluent`, `Steady`, `Guided`).
+  - `src/components/TitleScreen.tsx`: Header `Opening Scene`, `Victory Scene`, and `Defeat Scene` links; footer `Preview Opening / Victory / Defeat` links; `Preview` tags on upcoming level cards; Rift Locks `Clear` button.
+  - `src/components/BattleHUD.tsx`: Bottom-left Rift Locks `Clear` button, clickable `Locks` header reset, and clickable individual lock pip-bar resets (kept the letter phoneme button tappable so students can still hear each sound).
+  - `src/components/SettingsModal.tsx`: `Unlock All Levels` toggle and `Reset Placement` button (preserving the saved `unlockAllLevels` preference so a teacher can leave levels open on a student's device).
+  - `src/components/CutscenePlayer.tsx`: `Load MP4` upload button and hidden file input.
+- **Additional Test/Preview/Unlock Controls Found and Gated Behind Teacher Mode**:
+  - `src/components/SettingsModal.tsx`: `Testing Tools: Rift Locks` section (`Clear Level X Locks` and `Clear All Locks` buttons).
+  - `src/components/TitleScreen.tsx`: `Teacher: Unlock All in Settings` button on locked levels, `Teacher Unlock All active` text indicator in the Basic Training strip, and clickable individual Rift Lock reset buttons in the title progress summary (rendered as static text for students).
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Teacher Mode rule to Section 3 and aligned the Section 2A Cutscene pause rule. Zero new files added.
+
+### Next Up
+1. Playtest S-01 (fresh load, wrong code, `rift2026`, reload, and Level 1 in both SAY IT and Listen and Pick), then sync to GitHub.
+
 ## 2026-11-27: Director Workflow Setup & Mr. Scott's Decisions Sync (`BUILD.md`)
 
 ### Completed

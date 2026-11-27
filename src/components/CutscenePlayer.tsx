@@ -11,6 +11,7 @@ interface CutscenePlayerProps {
   customVideoUrl?: string | null;
   reducedMotion?: boolean;
   spanishCaptions?: boolean;
+  teacherMode?: boolean;
   onComplete: () => void;
   onOpenVoicePicker?: () => void;
   onOpenEll?: () => void;
@@ -23,6 +24,7 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
   customVideoUrl,
   reducedMotion = false,
   spanishCaptions = false,
+  teacherMode = false,
   onComplete,
   onOpenVoicePicker,
   onOpenEll,
@@ -261,7 +263,7 @@ export const CutscenePlayer: React.FC<CutscenePlayerProps> = ({
               Voice: {wardenVoice}
             </button>
           )}
-          {onUploadCustomVideo && (
+          {teacherMode && onUploadCustomVideo && (
             <>
               <input
                 ref={fileInputRef}
