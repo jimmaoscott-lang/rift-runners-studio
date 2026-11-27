@@ -1373,7 +1373,7 @@ export class BattleEngine {
         this.spawnBurst(def.pad.x, def.pad.y - 16, '#fbbf24', 10);
       }
       this.spawnFloatingText(this.wardenPos.x, this.wardenPos.y - 72, 'RALLY!', '#fbbf24', 1.3);
-      this.callbacks.onToast('Rally active! Defenders strike faster.', 'power.rally');
+      this.callbacks.onToast('Rally active! Defenders strike faster.', 'hero.rally');
     } else if (id === 'meteor') {
       const alive = this.creatures.filter((c) => c.alive);
       let targetPos: Vec2 = this.path.pointAt(0.42);
@@ -1400,7 +1400,7 @@ export class BattleEngine {
         impacted: false,
       });
       sound.sfx('meteorLaunch');
-      this.callbacks.onToast('Meteor strike incoming!', 'power.meteor');
+      this.callbacks.onToast('Meteor strike incoming!', 'hero.meteor');
     } else if (id === 'freeze') {
       this.freezeTimer = cfg.time || 5;
       sound.sfx('frost');
@@ -1421,7 +1421,7 @@ export class BattleEngine {
         this.spawnBurst(cr.x, cr.y - 12, '#7dd3fc', 8);
       }
       this.spawnFloatingText(this.wardenPos.x, this.wardenPos.y - 72, 'TIME FREEZE!', '#7dd3fc', 1.3);
-      this.callbacks.onToast('Time Freeze! Every creature is frozen solid.', 'power.freeze');
+      this.callbacks.onToast('Time Freeze! Every creature is frozen solid.', 'hero.freeze');
     }
 
     this.emitSnapshot();

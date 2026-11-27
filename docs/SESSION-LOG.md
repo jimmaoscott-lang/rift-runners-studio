@@ -2,6 +2,18 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-04): Hero Powers Use Recorded Voice Clips
+
+### Completed
+- **Hero Power Audio IDs (`src/game/CanvasBattleEngine.ts`)**:
+  - Updated `castHeroPower()` speech IDs from `power.rally`, `power.meteor`, and `power.freeze` to `hero.rally`, `hero.meteor`, and `hero.freeze` to match `public/assets/audio/ui/manifest.json` (`en` and `es`).
+  - Kept all three on-screen toast messages identical (`Rally active! Defenders strike faster.`, `Meteor strike incoming!`, and `Time Freeze! Every creature is frozen solid.`).
+  - Verified the three existing recordings in `public/assets/audio/ui/sprite.mp3`: `hero.rally` says "Rally.", `hero.meteor` says "Meteor.", and `hero.freeze` says "Time Freeze." (all three fit their powers).
+  - Changed zero audio files, gameplay values, speech checking, or saved data.
+
+### Next Up
+1. Playtest all three Hero Powers to confirm recorded audio plays without computer voice fallback, then sync to GitHub.
+
 ## 2026-11-27 (S-03): Battle Top Bar Fits Small Chromebook Screens
 
 ### Completed
