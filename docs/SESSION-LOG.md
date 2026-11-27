@@ -2,6 +2,34 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-06): Level Names and Silent E Rule Use Recorded Leda Voice
+
+### Completed
+- **Level Name & Silent E Rule Voice Clips (`public/assets/audio/ui/sprite.mp3`, `public/assets/audio/ui/manifest.json`)**:
+  - Generated all 12 missing UI voice clips (`rule.magice.v1` and `level.w1-l1` through `level.w3-l1`) in Leda's voice in a single batched TTS request using the exact requested text.
+  - Verified all 12 extracted clips by listening to confirm calm, clear Leda pronunciation, exact wording, and clean boundaries with zero bleed.
+  - Appended all 12 clips (64 kbps mono 24 kHz MP3) onto `public/assets/audio/ui/sprite.mp3` via stream-copy concatenation so all existing clips (`0.000s` to `259.680s`, including `hud.wave`, `hud.finalWave`, `forge.mega`, and `walk.step1` to `walk.step7`) remained bit-for-bit unshifted (`max PCM diff = 0`), and registered all 12 IDs under `"en"` in `public/assets/audio/ui/manifest.json`.
+  - Added zero loose audio files (repo count stayed at 147 files before and after; total size stayed at 29 MB before and after, with `sprite.mp3` growing by ~197 KB to 2.27 MB).
+  - Touched zero cutscenes, story paragraphs, or other code files.
+
+### Next Up
+1. Playtest level card speakers and the silent e Sound Rule card to confirm Leda's recorded voice plays cleanly without computer voice fallback, then sync to GitHub.
+
+## 2026-11-27 (S-05): Level 1 Walkthrough Steps Use Recorded Leda Voice
+
+### Completed
+- **Walkthrough Voice Clips (`public/assets/audio/ui/sprite.mp3`, `public/assets/audio/ui/manifest.json`)**:
+  - Generated all 7 Level 1 walkthrough steps in Leda's voice across 2 batched TTS requests, matching the exact on-screen titles and bodies (reading "Rift Locks and Hero Powers" for the "&" in step 6).
+  - Verified every single extracted clip by listening to confirm verbatim wording, clean starts/endings, and zero bleed between steps.
+  - Appended the 7 clips (64 kbps mono 24 kHz MP3) onto `public/assets/audio/ui/sprite.mp3` via stream-copy concatenation so all existing clips (`0.000s` to `183.696s`) remained bit-for-bit unshifted (`max PCM diff = 0`), and added `walk.step1` through `walk.step7` under `"en"` in `public/assets/audio/ui/manifest.json`.
+  - Added zero loose audio files (repo file count stayed at 147 before and after).
+- **Walkthrough Speaker Button (`src/components/BattleHUD.tsx`)**:
+  - Updated the `"Hear tutorial step"` button to call `sound.speakUI(\`walk.step${walkthrough.stepNum}\`, \`${walkthrough.title}. ${walkthrough.body}\`)`.
+  - Changed zero walkthrough order, text, highlights, cutscenes, or Spanish text.
+
+### Next Up
+1. Playtest all 7 Level 1 walkthrough speaker buttons to verify Leda's recorded voice plays cleanly on every step, then sync to GitHub.
+
 ## 2026-11-27 (S-04): Hero Powers Use Recorded Voice Clips
 
 ### Completed

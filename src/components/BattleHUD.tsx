@@ -491,8 +491,8 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               <button
                 type="button"
                 onClick={() =>
-                  sound.speakNarration(
-                    `walkthrough-free-v2-step-${walkthrough.stepNum}`,
+                  sound.speakUI(
+                    `walk.step${walkthrough.stepNum}`,
                     `${walkthrough.title}. ${walkthrough.body}`
                   )
                 }
