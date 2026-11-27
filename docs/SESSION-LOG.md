@@ -2,6 +2,19 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-03): Battle Top Bar Fits Small Chromebook Screens
+
+### Completed
+- **Responsive Top Bar Layout (`src/components/BattleHUD.tsx`)**:
+  - Replaced the clipped `overflow-x-auto` left group with a clean wrapping top HUD column so every top bar control (`Crystals`, Hero Powers, `Send now`, `Pause`, difficulty, speed, walkthrough help, `Settings`, `Stop`, and the Teacher/Builder Mode badge) stays fully visible with zero overlap across `1024 x 576` through `1920 x 1080` in both student view and Teacher Mode.
+  - Hid Hero Power text labels (`Rally`, `Meteor`, `Freeze`) below `1200px` (`hidden min-[1200px]:inline`), leaving the icon and charge counter visible while keeping each power's name in `title` and `aria-label`. Windows `1200px` and wider (including `1366 x 768`) show the full labels and original spacing.
+  - Enforced `>= 32 x 32` pixel tap targets (`h-8 min-w-8`) on every top bar button, including the `Turn off` button inside the amber Teacher/Builder Mode badge.
+  - Flowed the Level 1 walkthrough banner and subtle toast banner directly beneath the top bar in the same top column so a wrapped Teacher Mode badge never overlaps the walkthrough on compact screens.
+  - Changed zero gameplay, numbers, text, Teacher Mode logic, speech, or saved data.
+
+### Next Up
+1. Check BattleHUD top bar at `1024 x 576`, `1093 x 614`, and `1366 x 768` in both student view and Teacher Mode, then sync to GitHub.
+
 ## 2026-11-27 (S-02): Builder Mode and Ephemeral Difficulty Dials
 
 ### Completed

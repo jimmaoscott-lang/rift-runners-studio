@@ -197,183 +197,277 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden select-none">
-      {/* Single Slim Top Bar (strictly single-row, zero wrapping over the Rift) */}
-      <div className="pointer-events-auto absolute inset-x-2 top-2 z-20 flex items-center justify-between gap-1.5">
-        <div className="flex flex-nowrap items-center gap-1 min-w-0 overflow-x-auto">
-          {/* Crystals */}
-          <div
-            title="Rune Crystals"
-            className="flex h-8 items-center gap-1 rounded-xl border-2 border-purple-400/65 bg-[#171232]/94 px-2 font-tabular text-xs sm:text-sm font-extrabold text-white shadow-md shrink-0"
-          >
-            <Gem className="h-3.5 w-3.5 text-cyan-300 fill-cyan-300/30" />
-            <span>{snap.crystals}</span>
-          </div>
+      {/* Top HUD Column: Top Bar + Walkthrough / Toast flowing cleanly below with zero overlap */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-col gap-2">
+        <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-1 min-w-0">
+            {/* Crystals */}
+            <div
+              title="Rune Crystals"
+              className="flex h-8 items-center gap-1 rounded-xl border-2 border-purple-400/65 bg-[#171232]/94 px-1.5 min-[1200px]:px-2 font-tabular text-xs min-[1200px]:text-sm font-extrabold text-white shadow-md shrink-0"
+            >
+              <Gem className="h-3.5 w-3.5 text-cyan-300 fill-cyan-300/30 shrink-0" />
+              <span>{snap.crystals}</span>
+            </div>
 
-          {/* Hero Powers moved cleanly onto the single top bar */}
-          <div
-            className={`flex items-center gap-1 rounded-xl ${
-              highlightLocks ? 'animate-tutorial-pulse ring-2 ring-amber-300' : ''
-            }`}
-          >
-            {HERO_POWER_ORDER.map((pid) => {
-              const p = HERO_POWERS[pid];
-              const cur = snap.powers[pid];
-              const ready = cur >= p.charge;
-              const pct = Math.min(100, Math.round((cur / p.charge) * 100));
-              const Icon = pid === 'rally' ? Sparkles : pid === 'meteor' ? Flame : Snowflake;
-              const shortLabel = pid === 'freeze' ? 'Freeze' : p.name;
-              const borderCol =
-                pid === 'rally'
-                  ? 'border-amber-400/75'
-                  : pid === 'meteor'
-                  ? 'border-orange-400/75'
-                  : 'border-cyan-400/75';
-              const barCol =
-                pid === 'rally'
-                  ? 'bg-amber-400'
-                  : pid === 'meteor'
-                  ? 'bg-orange-400'
-                  : 'bg-cyan-400';
+            {/* Hero Powers moved cleanly onto the single top bar */}
+            <div
+              className={`flex items-center gap-1 rounded-xl shrink-0 ${
+                highlightLocks ? 'animate-tutorial-pulse ring-2 ring-amber-300' : ''
+              }`}
+            >
+              {HERO_POWER_ORDER.map((pid) => {
+                const p = HERO_POWERS[pid];
+                const cur = snap.powers[pid];
+                const ready = cur >= p.charge;
+                const pct = Math.min(100, Math.round((cur / p.charge) * 100));
+                const Icon = pid === 'rally' ? Sparkles : pid === 'meteor' ? Flame : Snowflake;
+                const shortLabel = pid === 'freeze' ? 'Freeze' : p.name;
+                const borderCol =
+                  pid === 'rally'
+                    ? 'border-amber-400/75'
+                    : pid === 'meteor'
+                    ? 'border-orange-400/75'
+                    : 'border-cyan-400/75';
+                const barCol =
+                  pid === 'rally'
+                    ? 'bg-amber-400'
+                    : pid === 'meteor'
+                    ? 'bg-orange-400'
+                    : 'bg-cyan-400';
 
-              return (
-                <button
-                  key={pid}
-                  type="button"
-                  disabled={!ready}
-                  onClick={() => onCastPower(pid)}
-                  title={
-                    spanishCaptions
-                      ? `${p.name}: ${p.desc} (${cur}/${p.charge}) | ${SPANISH_HERO_POWERS[pid].nameEs}: ${SPANISH_HERO_POWERS[pid].descEs}`
-                      : `${p.name}: ${p.desc} (${cur}/${p.charge})`
-                  }
-                  className={`flex h-8 flex-col justify-center rounded-xl border-2 px-1.5 transition-all shadow-md shrink-0 ${
-                    ready
-                      ? `${borderCol} bg-[#2b1d5e]/96 text-white hover:brightness-115 cursor-pointer ring-2 ring-amber-300/70`
-                      : `${borderCol} bg-[#171232]/90 text-slate-200 opacity-90 cursor-not-allowed`
-                  }`}
-                >
-                  <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold leading-none whitespace-nowrap">
-                    <Icon
-                      className={`h-3 w-3 shrink-0 ${
-                        pid === 'rally'
-                          ? 'text-amber-300'
-                          : pid === 'meteor'
-                          ? 'text-orange-300'
-                          : 'text-cyan-300'
-                      }`}
-                    />
-                    <span>{shortLabel}</span>
-                    <span className="font-tabular text-[10px] text-purple-200/90">
-                      {ready ? 'GO!' : `${cur}/${p.charge}`}
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-900/90">
-                    <div className={`h-full ${barCol} transition-[width]`} style={{ width: `${pct}%` }} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Next Wave Countdown / Send Now Button / Bonus Surge Status */}
-          {(() => {
-            const nextIsFinal =
-              !snap.bonusActive && snap.locksReady && snap.wave + 1 >= level.minWaves;
-            const isLastWord = snap.wordsUntilWave === 1;
-            if (snap.phase === 'build' || snap.phase === 'between') {
-              return (
-                <div className="flex items-center gap-1 shrink-0">
+                return (
                   <button
+                    key={pid}
                     type="button"
-                    onClick={onStartWave}
+                    disabled={!ready}
+                    onClick={() => onCastPower(pid)}
+                    aria-label={`${p.name} (${ready ? 'GO!' : `${cur}/${p.charge}`})`}
                     title={
-                      isLastWord
-                        ? 'Your next word guess launches the wave! Build first or click to launch now.'
-                        : 'Click to launch the next wave now'
+                      spanishCaptions
+                        ? `${p.name}: ${p.desc} (${cur}/${p.charge}) | ${SPANISH_HERO_POWERS[pid].nameEs}: ${SPANISH_HERO_POWERS[pid].descEs}`
+                        : `${p.name}: ${p.desc} (${cur}/${p.charge})`
                     }
-                    className={`flex h-8 items-center gap-1.5 rounded-xl border-2 px-2.5 font-tabular text-xs font-bold shadow-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                      highlightWave
-                        ? 'border-amber-300 bg-[#2d1e68] text-white animate-tutorial-pulse'
-                        : isLastWord
-                        ? 'border-amber-300 bg-[#3a2210]/95 text-amber-100 hover:border-amber-200 hover:bg-[#4c2c13] animate-tutorial-pulse'
-                        : snap.bonusActive
-                        ? 'border-cyan-400/80 bg-[#122645]/95 text-cyan-100 hover:border-cyan-300 hover:bg-[#19355d]'
-                        : nextIsFinal
-                        ? 'border-amber-400 bg-[#3a2210]/95 text-amber-100 hover:border-amber-300 hover:bg-[#4c2c13]'
-                        : 'border-purple-400/70 bg-[#1c1440]/94 text-purple-100 hover:border-cyan-300 hover:bg-[#261c54]'
+                    className={`flex h-8 min-w-8 flex-col justify-center rounded-xl border-2 px-1.5 transition-all shadow-md shrink-0 ${
+                      ready
+                        ? `${borderCol} bg-[#2b1d5e]/96 text-white hover:brightness-115 cursor-pointer ring-2 ring-amber-300/70`
+                        : `${borderCol} bg-[#171232]/90 text-slate-200 opacity-90 cursor-not-allowed`
                     }`}
                   >
-                    <span className="text-[11px] opacity-95">
-                      {snap.bonusActive
-                        ? `Bonus ${snap.bonusWave + 1}/${snap.bonusTotal} · ${snap.wordsUntilWave}w`
-                        : nextIsFinal
-                        ? `Final Wave · ${snap.wordsUntilWave}w`
-                        : isLastWord
-                        ? `Build first! W${snap.wave + 1} · 1w`
-                        : `W${snap.wave + 1} · ${snap.wordsUntilWave}w`}
-                    </span>
-                    <span
-                      className={`font-extrabold ${
-                        nextIsFinal || isLastWord ? 'text-amber-300' : 'text-cyan-300'
+                    <div className="flex items-center gap-1 text-[10px] min-[1200px]:text-[11px] font-bold leading-none whitespace-nowrap">
+                      <Icon
+                        className={`h-3 w-3 shrink-0 ${
+                          pid === 'rally'
+                            ? 'text-amber-300'
+                            : pid === 'meteor'
+                            ? 'text-orange-300'
+                            : 'text-cyan-300'
+                        }`}
+                      />
+                      <span className="hidden min-[1200px]:inline">{shortLabel}</span>
+                      <span className="font-tabular text-[10px] text-purple-200/90">
+                        {ready ? 'GO!' : `${cur}/${p.charge}`}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-900/90">
+                      <div className={`h-full ${barCol} transition-[width]`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Next Wave Countdown / Send Now Button / Bonus Surge Status */}
+            {(() => {
+              const nextIsFinal =
+                !snap.bonusActive && snap.locksReady && snap.wave + 1 >= level.minWaves;
+              const isLastWord = snap.wordsUntilWave === 1;
+              if (snap.phase === 'build' || snap.phase === 'between') {
+                return (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={onStartWave}
+                      title={
+                        isLastWord
+                          ? 'Your next word guess launches the wave! Build first or click to launch now.'
+                          : 'Click to launch the next wave now'
+                      }
+                      className={`flex h-8 min-w-8 items-center gap-1 min-[1200px]:gap-1.5 rounded-xl border-2 px-2 min-[1200px]:px-2.5 font-tabular text-[11px] min-[1200px]:text-xs font-bold shadow-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                        highlightWave
+                          ? 'border-amber-300 bg-[#2d1e68] text-white animate-tutorial-pulse'
+                          : isLastWord
+                          ? 'border-amber-300 bg-[#3a2210]/95 text-amber-100 hover:border-amber-200 hover:bg-[#4c2c13] animate-tutorial-pulse'
+                          : snap.bonusActive
+                          ? 'border-cyan-400/80 bg-[#122645]/95 text-cyan-100 hover:border-cyan-300 hover:bg-[#19355d]'
+                          : nextIsFinal
+                          ? 'border-amber-400 bg-[#3a2210]/95 text-amber-100 hover:border-amber-300 hover:bg-[#4c2c13]'
+                          : 'border-purple-400/70 bg-[#1c1440]/94 text-purple-100 hover:border-cyan-300 hover:bg-[#261c54]'
                       }`}
                     >
-                      Send now
+                      <span className="text-[11px] opacity-95">
+                        {snap.bonusActive
+                          ? `Bonus ${snap.bonusWave + 1}/${snap.bonusTotal} · ${snap.wordsUntilWave}w`
+                          : nextIsFinal
+                          ? `Final Wave · ${snap.wordsUntilWave}w`
+                          : isLastWord
+                          ? `Build first! W${snap.wave + 1} · 1w`
+                          : `W${snap.wave + 1} · ${snap.wordsUntilWave}w`}
+                      </span>
+                      <span
+                        className={`font-extrabold ${
+                          nextIsFinal || isLastWord ? 'text-amber-300' : 'text-cyan-300'
+                        }`}
+                      >
+                        Send now
+                      </span>
+                    </button>
+                    {snap.bonusActive && (
+                      <button
+                        type="button"
+                        onClick={onSealRift}
+                        title="Finish level now (your win and stars are already saved)"
+                        className="flex h-8 min-w-8 items-center gap-1 rounded-xl border-2 border-emerald-400/75 bg-emerald-950/85 px-2 min-[1200px]:px-2.5 text-xs font-extrabold text-emerald-200 hover:bg-emerald-900/90 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        Finish
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div className="flex items-center gap-1 shrink-0">
+                  <div
+                    className={`flex h-8 items-center gap-1 min-[1200px]:gap-1.5 rounded-xl border-2 px-2 min-[1200px]:px-2.5 font-tabular text-[11px] min-[1200px]:text-xs font-bold shadow-md whitespace-nowrap shrink-0 ${
+                      snap.bonusActive
+                        ? 'border-cyan-400/80 bg-[#122645]/95 text-cyan-100'
+                        : snap.finalWave
+                        ? 'border-amber-400 bg-[#3a2210]/95 text-amber-200'
+                        : 'border-fuchsia-400/75 bg-[#25113d]/94 text-fuchsia-100'
+                    }`}
+                  >
+                    <span>
+                      {snap.bonusActive
+                        ? `Bonus ${snap.bonusWave}/${snap.bonusTotal}`
+                        : snap.finalWave
+                        ? 'Final Wave'
+                        : `Wave ${snap.wave}`}
                     </span>
-                  </button>
+                    <span className="opacity-60">·</span>
+                    <span>{snap.creaturesAlive} left</span>
+                  </div>
                   {snap.bonusActive && (
                     <button
                       type="button"
                       onClick={onSealRift}
                       title="Finish level now (your win and stars are already saved)"
-                      className="flex h-8 items-center gap-1 rounded-xl border-2 border-emerald-400/75 bg-emerald-950/85 px-2.5 text-xs font-extrabold text-emerald-200 hover:bg-emerald-900/90 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      className="flex h-8 min-w-8 items-center gap-1 rounded-xl border-2 border-emerald-400/75 bg-emerald-950/85 px-2 min-[1200px]:px-2.5 text-xs font-extrabold text-emerald-200 hover:bg-emerald-900/90 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
                     >
                       Finish
                     </button>
                   )}
                 </div>
               );
-            }
-            return (
-              <div className="flex items-center gap-1 shrink-0">
-                <div
-                  className={`flex h-8 items-center gap-1.5 rounded-xl border-2 px-2.5 font-tabular text-xs font-bold shadow-md whitespace-nowrap shrink-0 ${
-                    snap.bonusActive
-                      ? 'border-cyan-400/80 bg-[#122645]/95 text-cyan-100'
-                      : snap.finalWave
-                      ? 'border-amber-400 bg-[#3a2210]/95 text-amber-200'
-                      : 'border-fuchsia-400/75 bg-[#25113d]/94 text-fuchsia-100'
-                  }`}
-                >
-                  <span>
-                    {snap.bonusActive
-                      ? `Bonus ${snap.bonusWave}/${snap.bonusTotal}`
-                      : snap.finalWave
-                      ? 'Final Wave'
-                      : `Wave ${snap.wave}`}
-                  </span>
-                  <span className="opacity-60">·</span>
-                  <span>{snap.creaturesAlive} left</span>
-                </div>
-                {snap.bonusActive && (
-                  <button
-                    type="button"
-                    onClick={onSealRift}
-                    title="Finish level now (your win and stars are already saved)"
-                    className="flex h-8 items-center gap-1 rounded-xl border-2 border-emerald-400/75 bg-emerald-950/85 px-2.5 text-xs font-extrabold text-emerald-200 hover:bg-emerald-900/90 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    Finish
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-        </div>
+            })()}
+          </div>
 
-        {/* Right-aligned Utility Controls */}
-        <div className="flex items-center gap-1 shrink-0">
+          {/* Right-aligned Utility Controls */}
+          <div className="ml-auto flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onTogglePause}
+              aria-label={snap.paused ? 'Resume' : 'Pause'}
+              title={snap.paused ? 'Resume (P)' : 'Pause (P)'}
+              className={`flex h-8 w-8 items-center justify-center rounded-xl border-2 shadow-md transition-colors cursor-pointer shrink-0 ${
+                snap.paused
+                  ? 'border-cyan-300 bg-cyan-500 text-slate-950'
+                  : 'border-purple-400/60 bg-[#171232]/92 text-white hover:border-cyan-300'
+              }`}
+            >
+              {snap.paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={onCycleDifficulty}
+              title={`Difficulty: ${DIFFICULTIES[snap.difficulty].label}. ${DIFFICULTIES[snap.difficulty].desc} Click to cycle Easy / Normal / Hard / Expert.`}
+              className={`inline-flex h-8 min-w-8 items-center justify-center rounded-xl border-2 px-1.5 min-[1200px]:px-2 text-[11px] min-[1200px]:text-xs font-extrabold shadow-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                snap.difficulty === 'easy'
+                  ? 'border-emerald-400/80 bg-emerald-950/85 text-emerald-200 hover:border-emerald-300'
+                  : snap.difficulty === 'normal'
+                  ? 'border-cyan-400/70 bg-[#132440]/92 text-cyan-200 hover:border-cyan-300'
+                  : snap.difficulty === 'hard'
+                  ? 'border-amber-400/80 bg-amber-950/80 text-amber-200 hover:border-amber-300'
+                  : 'border-rose-400/85 bg-rose-950/85 text-rose-200 hover:border-rose-300'
+              }`}
+            >
+              {DIFFICULTIES[snap.difficulty].shortLabel}
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleSpeed}
+              title={
+                snap.speed === 0.5
+                  ? 'Battle speed: 0.5x (Half Speed). Click to switch to 1x.'
+                  : snap.speed === 2
+                  ? 'Battle speed: 2x (Fast). Click to switch to 0.5x.'
+                  : 'Battle speed: 1x (Normal). Click to cycle 2x / 0.5x.'
+              }
+              className={`inline-flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-xl border-2 px-1.5 min-[1200px]:px-2 font-tabular text-[11px] min-[1200px]:text-xs font-extrabold shadow-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                snap.speed === 2
+                  ? 'border-amber-200 bg-amber-400 text-slate-950'
+                  : snap.speed === 0.5
+                  ? 'border-cyan-200 bg-cyan-400 text-slate-950'
+                  : 'border-purple-400/60 bg-[#171232]/92 text-amber-200 hover:border-amber-300'
+              }`}
+            >
+              <FastForward className="h-3 w-3 shrink-0" />
+              <span>{snap.speed}x</span>
+            </button>
+
+            {level.hasWalkthrough && (
+              <button
+                type="button"
+                onClick={onToggleWalkthrough}
+                aria-label="Toggle Walkthrough Guide"
+                title={walkthrough ? 'Hide Walkthrough' : 'Show Walkthrough Guide'}
+                className={`flex h-8 w-8 items-center justify-center rounded-xl border-2 shadow-md transition-colors cursor-pointer shrink-0 ${
+                  walkthrough
+                    ? 'border-amber-300 bg-amber-400/20 text-amber-200'
+                    : 'border-purple-400/60 bg-[#171232]/92 text-slate-200 hover:border-amber-300 hover:text-amber-200'
+                }`}
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              aria-label="Open Settings"
+              title="Settings"
+              className="flex h-8 w-8 items-center justify-center rounded-xl border-2 border-purple-400/60 bg-[#171232]/92 text-slate-200 hover:border-cyan-300 hover:text-white shadow-md cursor-pointer shrink-0"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onExitToTitle}
+              aria-label="Stop Game and Return to Title"
+              title="Stop game and return to title"
+              className="inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-xl border-2 border-rose-400/75 bg-[#2a1228]/95 px-2 min-[1200px]:px-2.5 text-[11px] min-[1200px]:text-xs font-extrabold text-rose-100 hover:border-rose-300 hover:bg-rose-500/30 hover:text-white shadow-md cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Square className="h-3 w-3 fill-current shrink-0" />
+              <span>Stop</span>
+            </button>
+          </div>
+
+          {/* Teacher / Builder Mode Badge (sits inline on wide screens, wraps cleanly without overlapping on compact screens) */}
           {teacherMode && (
-            <div className="flex h-8 items-center gap-1.5 rounded-xl border-2 border-amber-400/85 bg-amber-950/90 px-2 text-[11px] font-bold text-amber-200 shadow-md whitespace-nowrap shrink-0">
-              <span>{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
+            <div className="flex h-8 items-center overflow-hidden rounded-xl bg-amber-950/90 ring-2 ring-inset ring-amber-400/85 text-[11px] font-bold text-amber-200 shadow-md whitespace-nowrap shrink-0">
+              <span className="px-2">{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
               {onTurnOffTeacherMode && (
                 <button
                   type="button"
@@ -381,181 +475,107 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                     sound.sfx('tap');
                     onTurnOffTeacherMode();
                   }}
-                  className="rounded-md bg-amber-400 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
+                  className="flex h-8 min-w-8 items-center justify-center bg-amber-400 px-2 text-[10px] font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
                 >
                   Turn off
                 </button>
               )}
             </div>
           )}
-          <button
-            type="button"
-            onClick={onTogglePause}
-            aria-label={snap.paused ? 'Resume' : 'Pause'}
-            title={snap.paused ? 'Resume (P)' : 'Pause (P)'}
-            className={`flex h-8 w-8 items-center justify-center rounded-xl border-2 shadow-md transition-colors cursor-pointer ${
-              snap.paused
-                ? 'border-cyan-300 bg-cyan-500 text-slate-950'
-                : 'border-purple-400/60 bg-[#171232]/92 text-white hover:border-cyan-300'
-            }`}
-          >
-            {snap.paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={onCycleDifficulty}
-            title={`Difficulty: ${DIFFICULTIES[snap.difficulty].label}. ${DIFFICULTIES[snap.difficulty].desc} Click to cycle Easy / Normal / Hard / Expert.`}
-            className={`inline-flex h-8 items-center rounded-xl border-2 px-2 text-xs font-extrabold shadow-md transition-colors cursor-pointer whitespace-nowrap ${
-              snap.difficulty === 'easy'
-                ? 'border-emerald-400/80 bg-emerald-950/85 text-emerald-200 hover:border-emerald-300'
-                : snap.difficulty === 'normal'
-                ? 'border-cyan-400/70 bg-[#132440]/92 text-cyan-200 hover:border-cyan-300'
-                : snap.difficulty === 'hard'
-                ? 'border-amber-400/80 bg-amber-950/80 text-amber-200 hover:border-amber-300'
-                : 'border-rose-400/85 bg-rose-950/85 text-rose-200 hover:border-rose-300'
-            }`}
-          >
-            {DIFFICULTIES[snap.difficulty].shortLabel}
-          </button>
-
-          <button
-            type="button"
-            onClick={onToggleSpeed}
-            title={
-              snap.speed === 0.5
-                ? 'Battle speed: 0.5x (Half Speed). Click to switch to 1x.'
-                : snap.speed === 2
-                ? 'Battle speed: 2x (Fast). Click to switch to 0.5x.'
-                : 'Battle speed: 1x (Normal). Click to cycle 2x / 0.5x.'
-            }
-            className={`inline-flex h-8 items-center gap-0.5 rounded-xl border-2 px-2 font-tabular text-xs font-extrabold shadow-md transition-colors cursor-pointer whitespace-nowrap ${
-              snap.speed === 2
-                ? 'border-amber-200 bg-amber-400 text-slate-950'
-                : snap.speed === 0.5
-                ? 'border-cyan-200 bg-cyan-400 text-slate-950'
-                : 'border-purple-400/60 bg-[#171232]/92 text-amber-200 hover:border-amber-300'
-            }`}
-          >
-            <FastForward className="h-3 w-3" />
-            <span>{snap.speed}x</span>
-          </button>
-
-          {level.hasWalkthrough && (
-            <button
-              type="button"
-              onClick={onToggleWalkthrough}
-              aria-label="Toggle Walkthrough Guide"
-              title={walkthrough ? 'Hide Walkthrough' : 'Show Walkthrough Guide'}
-              className={`flex h-8 w-8 items-center justify-center rounded-xl border-2 shadow-md transition-colors cursor-pointer ${
-                walkthrough
-                  ? 'border-amber-300 bg-amber-400/20 text-amber-200'
-                  : 'border-purple-400/60 bg-[#171232]/92 text-slate-200 hover:border-amber-300 hover:text-amber-200'
-              }`}
-            >
-              <HelpCircle className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            aria-label="Open Settings"
-            title="Settings"
-            className="flex h-8 w-8 items-center justify-center rounded-xl border-2 border-purple-400/60 bg-[#171232]/92 text-slate-200 hover:border-cyan-300 hover:text-white shadow-md cursor-pointer"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={onExitToTitle}
-            aria-label="Stop Game and Return to Title"
-            title="Stop game and return to title"
-            className="inline-flex h-8 items-center gap-1 rounded-xl border-2 border-rose-400/75 bg-[#2a1228]/95 px-2.5 text-xs font-extrabold text-rose-100 hover:border-rose-300 hover:bg-rose-500/30 hover:text-white shadow-md cursor-pointer whitespace-nowrap"
-          >
-            <Square className="h-3 w-3 fill-current" />
-            <span>Stop</span>
-          </button>
         </div>
-      </div>
 
-      {/* Interactive Level 1 Walkthrough Banner (slim, voiced, non-blocking) */}
-      {walkthrough && (
-        <div className="pointer-events-auto absolute left-1/2 top-12 z-20 w-[min(92%,540px)] -translate-x-1/2">
-          <div className="flex items-center gap-2.5 rounded-xl border-2 border-amber-300/85 bg-[#191238]/96 px-3 py-2 shadow-2xl">
-            <button
-              type="button"
-              onClick={() =>
-                sound.speakNarration(
-                  `walkthrough-free-v2-step-${walkthrough.stepNum}`,
-                  `${walkthrough.title}. ${walkthrough.body}`
-                )
-              }
-              title="Hear this step"
-              aria-label="Hear tutorial step"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25 cursor-pointer"
-            >
-              <Volume2 className="h-4 w-4" />
-            </button>
-
-            <div className="min-w-0 flex-1 leading-snug">
-              <div className="flex items-center gap-2 text-[11px] font-extrabold text-amber-300 uppercase tracking-wide">
-                <span>
-                  Step {walkthrough.stepNum} of {walkthrough.totalSteps}
-                </span>
-                <span className="text-purple-400" aria-hidden="true">·</span>
-                <span className="text-white normal-case tracking-normal truncate">
-                  {walkthrough.title}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs font-medium text-purple-100">{walkthrough.body}</p>
-              {spanishCaptions && SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1] && (() => {
-                const esStep = SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1];
-                return (
-                  <div className="mt-1 flex items-start gap-1.5 border-t border-amber-300/25 pt-1 text-[11px] font-medium text-cyan-200/95">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        sound.speakFallback(`${esStep.titleEs}. ${esStep.bodyEs}`, 'es-MX')
-                      }
-                      title="Escuchar este paso en español"
-                      aria-label="Escuchar este paso en español"
-                      className="mt-0.5 text-cyan-300 hover:text-white cursor-pointer shrink-0"
-                    >
-                      <Volume2 className="h-3.5 w-3.5" />
-                    </button>
-                    <span>
-                      <strong className="text-cyan-100">{esStep.titleEs}:</strong> {esStep.bodyEs}
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {walkthrough.canManualNext && (
-                <button
-                  type="button"
-                  onClick={onWalkthroughNext}
-                  className="inline-flex items-center gap-0.5 rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-amber-300 cursor-pointer whitespace-nowrap"
-                >
-                  <span>{walkthrough.isLast ? 'Finish' : 'Next'}</span>
-                  {!walkthrough.isLast && <ChevronRight className="h-3.5 w-3.5" />}
-                </button>
-              )}
+        {/* Interactive Level 1 Walkthrough Banner (slim, voiced, non-blocking) */}
+        {walkthrough && (
+          <div className="pointer-events-auto mx-auto w-[min(92%,540px)]">
+            <div className="flex items-center gap-2.5 rounded-xl border-2 border-amber-300/85 bg-[#191238]/96 px-3 py-2 shadow-2xl">
               <button
                 type="button"
-                onClick={onWalkthroughSkip}
-                title="Skip walkthrough"
-                className="rounded-lg border border-purple-500/50 bg-[#251c4f] px-2 py-1.5 text-[11px] font-semibold text-purple-200 hover:text-white hover:border-purple-300 cursor-pointer whitespace-nowrap"
+                onClick={() =>
+                  sound.speakNarration(
+                    `walkthrough-free-v2-step-${walkthrough.stepNum}`,
+                    `${walkthrough.title}. ${walkthrough.body}`
+                  )
+                }
+                title="Hear this step"
+                aria-label="Hear tutorial step"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300/60 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25 cursor-pointer"
               >
-                Skip
+                <Volume2 className="h-4 w-4" />
               </button>
+
+              <div className="min-w-0 flex-1 leading-snug">
+                <div className="flex items-center gap-2 text-[11px] font-extrabold text-amber-300 uppercase tracking-wide">
+                  <span>
+                    Step {walkthrough.stepNum} of {walkthrough.totalSteps}
+                  </span>
+                  <span className="text-purple-400" aria-hidden="true">·</span>
+                  <span className="text-white normal-case tracking-normal truncate">
+                    {walkthrough.title}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs font-medium text-purple-100">{walkthrough.body}</p>
+                {spanishCaptions && SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1] && (() => {
+                  const esStep = SPANISH_WALKTHROUGH_STEPS[walkthrough.stepNum - 1];
+                  return (
+                    <div className="mt-1 flex items-start gap-1.5 border-t border-amber-300/25 pt-1 text-[11px] font-medium text-cyan-200/95">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          sound.speakFallback(`${esStep.titleEs}. ${esStep.bodyEs}`, 'es-MX')
+                        }
+                        title="Escuchar este paso en español"
+                        aria-label="Escuchar este paso en español"
+                        className="mt-0.5 text-cyan-300 hover:text-white cursor-pointer shrink-0"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" />
+                      </button>
+                      <span>
+                        <strong className="text-cyan-100">{esStep.titleEs}:</strong> {esStep.bodyEs}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {walkthrough.canManualNext && (
+                  <button
+                    type="button"
+                    onClick={onWalkthroughNext}
+                    className="inline-flex items-center gap-0.5 rounded-lg bg-amber-400 px-2.5 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-amber-300 cursor-pointer whitespace-nowrap"
+                  >
+                    <span>{walkthrough.isLast ? 'Finish' : 'Next'}</span>
+                    {!walkthrough.isLast && <ChevronRight className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onWalkthroughSkip}
+                  title="Skip walkthrough"
+                  className="rounded-lg border border-purple-500/50 bg-[#251c4f] px-2 py-1.5 text-[11px] font-semibold text-purple-200 hover:text-white hover:border-purple-300 cursor-pointer whitespace-nowrap"
+                >
+                  Skip
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Subtle Toast Banner (hidden when walkthrough or defender popover is open so they never stack) */}
+        {toast && !walkthrough && !snap.selectedDef && (
+          <div className="pointer-events-auto mx-auto hidden md:flex max-w-md items-center gap-2 rounded-xl border border-cyan-400/50 bg-[#14102e]/92 px-3 py-1 text-xs font-medium text-cyan-100 shadow-lg">
+            <button
+              type="button"
+              onClick={() => sound.speakNarration('hud-toast', toast)}
+              className="text-cyan-300 hover:text-white cursor-pointer shrink-0"
+              aria-label="Hear message"
+            >
+              <Volume2 className="h-3.5 w-3.5" />
+            </button>
+            <span className="truncate">{toast}</span>
+          </div>
+        )}
+      </div>
 
       {/* Fly-In & Dissolve Wave / Level Start Announcement */}
       {waveBanner && (
@@ -587,21 +607,6 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               {waveBanner.subtitle}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Subtle Toast Banner (hidden when walkthrough or defender popover is open so they never stack) */}
-      {toast && !walkthrough && !snap.selectedDef && (
-        <div className="pointer-events-auto absolute left-1/2 top-12 z-20 -translate-x-1/2 hidden md:flex max-w-md items-center gap-2 rounded-xl border border-cyan-400/50 bg-[#14102e]/92 px-3 py-1 text-xs font-medium text-cyan-100 shadow-lg">
-          <button
-            type="button"
-            onClick={() => sound.speakNarration('hud-toast', toast)}
-            className="text-cyan-300 hover:text-white cursor-pointer shrink-0"
-            aria-label="Hear message"
-          >
-            <Volume2 className="h-3.5 w-3.5" />
-          </button>
-          <span className="truncate">{toast}</span>
         </div>
       )}
 
