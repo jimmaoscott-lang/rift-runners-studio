@@ -2,6 +2,19 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-08): Corrected GitHub Sync Rule in BUILD.md
+
+### Completed
+- **GitHub Sync Rules (`BUILD.md`)**:
+  - Replaced the section 6 `"GitHub Sync File-Count and Size Lock"` bullet with `"GitHub Sync Rules"`, clarifying that the 150 file and 15 MB limits apply per sync (one task) rather than to the whole repo, alongside whole-repo (< 1,000 files), per-file (< 50 MB), and published-site (< 1 GB) limits.
+  - Added the Nov 27 decision to `"Mr. Scott's decisions"` noting that the 150 file and 15 MB numbers apply to each sync, referencing section 6.
+  - Kept the Audio Sprite Packing Rule and Image and Voice Compression Rule intact.
+  - Audited `BUILD.md`, `README.md`, and `docs/DESIGN.md` and confirmed zero other lines apply 150 files or 15 MB to the whole repo. Left older `docs/SESSION-LOG.md` entries untouched.
+  - Changed zero code, art, or audio files.
+
+### Next Up
+1. Sync to GitHub so Claude can verify the S-08 documentation diff.
+
 ## 2026-11-27 (S-07): Standard Difficulty Numbers Built into Presets
 
 ### Completed

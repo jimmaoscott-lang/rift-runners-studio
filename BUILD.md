@@ -19,6 +19,7 @@ Settled. Do not change them unless Mr. Scott says so.
 - Leda is the voice for new word readings and narration. (Studio decision, kept)
 - Difficulty dials are a builder-only tool behind Builder Mode. Teachers and students never see them. Good dial values get written into the game as the real numbers, then dials go back to default. Builder Mode and the dials are removed before release. (Nov 27)
 - Nov 27: standard difficulty for all levels is Easy health 0.38 and speed 0.828; Normal health 0.504 and speed 0.855; Hard health 0.92 and speed 0.98; Expert health 1.0, speed 1.1 and creature count 1.1. This replaces the earlier note to keep the Level 1 Hard and Expert numbers.
+- Nov 27: the 150 file and 15 MB numbers apply to each sync, not to the whole repo. See the GitHub Sync Rules in section 6.
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 
@@ -130,7 +131,7 @@ Before marking any new phonics target complete, test spoken words against live A
 ## 6. Repository Hygiene and GitHub Sync Rules
 
 - **Primary Public Repo**: `jimmaoscott-lang/rift-runners-studio` (`main`). Both `jimmaoscott-lang/rift-runners-studio` and `jimmaoscott-lang/rift-runners` are public; never commit any student data to either repo.
-- **GitHub Sync File-Count and Size Lock**: Keep total tracked repository files well under `150` files and under `15 MB`. AI Studio's GitHub sync uploads changed files individually over the GitHub API and fails when a commit carries hundreds of tiny files (653 files failed; packing audio into sprites at 106 files and 8.6 MB pushed cleanly).
+- **GitHub Sync Rules**: Each sync (one task) changes fewer than 150 files and less than 15 MB, counting the full size of every added or changed file. These are cautious project numbers; the exact limit is not published. Split bigger work into more than one task and sync. The 150 file and 15 MB numbers do not apply to the whole repo. Keep the whole repo under 1,000 files (the reported AI Studio GitHub import limit), every file under 50 MB (GitHub blocks files over 100 MiB), and the published site under 1 GB. Project history: a 653 file commit failed; a 106 file, 9.0 MB commit worked.
 - **Audio Sprite Packing Rule**: Pack word clips, pure phonemes, and UI cues into the two Web Audio sprites (`public/assets/audio/words/sprite.mp3` and `public/assets/audio/ui/sprite.mp3`) using `[startSec, durationSec]` entries in their `manifest.json` files instead of adding dozens of loose individual MP3 files.
 - **Image and Voice Compression Rule**: Optimize new images before pushing (maps max `1400px` wide, cutscenes max `1280px` wide, sprites max `512px` square) and convert cached `.wav` narrations in `public/assets/audio/tts-cache/` to 64 kbps mono `.mp3`.
 - **Screenshot Cleanup**: Keep `public/assets/aistudio/` in `.gitignore` and delete temporary chat screenshots before pushing.
