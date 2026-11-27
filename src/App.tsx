@@ -15,6 +15,16 @@ import {
   PatternKey,
 } from './data/level1';
 import { SPANISH_DEFENDERS } from './data/ellSpanish';
+import {
+  advancePlacementRun,
+  buildPlacementReport,
+  createInitialPlacementRun,
+  getLevelConfigById,
+  getPlacementNextWord,
+  PLACEMENT_STAGES,
+  PLACEMENT_TIER_BONUS,
+  PlacementRunState,
+} from './data/placement';
 import { BattleEngine, BattleSnapshot } from './game/CanvasBattleEngine';
 import { loadGameSprites } from './game/sprites';
 import { sound } from './lib/audio';
@@ -24,6 +34,7 @@ import {
   GameSettings,
   getPatternLocks,
   loadProgress,
+  PlacementReport,
   recordPatternRead,
   saveProgress,
   StoredProgress,
@@ -33,7 +44,12 @@ import { BattleHUD, WalkthroughInfo, WaveBannerInfo } from './components/BattleH
 import { CutscenePlayer } from './components/CutscenePlayer';
 import { EllSupportModal } from './components/EllSupportModal';
 import { BattleEndData, ResultsScreen } from './components/ResultsScreen';
-import { ForgeStats, RuneForgePanel, SimRoundResult } from './components/RuneForgePanel';
+import {
+  ForgeStats,
+  PlacementForgeGuide,
+  RuneForgePanel,
+  SimRoundResult,
+} from './components/RuneForgePanel';
 import { SettingsModal } from './components/SettingsModal';
 import { TitleScreen } from './components/TitleScreen';
 
@@ -58,7 +74,7 @@ type AppAction =
   | { type: 'PREVIEW_CUTSCENE'; id: CutsceneId; returnTo: 'title' | 'results' }
   | { type: 'CUTSCENE_DONE' }
   | { type: 'BATTLE_FINISHED'; result: BattleEndData; forgeStats: ForgeStats }
-  | { type: 'RETURN_TITLE' }
+  | { type: 'RETURN_TITLE'; levelId?: LevelId }
   | { type: 'SET_SETTINGS_OPEN'; open: boolean };
 
 const EMPTY_FORGE_STATS: ForgeStats = {
@@ -102,7 +118,7 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
   },
   {
     title: 'Launch Wave 1',
-    body: 'Click Send now on the top bar (or keep forging 10 words) to face Wave 1 from the Rift.',
+    body: 'Click Send now on the top bar (or keep forging 8 words) to face Wave 1 from the Rift.',
     highlight: 'wave',
     canManualNext: false,
   },
@@ -178,6 +194,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         scene: 'title',
+        activeLevelId:
+          action.levelId && action.levelId !== 'placement'
+            ? action.levelId
+            : state.activeLevelId === 'placement'
+            ? 'w1-l1'
+            : state.activeLevelId,
       };
     case 'SET_SETTINGS_OPEN':
       return {
@@ -237,7 +259,7 @@ export default function App() {
     settingsOpen: false,
   });
 
-  const activeLevel = LEVELS[state.activeLevelId];
+  const activeLevel = getLevelConfigById(state.activeLevelId);
   const [progress, setProgress] = useState<StoredProgress>(() => loadProgress());
   const [azureStatus, setAzureStatus] = useState<'checking' | 'azure' | 'chrome' | 'off'>('checking');
   const [snap, setSnap] = useState<BattleSnapshot>(() => makeInitialSnapshot(LEVELS['w1-l1']));
@@ -257,10 +279,13 @@ export default function App() {
   const [ellOpen, setEllOpen] = useState(false);
   const [loadoutOpen, setLoadoutOpen] = useState(false);
   const [activeLoadout, setActiveLoadout] = useState<DefenderType[]>([]);
+  const [placementRun, setPlacementRun] = useState<PlacementRunState | null>(null);
+  const [lastPlacementReport, setLastPlacementReport] = useState<PlacementReport | null>(null);
 
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
   const forgeStatsRef = useRef<ForgeStats>({ ...EMPTY_FORGE_STATS, practice: [] });
+  const placementRunRef = useRef<PlacementRunState | null>(null);
   const toastTimerRef = useRef<number>(0);
   const bannerTimerRef = useRef<number>(0);
   const lockFlashTimerRef = useRef<number>(0);
@@ -420,6 +445,7 @@ export default function App() {
           ember: bank.sprites.ember.dataUrl,
           tesla: bank.sprites.tesla.dataUrl,
           rail: bank.sprites.rail.dataUrl,
+          gravity: bank.sprites.gravity.dataUrl,
         });
       })
       .catch(() => {
@@ -440,7 +466,7 @@ export default function App() {
   useEffect(() => {
     if (state.scene !== 'battle' || !canvasMountRef.current) return;
 
-    const lv = LEVELS[state.activeLevelId];
+    const lv = getLevelConfigById(state.activeLevelId);
     forgeStatsRef.current = { ...EMPTY_FORGE_STATS, practice: [] };
     setSnap(makeInitialSnapshot(lv, settings.difficulty || 'normal'));
     setForgedCount(0);
@@ -450,10 +476,24 @@ export default function App() {
     setToast('');
     sound.setMusic('calm');
 
+    if (lv.isPlacement) {
+      const initRun = createInitialPlacementRun();
+      placementRunRef.current = initRun;
+      setPlacementRun(initRun);
+      setLastPlacementReport(null);
+    } else {
+      placementRunRef.current = null;
+      setPlacementRun(null);
+    }
+
     // Fly-in level start announcement
     triggerWaveBanner(
-      `LEVEL ${lv.num}: ${lv.name.toUpperCase()}`,
-      lv.hasWalkthrough ? 'Guided Walkthrough · Defend the Rift Anchor' : lv.wordsSummary,
+      lv.isPlacement ? 'RUNNER BASIC TRAINING' : `LEVEL ${lv.num}: ${lv.name.toUpperCase()}`,
+      lv.isPlacement
+        ? 'Clear skill tiers to open your starting level'
+        : lv.hasWalkthrough
+        ? 'Guided Walkthrough · Defend the Rift Anchor'
+        : lv.wordsSummary,
       'cyan'
     );
 
@@ -464,29 +504,44 @@ export default function App() {
         const curProg = progressRef.current;
         const previewLosses = (curProg.losses || 0) + (res.win ? 0 : 1);
         const triggerTip =
+          !lv.isPlacement &&
           !res.win &&
           previewLosses >= 2 &&
           !curProg.seenHalfSpeedTip &&
           !curProg.settings.focusMode;
         setShowHalfSpeedTip(triggerTip);
+
+        const finalPlacementReport =
+          lv.isPlacement && placementRunRef.current
+            ? buildPlacementReport(placementRunRef.current)
+            : null;
+        if (finalPlacementReport) {
+          setLastPlacementReport(finalPlacementReport);
+        }
+
         setProgress((prev) => {
           const prevLevelStars = prev.levelStars?.[lv.id] ?? 0;
           const prevLevelWins = prev.levelWins?.[lv.id] ?? 0;
           const nextLosses = (prev.losses || 0) + (res.win ? 0 : 1);
           const updated: StoredProgress = {
             ...prev,
-            bestStars: Math.max(prev.bestStars, res.stars),
-            wins: prev.wins + (res.win ? 1 : 0),
-            losses: nextLosses,
+            bestStars: lv.isPlacement ? prev.bestStars : Math.max(prev.bestStars, res.stars),
+            wins: prev.wins + (res.win && !lv.isPlacement ? 1 : 0),
+            losses: lv.isPlacement ? prev.losses || 0 : nextLosses,
             seenHalfSpeedTip: prev.seenHalfSpeedTip || triggerTip,
-            levelStars: {
-              ...prev.levelStars,
-              [lv.id]: Math.max(prevLevelStars, res.stars),
-            },
-            levelWins: {
-              ...prev.levelWins,
-              [lv.id]: prevLevelWins + (res.win ? 1 : 0),
-            },
+            placement: finalPlacementReport ?? prev.placement ?? null,
+            levelStars: lv.isPlacement
+              ? prev.levelStars
+              : {
+                  ...prev.levelStars,
+                  [lv.id]: Math.max(prevLevelStars, res.stars),
+                },
+            levelWins: lv.isPlacement
+              ? prev.levelWins
+              : {
+                  ...prev.levelWins,
+                  [lv.id]: prevLevelWins + (res.win ? 1 : 0),
+                },
             battles: [
               ...prev.battles,
               {
@@ -527,14 +582,18 @@ export default function App() {
     if (settings.focusMode) {
       engine.setSpeed(0.5, true);
     }
-    const initialLocks = getPatternLocks(
-      progress,
-      lv.vowels,
-      lv.mastery.window,
-      lv.mastery.need,
-      lv.id
-    );
-    engine.setLocksReady(initialLocks.every((l) => l.done));
+    if (lv.isPlacement) {
+      engine.setLocksReady(false);
+    } else {
+      const initialLocks = getPatternLocks(
+        progress,
+        lv.vowels,
+        lv.mastery.window,
+        lv.mastery.need,
+        lv.id
+      );
+      engine.setLocksReady(initialLocks.every((l) => l.done));
+    }
     engineRef.current = engine;
 
     return () => {
@@ -673,11 +732,83 @@ export default function App() {
     lockFlashTimerRef.current = window.setTimeout(() => setLockBonusFlash(null), 2600);
   }, []);
 
+  const persistPlacementSnapshot = useCallback((run: PlacementRunState): PlacementReport => {
+    const report = buildPlacementReport(run);
+    const updated: StoredProgress = {
+      ...progressRef.current,
+      placement: report,
+    };
+    progressRef.current = updated;
+    saveProgress(updated);
+    setProgress(updated);
+    return report;
+  }, []);
+
+  const handleClearPlacement = useCallback(() => {
+    sound.sfx('tap');
+    const updated: StoredProgress = {
+      ...progressRef.current,
+      placement: null,
+    };
+    progressRef.current = updated;
+    saveProgress(updated);
+    setProgress(updated);
+    setLastPlacementReport(null);
+    showToast('Basic Training placement cleared.');
+  }, [showToast]);
+
   const handleWordForged = useCallback(
     (pattern: PatternKey, firstTryClean: boolean, stats: ForgeStats) => {
       forgeStatsRef.current = stats;
       setForgedCount(stats.forged);
       const prev = progressRef.current;
+
+      if (activeLevel.isPlacement && placementRunRef.current) {
+        const nextProg = recordPatternRead(
+          prev,
+          pattern,
+          firstTryClean,
+          activeLevel.id,
+          activeLevel.mastery
+        );
+        progressRef.current = nextProg;
+        setProgress(nextProg);
+
+        const outcome = advancePlacementRun(placementRunRef.current, firstTryClean);
+        placementRunRef.current = outcome.next;
+        setPlacementRun(outcome.next);
+
+        if (outcome.justClearedStage) {
+          engineRef.current?.triggerPlacementTierClear(
+            outcome.justClearedStage.label,
+            outcome.justClearedStage.nextOpenedLabel,
+            PLACEMENT_TIER_BONUS
+          );
+          persistPlacementSnapshot(outcome.next);
+        }
+
+        if (outcome.justSettled) {
+          const report = persistPlacementSnapshot(outcome.next);
+          setLastPlacementReport(report);
+          const recLv = LEVELS[report.recommendedLevelId] || LEVELS['w1-l1'];
+          const recLabel = `${recLv.worldName}, Level ${recLv.num}: ${recLv.name}`;
+          engineRef.current?.setLocksReady(true);
+          showToast(
+            report.allMastered
+              ? 'All 8 tiers mastered! Clear this Final Wave to complete Basic Training.'
+              : `Starting level ready: ${recLabel}! Clear the Final Wave to finish Basic Training.`
+          );
+          triggerWaveBanner(
+            report.allMastered ? 'ALL TIERS CLEARED!' : 'STARTING LEVEL READY',
+            `${recLabel} · Clear the Graduation Wave`,
+            'amber'
+          );
+        }
+
+        engineRef.current?.onWordRead(outcome.next.settled, []);
+        return;
+      }
+
       const prevLocks = getPatternLocks(
         prev,
         activeLevel.vowels,
@@ -712,7 +843,7 @@ export default function App() {
         newlyLocked.map((lk) => ({ vowel: lk.vowel, label: lk.label }))
       );
     },
-    [activeLevel, flashLockBonus]
+    [activeLevel, flashLockBonus, persistPlacementSnapshot, showToast, triggerWaveBanner]
   );
 
   const handleClearLocks = useCallback(
@@ -753,6 +884,57 @@ export default function App() {
         engineRef.current?.triggerMegaBlast();
       }
       const prev = progressRef.current;
+
+      if (activeLevel.isPlacement && placementRunRef.current) {
+        let run = placementRunRef.current;
+        let nextProg = prev;
+        let settledNow = false;
+        const clearedStages: Array<{ label: string; nextOpenedLabel: string }> = [];
+
+        for (let i = 0; i < sim.wordCount; i++) {
+          const wordEntry = getPlacementNextWord(run);
+          const pat = (wordEntry?.pattern || 'a') as PatternKey;
+          const clean = i < sim.cleanCount;
+          nextProg = recordPatternRead(nextProg, pat, clean, activeLevel.id, activeLevel.mastery);
+          const outcome = advancePlacementRun(run, clean);
+          run = outcome.next;
+          if (outcome.justClearedStage) {
+            clearedStages.push({
+              label: outcome.justClearedStage.label,
+              nextOpenedLabel: outcome.justClearedStage.nextOpenedLabel,
+            });
+          }
+          if (outcome.justSettled) {
+            settledNow = true;
+          }
+        }
+
+        progressRef.current = nextProg;
+        setProgress(nextProg);
+        placementRunRef.current = run;
+        setPlacementRun(run);
+
+        for (const cs of clearedStages) {
+          engineRef.current?.triggerPlacementTierClear(
+            cs.label,
+            cs.nextOpenedLabel,
+            PLACEMENT_TIER_BONUS
+          );
+        }
+        if (clearedStages.length > 0 || settledNow) {
+          const report = persistPlacementSnapshot(run);
+          if (settledNow) {
+            setLastPlacementReport(report);
+            const recLv = LEVELS[report.recommendedLevelId] || LEVELS['w1-l1'];
+            showToast(
+              `Starting level ready: ${recLv.worldName}, Level ${recLv.num}: ${recLv.name}! Clear the Final Wave to finish.`
+            );
+          }
+        }
+        engineRef.current?.onSimulatedRound(sim.wordCount, run.settled, []);
+        return;
+      }
+
       const prevLocks = getPatternLocks(
         prev,
         activeLevel.vowels,
@@ -788,7 +970,7 @@ export default function App() {
         newlyLocked.map((lk) => ({ vowel: lk.vowel, label: lk.label }))
       );
     },
-    [activeLevel, flashLockBonus, snap.phase]
+    [activeLevel, flashLockBonus, persistPlacementSnapshot, showToast, snap.phase]
   );
 
   const handleRuleHold = useCallback((hold: boolean) => {
@@ -846,16 +1028,40 @@ export default function App() {
       })()
     : null;
 
+  const placementGuide: PlacementForgeGuide | null =
+    activeLevel.isPlacement && placementRun
+      ? (() => {
+          const activeStage =
+            PLACEMENT_STAGES[placementRun.stageIdx] ||
+            PLACEMENT_STAGES[PLACEMENT_STAGES.length - 1];
+          const recLv = LEVELS[placementRun.recommendedLevelId] || LEVELS['w1-l1'];
+          return {
+            stageNum: placementRun.stageIdx + 1,
+            stageTotal: PLACEMENT_STAGES.length,
+            stageLabel: activeStage.label,
+            wordNum: Math.min(placementRun.wordIdx + 1, activeStage.probeWords.length),
+            wordTotal: activeStage.probeWords.length,
+            forcedWord: getPlacementNextWord(placementRun),
+            settled: placementRun.settled,
+            settledLevelLabel: `${recLv.worldName}, Level ${recLv.num}: ${recLv.name}`,
+            practicePool: [...recLv.realWords, ...recLv.runes],
+          };
+        })()
+      : null;
+
   return (
     <div className="fixed inset-0 h-[100dvh] w-full overflow-hidden bg-[#120d26] font-reading text-slate-100">
       {state.scene === 'title' && (
         <TitleScreen
-          activeLevel={activeLevel}
+          activeLevel={activeLevel.isPlacement ? LEVELS['w1-l1'] : activeLevel}
           progress={progress}
           locks={locks}
           azureStatus={azureStatus}
           onSelectLevel={(levelId) => dispatch({ type: 'SELECT_LEVEL', levelId })}
           onChangeDifficulty={handleChangeDifficulty}
+          onStartBasicTraining={() =>
+            dispatch({ type: 'START_LEVEL_WITH_OPENING', levelId: 'placement' })
+          }
           onStartWithCutscene={() => dispatch({ type: 'START_WITH_OPENING' })}
           onStartDirect={() => dispatch({ type: 'START_DIRECT_BATTLE' })}
           onOpenCutscene={(id) => dispatch({ type: 'PREVIEW_CUTSCENE', id, returnTo: 'title' })}
@@ -889,6 +1095,8 @@ export default function App() {
                   ? 'bg-[#1c1210]'
                   : activeLevel.worldId === 'w3'
                   ? 'bg-[#0e1c2b]'
+                  : activeLevel.worldId === 'training'
+                  ? 'bg-[#163322]'
                   : 'bg-[#1b3a22]'
               }`}
             >
@@ -897,6 +1105,7 @@ export default function App() {
                 level={activeLevel}
                 snap={snap}
                 locks={locks}
+                placementRun={placementRun}
                 toast={toast}
                 waveBanner={waveBanner}
                 walkthrough={activeWalkthrough}
@@ -918,6 +1127,7 @@ export default function App() {
                   setTutorialIdx((prev) => (prev === null ? 0 : null));
                 }}
                 onUpgrade={(spec) => engineRef.current?.upgradeSelected(spec)}
+                onSetTargetMode={(mode) => engineRef.current?.setSelectedTargetMode(mode)}
                 onSell={() => engineRef.current?.sellSelected()}
                 onClosePopup={() => engineRef.current?.clearSelection()}
                 onCastPower={(id: HeroPowerId) => engineRef.current?.castHeroPower(id)}
@@ -938,7 +1148,12 @@ export default function App() {
                   sound.stopSpeaking();
                   speech.stop();
                   speech.releaseMicStream();
-                  dispatch({ type: 'RETURN_TITLE' });
+                  dispatch({
+                    type: 'RETURN_TITLE',
+                    levelId: activeLevel.isPlacement
+                      ? progressRef.current.placement?.recommendedLevelId || 'w1-l1'
+                      : undefined,
+                  });
                 }}
               />
             </div>
@@ -949,6 +1164,7 @@ export default function App() {
               level={activeLevel}
               settings={settings}
               unlockedPatterns={locks.filter((l) => !l.done).map((l) => l.vowel)}
+              placementGuide={placementGuide}
               disabled={snap.phase === 'done' || snap.phase === 'milestone'}
               azureStatus={azureStatus}
               tutorialHighlight={activeWalkthrough?.highlight === 'forge'}
@@ -1089,9 +1305,14 @@ export default function App() {
           forgeStats={state.lastForgeStats}
           progress={progress}
           locks={locks}
+          placementReport={activeLevel.isPlacement ? lastPlacementReport || progress.placement : null}
           showHalfSpeedTip={showHalfSpeedTip}
           onDismissHalfSpeedTip={() => setShowHalfSpeedTip(false)}
           onOpenSettings={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
+          onGoToRecommended={(levelId) => {
+            setShowHalfSpeedTip(false);
+            dispatch({ type: 'START_LEVEL_WITH_OPENING', levelId });
+          }}
           onNextLevel={
             activeLevel.nextLevelId && !LEVELS[activeLevel.nextLevelId]?.comingSoon
               ? () => {
@@ -1116,7 +1337,12 @@ export default function App() {
           }
           onReturnTitle={() => {
             setShowHalfSpeedTip(false);
-            dispatch({ type: 'RETURN_TITLE' });
+            dispatch({
+              type: 'RETURN_TITLE',
+              levelId: activeLevel.isPlacement
+                ? (lastPlacementReport || progress.placement)?.recommendedLevelId || 'w1-l1'
+                : undefined,
+            });
           }}
         />
       )}
@@ -1131,6 +1357,7 @@ export default function App() {
           onChange={handleSettingsChange}
           onClearActiveLocks={() => handleClearLocks(false)}
           onClearAllLocks={() => handleClearLocks(true)}
+          onClearPlacement={handleClearPlacement}
           onOpenEll={openEllModal}
           onClose={() => {
             dispatch({ type: 'SET_SETTINGS_OPEN', open: false });

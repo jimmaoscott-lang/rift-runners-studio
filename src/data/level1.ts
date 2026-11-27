@@ -1,7 +1,7 @@
-export type WorldId = 'w1' | 'w2' | 'w3';
+export type WorldId = 'training' | 'w1' | 'w2' | 'w3';
 export type VowelKey = 'a' | 'e' | 'i' | 'o' | 'u';
 export type PatternKey = VowelKey | (string & {});
-export type LevelId = 'w1-l1' | 'w1-l2' | 'w1-l3' | 'w1-l4' | 'w1-l5' | 'w2-l1' | 'w2-l2' | 'w2-l3' | 'w2-l4' | 'w2-l5' | 'w3-l1' | (string & {});
+export type LevelId = 'placement' | 'w1-l1' | 'w1-l2' | 'w1-l3' | 'w1-l4' | 'w1-l5' | 'w2-l1' | 'w2-l2' | 'w2-l3' | 'w2-l4' | 'w2-l5' | 'w3-l1' | (string & {});
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'expert';
 
 export interface DifficultyConfig {
@@ -152,7 +152,11 @@ export interface CreatureDef {
   flying?: boolean;
   isBoss?: boolean;
   slowResist?: number;
+  gravityResist?: number;
   armor?: number;
+  fireResist?: number;
+  electricResist?: number;
+  arrowResist?: number;
   splitsInto?: { type: CreatureType; count: number };
 }
 
@@ -239,9 +243,11 @@ export interface LevelConfig {
   };
   finalBoost: number;
   hasWalkthrough: boolean;
+  isPlacement?: boolean;
   comingSoon?: boolean;
   freePlacement?: boolean;
   noBuildZones?: Array<{ u: number; v: number; r: number; label?: string }>;
+  noBuildPolys?: Array<{ points: [number, number][]; label?: string }>;
   backdropImage: string;
   pathUv: [number, number][];
   riverUv: [number, number][];
@@ -530,9 +536,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     cost: 60,
     up: [45, 80],
     levels: [
-      { dmg: 10, range: 6.8, rate: 1.0 },
-      { dmg: 15, range: 7.8, rate: 1.15 },
-      { dmg: 22, range: 8.8, rate: 1.3 },
+      { dmg: 7, range: 6.8, rate: 1.0 },
+      { dmg: 10, range: 7.8, rate: 1.15 },
+      { dmg: 15, range: 8.8, rate: 1.3 },
     ],
     spec: {
       a: {
@@ -540,14 +546,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Sharpshooter Tower',
         desc: 'Heavy arrows that reach far and hit hard.',
         cost: 145,
-        stats: { dmg: 48, range: 11.8, rate: 0.85 },
+        stats: { dmg: 32, range: 11.8, rate: 0.85 },
       },
       b: {
         id: 'b',
         name: 'Volley Tower',
         desc: 'Fires three arrows at once, at three creatures.',
         cost: 145,
-        stats: { dmg: 16, range: 9.2, rate: 1.45, multi: 3 },
+        stats: { dmg: 11, range: 9.2, rate: 1.45, multi: 3 },
       },
     },
   },
@@ -560,9 +566,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     cost: 40,
     up: [35, 60],
     levels: [
-      { dps: 12, radius: 2.2 },
-      { dps: 18, radius: 2.4 },
-      { dps: 26, radius: 2.6 },
+      { dps: 8, radius: 2.2 },
+      { dps: 12, radius: 2.4 },
+      { dps: 17, radius: 2.6 },
     ],
     spec: {
       a: {
@@ -570,14 +576,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Blade Pit',
         desc: 'Sharper spikes. Huge damage to anything that walks over.',
         cost: 110,
-        stats: { dps: 44, radius: 2.8 },
+        stats: { dps: 29, radius: 2.8 },
       },
       b: {
         id: 'b',
         name: 'Tar Pit',
         desc: 'Sticky tar slows creatures while the spikes hurt them.',
         cost: 110,
-        stats: { dps: 20, radius: 3.2, slow: 0.45 },
+        stats: { dps: 13, radius: 3.2, slow: 0.45 },
       },
     },
   },
@@ -592,9 +598,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     respawn: 14,
     regen: 2,
     levels: [
-      { hp: 150, dmg: 14, rate: 1.0, hold: 3 },
-      { hp: 210, dmg: 20, rate: 1.1, hold: 3 },
-      { hp: 290, dmg: 28, rate: 1.2, hold: 4 },
+      { hp: 150, dmg: 9, rate: 1.0, hold: 3 },
+      { hp: 210, dmg: 13, rate: 1.1, hold: 3 },
+      { hp: 290, dmg: 19, rate: 1.2, hold: 4 },
     ],
     spec: {
       a: {
@@ -602,14 +608,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Mountain Golem',
         desc: 'Huge and tough. Holds 6 creatures and rebuilds faster.',
         cost: 195,
-        stats: { hp: 470, dmg: 30, rate: 1.2, hold: 6, respawn: 9 },
+        stats: { hp: 470, dmg: 20, rate: 1.2, hold: 6, respawn: 9 },
       },
       b: {
         id: 'b',
         name: 'Quake Golem',
         desc: 'Every slam hits all the creatures it holds.',
         cost: 195,
-        stats: { hp: 320, dmg: 36, rate: 1.2, hold: 4, cleave: true },
+        stats: { hp: 320, dmg: 24, rate: 1.2, hold: 4, cleave: true },
       },
     },
   },
@@ -617,29 +623,29 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     id: 'frost',
     name: 'Frost Totem',
     shortName: 'Frost',
-    desc: 'Slows every creature in its ring.',
+    desc: 'Slows creatures in its ring. Frost-resistant foes shrug off chill.',
     kind: 'tower',
     cost: 80,
     up: [55, 90],
     levels: [
-      { range: 5.4, slow: 0.4 },
-      { range: 6.4, slow: 0.5 },
-      { range: 7.4, slow: 0.58 },
+      { range: 5.2, slow: 0.35 },
+      { range: 6.1, slow: 0.44 },
+      { range: 7.0, slow: 0.5 },
     ],
     spec: {
       a: {
         id: 'a',
         name: 'Glacier Totem',
-        desc: 'Every few seconds, it freezes everything in its ring.',
+        desc: 'Periodically freezes non-resistant creatures in its ring.',
         cost: 160,
-        stats: { range: 7.6, slow: 0.58, freezeEvery: 5.5, freezeTime: 1.6 },
+        stats: { range: 7.2, slow: 0.5, freezeEvery: 6.0, freezeTime: 1.45 },
       },
       b: {
         id: 'b',
         name: 'Blizzard Totem',
-        desc: 'A wider, colder ring that hurts creatures as it slows them.',
+        desc: 'A wider icy storm that slows and steadily chips down unresisted packs.',
         cost: 160,
-        stats: { range: 8.8, slow: 0.64, dps: 8 },
+        stats: { range: 8.2, slow: 0.55, dps: 6 },
       },
     },
   },
@@ -652,9 +658,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     cost: 110,
     up: [75, 115],
     levels: [
-      { dmg: 22, range: 6.6, rate: 0.62, splash: 2.3 },
-      { dmg: 32, range: 7.6, rate: 0.68, splash: 2.6 },
-      { dmg: 44, range: 8.6, rate: 0.74, splash: 2.9 },
+      { dmg: 15, range: 6.6, rate: 0.62, splash: 2.3 },
+      { dmg: 21, range: 7.6, rate: 0.68, splash: 2.6 },
+      { dmg: 29, range: 8.6, rate: 0.74, splash: 2.9 },
     ],
     spec: {
       a: {
@@ -662,14 +668,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Inferno Mortar',
         desc: 'Massive fiery blasts with long reach that smash packed waves.',
         cost: 175,
-        stats: { dmg: 74, range: 10.8, rate: 0.56, splash: 3.7 },
+        stats: { dmg: 50, range: 10.8, rate: 0.56, splash: 3.7 },
       },
       b: {
         id: 'b',
         name: 'Cinder Repeater',
         desc: 'Rapid-fire blazing shells that keep steady splash pressure on the bridge.',
         cost: 175,
-        stats: { dmg: 30, range: 8.6, rate: 1.45, splash: 2.2 },
+        stats: { dmg: 20, range: 8.6, rate: 1.45, splash: 2.2 },
       },
     },
   },
@@ -682,9 +688,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     cost: 130,
     up: [90, 130],
     levels: [
-      { dmg: 20, range: 6.4, rate: 0.9, chain: 3, chainRange: 3.4 },
-      { dmg: 29, range: 7.2, rate: 1.0, chain: 4, chainRange: 3.8 },
-      { dmg: 40, range: 8.0, rate: 1.1, chain: 4, chainRange: 4.1 },
+      { dmg: 13, range: 6.4, rate: 0.9, chain: 3, chainRange: 3.4 },
+      { dmg: 19, range: 7.2, rate: 1.0, chain: 4, chainRange: 3.8 },
+      { dmg: 27, range: 8.0, rate: 1.1, chain: 4, chainRange: 4.1 },
     ],
     spec: {
       a: {
@@ -692,14 +698,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Storm Conduit',
         desc: 'Supercharged arcs chain across 6 creatures at once, shredding swarms and flyers.',
         cost: 190,
-        stats: { dmg: 46, range: 8.8, rate: 1.25, chain: 6, chainRange: 4.8 },
+        stats: { dmg: 31, range: 8.8, rate: 1.25, chain: 6, chainRange: 4.8 },
       },
       b: {
         id: 'b',
         name: 'Overcharge Beam',
         desc: 'Locks a surging plasma arc onto one enemy, ramping damage higher each hit to melt Brutes and Bosses.',
         cost: 190,
-        stats: { dmg: 38, range: 9.2, rate: 1.5, chain: 1, beamRamp: 0.35 },
+        stats: { dmg: 25, range: 9.2, rate: 1.5, chain: 1, beamRamp: 0.35 },
       },
     },
   },
@@ -712,9 +718,9 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     cost: 135,
     up: [100, 145],
     levels: [
-      { dmg: 34, range: 8.6, rate: 0.72, armorPierce: true },
-      { dmg: 50, range: 9.6, rate: 0.8, armorPierce: true },
-      { dmg: 70, range: 10.6, rate: 0.88, armorPierce: true },
+      { dmg: 23, range: 8.6, rate: 0.72, armorPierce: true },
+      { dmg: 34, range: 9.6, rate: 0.8, armorPierce: true },
+      { dmg: 47, range: 10.6, rate: 0.88, armorPierce: true },
     ],
     spec: {
       a: {
@@ -722,14 +728,14 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
         name: 'Piercing Rail',
         desc: 'Fires a hyper-velocity cyan rail beam that punches through up to 4 enemies in a line.',
         cost: 200,
-        stats: { dmg: 92, range: 11.8, rate: 0.92, armorPierce: true, pierceCount: 4 },
+        stats: { dmg: 62, range: 11.8, rate: 0.92, armorPierce: true, pierceCount: 4 },
       },
       b: {
         id: 'b',
         name: 'Shatter Coil',
         desc: 'Massive armor-piercing round that cracks enemy armor for 5 seconds so every tower hits at full power.',
         cost: 200,
-        stats: { dmg: 122, range: 11.0, rate: 0.82, armorPierce: true, armorShred: 5.0 },
+        stats: { dmg: 82, range: 11.0, rate: 0.82, armorPierce: true, armorShred: 5.0 },
       },
     },
   },
@@ -737,28 +743,27 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
     id: 'gravity',
     name: 'Gravity Snare',
     shortName: 'Gravity',
-    desc: 'Trail vortex trap that drags ground and flying foes down, slowing and pulling them back into tower range.',
+    desc: 'Trail vortex that slows and periodically pulls lighter foes back into tower range. Heavy and anchored foes resist pulls.',
     kind: 'trail',
     cost: 95,
     up: [65, 105],
     levels: [
-      { dps: 14, radius: 2.35, slow: 0.45, pullEvery: 2.8, pullStrength: 0.018, hitsAir: true },
-      { dps: 22, radius: 2.6, slow: 0.54, pullEvery: 2.5, pullStrength: 0.024, hitsAir: true },
-      { dps: 32, radius: 2.85, slow: 0.62, pullEvery: 2.2, pullStrength: 0.03, hitsAir: true },
+      { dps: 6, radius: 2.25, slow: 0.34, pullEvery: 3.2, pullStrength: 0.015, hitsAir: true },
+      { dps: 9, radius: 2.45, slow: 0.4, pullEvery: 2.9, pullStrength: 0.019, hitsAir: true },
+      { dps: 13, radius: 2.65, slow: 0.46, pullEvery: 2.6, pullStrength: 0.023, hitsAir: true },
     ],
     spec: {
       a: {
         id: 'a',
         name: 'Singularity Well',
-        desc: 'Crushing gravity well that pulls enemies backward, cracks enemy armor for 3 seconds, and deals heavy damage.',
+        desc: 'Tactical vortex that pulls lighter foes back and cracks armor for 3 seconds so your towers shred them.',
         cost: 175,
         stats: {
-          dps: 46,
-          radius: 3.0,
-          slow: 0.72,
-          pullEvery: 2.1,
-          pullStrength: 0.04,
-          armorPierce: true,
+          dps: 18,
+          radius: 2.8,
+          slow: 0.5,
+          pullEvery: 2.5,
+          pullStrength: 0.028,
           armorShred: 3.0,
           hitsAir: true,
         },
@@ -766,16 +771,16 @@ export const DEFENDERS: Record<DefenderType, DefenderDef> = {
       b: {
         id: 'b',
         name: 'Stasis Anchor',
-        desc: 'Wide graviton field that locks ground and flying creatures in place for 1.5 seconds every 4 seconds.',
+        desc: 'Wide graviton field that briefly locks non-resistant ground and air foes in place every 5 seconds.',
         cost: 175,
         stats: {
-          dps: 34,
-          radius: 3.35,
-          slow: 0.65,
-          freezeEvery: 4.0,
-          freezeTime: 1.5,
-          pullEvery: 2.8,
-          pullStrength: 0.024,
+          dps: 12,
+          radius: 3.0,
+          slow: 0.48,
+          freezeEvery: 5.0,
+          freezeTime: 1.25,
+          pullEvery: 3.2,
+          pullStrength: 0.018,
           hitsAir: true,
         },
       },
@@ -800,20 +805,20 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     id: 'wisp',
     name: 'Rift Wisp',
     hp: 18,
-    speed: 3.4,
+    speed: 2.28,
     anchor: 1,
     shards: 1,
-    hit: 6,
+    hit: 5,
     size: 1.0,
   },
   bat: {
     id: 'bat',
     name: 'Rift Bat',
     hp: 30,
-    speed: 4.05,
+    speed: 2.7,
     anchor: 1,
     shards: 2,
-    hit: 8,
+    hit: 6,
     size: 1.0,
     flying: true,
   },
@@ -821,122 +826,141 @@ export const CREATURES: Record<CreatureType, CreatureDef> = {
     id: 'thornback',
     name: 'Thornback',
     hp: 70,
-    speed: 1.9,
+    speed: 1.27,
     anchor: 2,
     shards: 3,
-    hit: 16,
+    hit: 12,
     size: 1.0,
+    arrowResist: 0.25,
   },
   bramble: {
     id: 'bramble',
     name: 'Bramble Stalker',
     hp: 115,
-    speed: 2.35,
+    speed: 1.57,
     anchor: 3,
     shards: 4,
-    hit: 22,
+    hit: 16,
     size: 1.1,
+    slowResist: 0.45,
   },
   splitter: {
     id: 'splitter',
     name: 'Rift Splitter',
     hp: 140,
-    speed: 1.75,
+    speed: 1.17,
     anchor: 2,
     shards: 5,
-    hit: 18,
+    hit: 14,
     size: 1.15,
+    electricResist: 0.5,
     splitsInto: { type: 'wisp', count: 2 },
   },
   brute: {
     id: 'brute',
     name: 'Ironbark Brute',
-    hp: 255,
-    speed: 1.45,
+    hp: 265,
+    speed: 0.97,
     anchor: 4,
     shards: 10,
-    hit: 28,
+    hit: 21,
     size: 1.28,
+    armor: 0.3,
+    gravityResist: 0.85,
   },
   thornking: {
     id: 'thornking',
     name: 'The Thornking',
-    hp: 780,
-    speed: 1.12,
+    hp: 820,
+    speed: 0.75,
     anchor: 8,
     shards: 40,
-    hit: 44,
+    hit: 33,
     size: 1.5,
     isBoss: true,
+    armor: 0.3,
+    slowResist: 0.55,
+    gravityResist: 0.9,
   },
   cinderimp: {
     id: 'cinderimp',
     name: 'Cinder Imp',
-    hp: 42,
-    speed: 4.15,
+    hp: 46,
+    speed: 2.77,
     anchor: 1,
     shards: 2,
-    hit: 10,
+    hit: 8,
     size: 0.96,
-    slowResist: 0.5,
+    slowResist: 0.85,
+    fireResist: 0.65,
   },
   shieldbearer: {
     id: 'shieldbearer',
     name: 'Shieldbearer',
-    hp: 165,
-    speed: 1.55,
+    hp: 175,
+    speed: 1.04,
     anchor: 3,
     shards: 7,
-    hit: 24,
+    hit: 18,
     size: 1.18,
-    armor: 0.45,
+    armor: 0.5,
+    arrowResist: 0.45,
+    gravityResist: 0.5,
   },
   shrieker: {
     id: 'shrieker',
     name: 'Rift Shrieker',
-    hp: 105,
-    speed: 2.35,
+    hp: 112,
+    speed: 1.57,
     anchor: 2,
     shards: 6,
-    hit: 16,
+    hit: 12,
     size: 1.05,
     flying: true,
     armor: 0.4,
+    gravityResist: 0.7,
   },
   weaver: {
     id: 'weaver',
     name: 'Forge Weaver',
-    hp: 155,
-    speed: 1.78,
+    hp: 165,
+    speed: 1.19,
     anchor: 3,
     shards: 8,
-    hit: 18,
+    hit: 14,
     size: 1.15,
     armor: 0.2,
+    fireResist: 0.6,
+    electricResist: 0.45,
   },
   ironwarden: {
     id: 'ironwarden',
     name: 'The Iron Warden',
-    hp: 1180,
-    speed: 0.98,
+    hp: 1280,
+    speed: 0.65,
     anchor: 10,
     shards: 65,
-    hit: 58,
+    hit: 44,
     size: 1.65,
     isBoss: true,
-    armor: 0.45,
-    slowResist: 0.35,
+    armor: 0.5,
+    slowResist: 0.65,
+    gravityResist: 0.95,
+    fireResist: 0.5,
   },
   galewraith: {
     id: 'galewraith',
     name: 'Gale Wraith',
-    hp: 155,
-    speed: 2.35,
+    hp: 165,
+    speed: 1.57,
     anchor: 2,
     shards: 8,
-    hit: 18,
+    hit: 14,
     size: 1.08,
     armor: 0.15,
+    arrowResist: 0.25,
+    electricResist: 0.5,
+    gravityResist: 0.9,
   },
 };
 
@@ -954,7 +978,7 @@ export const HERO_POWERS: Record<HeroPowerId, HeroPowerDef> = {
     name: 'Meteor',
     desc: 'Drops a meteor on the biggest group of creatures.',
     charge: 20,
-    dmg: 60,
+    dmg: 55,
     radius: 3.5,
   },
   freeze: {
@@ -1271,9 +1295,9 @@ export const LEVEL1: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost'],
   runeRate: 0.25,
   startCrystals: 105,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 5,
   bonusSurgeWaves: 3,
   mastery: {
     window: 10,
@@ -1287,12 +1311,19 @@ export const LEVEL1: LevelConfig = {
   hasWalkthrough: true,
   freePlacement: true,
   noBuildZones: [
-    // Far-right deep pine treeline beyond the river
-    { u: 0.93, v: 0.22, r: 0.11, label: 'Dense forest' },
-    { u: 0.94, v: 0.48, r: 0.10, label: 'Dense forest' },
-    { u: 0.94, v: 0.76, r: 0.11, label: 'Dense forest' },
-    // Top-left dark rift cliff
-    { u: 0.08, v: 0.12, r: 0.10, label: 'Rift cliff' },
+    // Large mossy boulders on open grass
+    { u: 0.625, v: 0.08, r: 0.052, label: 'Boulder' },
+    { u: 0.555, v: 0.345, r: 0.038, label: 'Boulder' },
+    { u: 0.68, v: 0.575, r: 0.045, label: 'Boulder' },
+    { u: 0.155, v: 0.64, r: 0.042, label: 'Boulder' },
+  ],
+  noBuildPolys: [
+    // Far-right dense pine treeline beyond the river
+    { points: [[0.82, 0.0], [1.0, 0.0], [1.0, 1.0], [0.80, 1.0], [0.84, 0.55]], label: 'Dense forest' },
+    // Top-left dark rift cliff & purple pines
+    { points: [[0.0, 0.0], [0.34, 0.0], [0.34, 0.18], [0.16, 0.36], [0.0, 0.42]], label: 'Rift cliff' },
+    // Bottom-left dense trees
+    { points: [[0.0, 0.56], [0.14, 0.72], [0.25, 0.92], [0.25, 1.0], [0.0, 1.0]], label: 'Dense forest' },
   ],
   backdropImage: '/src/assets/images/cutscene_opening_warden_1795457392314.jpg',
   pathUv: [
@@ -1344,37 +1375,39 @@ export const LEVEL1: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'wisp', count: 8, gap: 1.6 },
-        { type: 'thornback', count: 3, gap: 4, delay: 8 },
+        { type: 'wisp', count: 10, gap: 1.45 },
+        { type: 'thornback', count: 4, gap: 3.6, delay: 7.5 },
       ],
     },
     {
-      hp: 1.35,
+      hp: 1.25,
       groups: [
-        { type: 'thornback', count: 6, gap: 3.5 },
-        { type: 'wisp', count: 8, gap: 1.2, delay: 10 },
+        { type: 'thornback', count: 7, gap: 3.1 },
+        { type: 'wisp', count: 12, gap: 1.05, delay: 8.5 },
       ],
     },
     {
-      hp: 1.8,
+      hp: 1.6,
       groups: [
-        { type: 'wisp', count: 14, gap: 0.9 },
-        { type: 'thornback', count: 6, gap: 3, delay: 6 },
+        { type: 'wisp', count: 16, gap: 0.82 },
+        { type: 'thornback', count: 9, gap: 2.6, delay: 5.5 },
+        { type: 'wisp', count: 8, gap: 0.75, delay: 16 },
       ],
     },
     {
-      hp: 2.3,
+      hp: 2.0,
       groups: [
-        { type: 'thornback', count: 10, gap: 2.6 },
-        { type: 'wisp', count: 12, gap: 0.9, delay: 12 },
+        { type: 'thornback', count: 12, gap: 2.3 },
+        { type: 'wisp', count: 18, gap: 0.78, delay: 6 },
+        { type: 'thornback', count: 6, gap: 2.1, delay: 18 },
       ],
     },
     {
-      hp: 2.7,
+      hp: 2.45,
       groups: [
-        { type: 'thornback', count: 14, gap: 2.2 },
-        { type: 'wisp', count: 16, gap: 1.0, delay: 4 },
-        { type: 'wisp', count: 8, gap: 0.6, delay: 28 },
+        { type: 'thornback', count: 16, gap: 1.95 },
+        { type: 'wisp', count: 20, gap: 0.75, delay: 4 },
+        { type: 'wisp', count: 12, gap: 0.55, delay: 22 },
       ],
     },
   ],
@@ -1400,9 +1433,9 @@ export const LEVEL2: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember'],
   runeRate: 0.28,
   startCrystals: 140,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 5,
   bonusSurgeWaves: 3,
   mastery: {
     window: 11,
@@ -1416,10 +1449,17 @@ export const LEVEL2: LevelConfig = {
   hasWalkthrough: false,
   freePlacement: true,
   noBuildZones: [
-    // Dense bramble thickets & top/bottom forest corners
-    { u: 0.05, v: 0.85, r: 0.12, label: 'Bramble thicket' },
     { u: 0.70, v: 0.07, r: 0.08, label: 'Bramble thicket' },
-    { u: 0.95, v: 0.28, r: 0.09, label: 'Dense forest' },
+  ],
+  noBuildPolys: [
+    // Left & bottom-left thick brambles and pines
+    { points: [[0.0, 0.0], [0.13, 0.0], [0.13, 0.60], [0.27, 0.84], [0.27, 1.0], [0.0, 1.0]], label: 'Bramble thicket' },
+    // Top treeline & upper-right brambles
+    { points: [[0.14, 0.0], [0.84, 0.0], [0.76, 0.16], [0.58, 0.18], [0.56, 0.10], [0.14, 0.10]], label: 'Dense forest' },
+    // Right pines & brambles
+    { points: [[0.84, 0.12], [1.0, 0.08], [1.0, 1.0], [0.87, 0.64], [0.80, 0.42]], label: 'Bramble thicket' },
+    // Bottom trees beside river
+    { points: [[0.43, 0.78], [0.68, 0.80], [0.74, 1.0], [0.40, 1.0]], label: 'Dense forest' },
   ],
   backdropImage: '/src/assets/images/cutscene_l2_bramble_opening_1795467449678.jpg',
   pathUv: [
@@ -1473,47 +1513,48 @@ export const LEVEL2: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'wisp', count: 10, gap: 1.35 },
-        { type: 'thornback', count: 4, gap: 3.4 },
+        { type: 'wisp', count: 12, gap: 1.25 },
+        { type: 'thornback', count: 5, gap: 3.1, delay: 6 },
       ],
     },
     {
-      hp: 1.15,
+      hp: 1.18,
       groups: [
-        { type: 'bramble', count: 3, gap: 3.6 },
-        { type: 'wisp', count: 12, gap: 0.95 },
+        { type: 'bramble', count: 5, gap: 3.1 },
+        { type: 'wisp', count: 14, gap: 0.85, delay: 5 },
+        { type: 'thornback', count: 5, gap: 2.9, delay: 11 },
       ],
     },
     {
-      hp: 1.35,
+      hp: 1.4,
       groups: [
-        { type: 'wisp', count: 16, gap: 0.75 },
-        { type: 'bramble', count: 5, gap: 2.8 },
-        { type: 'thornback', count: 5, gap: 2.8 },
+        { type: 'wisp', count: 18, gap: 0.72 },
+        { type: 'bramble', count: 7, gap: 2.5, delay: 4.5 },
+        { type: 'thornback', count: 7, gap: 2.5, delay: 10.5 },
       ],
     },
     {
-      hp: 1.6,
+      hp: 1.65,
       groups: [
-        { type: 'bramble', count: 7, gap: 2.4 },
-        { type: 'thornback', count: 8, gap: 2.4 },
-        { type: 'wisp', count: 14, gap: 0.8 },
+        { type: 'bramble', count: 9, gap: 2.15 },
+        { type: 'thornback', count: 10, gap: 2.2, delay: 4 },
+        { type: 'wisp', count: 18, gap: 0.7, delay: 10 },
       ],
     },
     {
-      hp: 1.9,
+      hp: 1.95,
       groups: [
-        { type: 'bramble', count: 9, gap: 2.1 },
-        { type: 'wisp', count: 18, gap: 0.68 },
-        { type: 'thornback', count: 8, gap: 2.2 },
+        { type: 'bramble', count: 12, gap: 1.85 },
+        { type: 'wisp', count: 22, gap: 0.62, delay: 4 },
+        { type: 'thornback', count: 11, gap: 1.95, delay: 9.5 },
       ],
     },
     {
-      hp: 2.2,
+      hp: 2.25,
       groups: [
-        { type: 'bramble', count: 12, gap: 1.9 },
-        { type: 'thornback', count: 10, gap: 2.0 },
-        { type: 'wisp', count: 20, gap: 0.6 },
+        { type: 'bramble', count: 14, gap: 1.7 },
+        { type: 'thornback', count: 13, gap: 1.8, delay: 4 },
+        { type: 'wisp', count: 24, gap: 0.55, delay: 9 },
       ],
     },
   ],
@@ -1676,9 +1717,9 @@ export const LEVEL3: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember'],
   runeRate: 0.28,
   startCrystals: 155,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 5,
   bonusSurgeWaves: 3,
   mastery: {
     window: 11,
@@ -1691,16 +1732,16 @@ export const LEVEL3: LevelConfig = {
   finalBoost: 1.25,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Distant mountain sky & upper gorge opening
-    { u: 0.56, v: 0.08, r: 0.11, label: 'Deep gorge' },
-    { u: 0.72, v: 0.08, r: 0.11, label: 'Deep gorge' },
-    { u: 0.88, v: 0.08, r: 0.11, label: 'Mountain cliff' },
-    // Canyon river chasm above & below the stone arch bridge
-    { u: 0.65, v: 0.29, r: 0.065, label: 'Deep gorge' },
-    { u: 0.65, v: 0.39, r: 0.055, label: 'Deep gorge' },
-    { u: 0.65, v: 0.68, r: 0.06, label: 'Deep gorge' },
-    { u: 0.60, v: 0.84, r: 0.065, label: 'Deep gorge' },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Sky, distant mountains, and upper treeline
+    { points: [[0.0, 0.0], [1.0, 0.0], [1.0, 0.44], [0.75, 0.42], [0.73, 0.20], [0.42, 0.18], [0.0, 0.16]], label: 'Deep gorge' },
+    // Canyon river chasm above the stone arch bridge
+    { points: [[0.56, 0.18], [0.74, 0.18], [0.72, 0.45], [0.56, 0.45]], label: 'Deep gorge' },
+    // Canyon river chasm below the stone arch bridge
+    { points: [[0.53, 0.56], [0.72, 0.56], [0.66, 1.0], [0.48, 1.0]], label: 'Deep gorge' },
+    // Left and bottom-left dense pine forest
+    { points: [[0.0, 0.16], [0.15, 0.20], [0.15, 0.66], [0.24, 0.84], [0.48, 0.86], [0.48, 1.0], [0.0, 1.0]], label: 'Dense forest' },
   ],
   backdropImage: '/src/assets/images/cutscene_l3_hollow_bridge_v2_1795472155574.jpg',
   pathUv: [
@@ -1752,39 +1793,49 @@ export const LEVEL3: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'bat', count: 8, gap: 1.3 },
-        { type: 'thornback', count: 4, gap: 3.2, delay: 7 },
+        { type: 'bat', count: 10, gap: 1.2 },
+        { type: 'thornback', count: 5, gap: 3.0, delay: 6.5 },
       ],
     },
     {
-      hp: 1.2,
+      hp: 1.18,
       groups: [
-        { type: 'bat', count: 12, gap: 0.95 },
-        { type: 'bramble', count: 4, gap: 3.1, delay: 6 },
+        { type: 'bat', count: 14, gap: 0.9 },
+        { type: 'bramble', count: 5, gap: 2.9, delay: 5.5 },
+        { type: 'wisp', count: 10, gap: 0.85, delay: 11 },
       ],
     },
     {
-      hp: 1.45,
+      hp: 1.4,
       groups: [
-        { type: 'wisp', count: 12, gap: 0.8 },
-        { type: 'bat', count: 14, gap: 0.85, delay: 5 },
-        { type: 'bramble', count: 5, gap: 2.7, delay: 11 },
+        { type: 'wisp', count: 16, gap: 0.72 },
+        { type: 'bat', count: 16, gap: 0.78, delay: 4.5 },
+        { type: 'bramble', count: 7, gap: 2.4, delay: 10 },
       ],
     },
     {
-      hp: 1.75,
+      hp: 1.66,
       groups: [
-        { type: 'bramble', count: 7, gap: 2.3 },
-        { type: 'bat', count: 16, gap: 0.75, delay: 4 },
-        { type: 'thornback', count: 8, gap: 2.2, delay: 10 },
+        { type: 'bramble', count: 9, gap: 2.1 },
+        { type: 'bat', count: 18, gap: 0.7, delay: 4 },
+        { type: 'thornback', count: 9, gap: 2.1, delay: 9.5 },
       ],
     },
     {
-      hp: 2.1,
+      hp: 1.96,
       groups: [
-        { type: 'bat', count: 20, gap: 0.65 },
-        { type: 'bramble', count: 9, gap: 2.0, delay: 5 },
-        { type: 'thornback', count: 10, gap: 2.0, delay: 12 },
+        { type: 'bat', count: 22, gap: 0.62 },
+        { type: 'bramble', count: 11, gap: 1.9, delay: 4.5 },
+        { type: 'thornback', count: 11, gap: 1.9, delay: 10.5 },
+        { type: 'wisp', count: 16, gap: 0.6, delay: 16 },
+      ],
+    },
+    {
+      hp: 2.25,
+      groups: [
+        { type: 'bat', count: 26, gap: 0.56 },
+        { type: 'bramble', count: 12, gap: 1.75, delay: 4 },
+        { type: 'thornback', count: 12, gap: 1.8, delay: 10 },
       ],
     },
   ],
@@ -1958,9 +2009,9 @@ export const LEVEL4: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember'],
   runeRate: 0.3,
   startCrystals: 205,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 6,
   bonusSurgeWaves: 3,
   mastery: {
     window: 6,
@@ -1973,10 +2024,16 @@ export const LEVEL4: LevelConfig = {
   finalBoost: 1.25,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Tall ruined sanctuary back wall & outer pine perimeter
-    { u: 0.58, v: 0.14, r: 0.08, label: 'Ruin wall' },
-    { u: 0.94, v: 0.22, r: 0.09, label: 'Dense forest' },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Tall ruined sanctuary back walls
+    { points: [[0.42, 0.05], [0.74, 0.04], [0.89, 0.34], [0.83, 0.52], [0.74, 0.39], [0.62, 0.24], [0.42, 0.35]], label: 'Ruin wall' },
+    // Central ruined archway and broken wall
+    { points: [[0.56, 0.48], [0.65, 0.48], [0.63, 0.66], [0.45, 0.88], [0.41, 0.79]], label: 'Ruin wall' },
+    // Dense pine forest perimeter (left, right, top)
+    { points: [[0.0, 0.0], [0.11, 0.0], [0.11, 1.0], [0.0, 1.0]], label: 'Dense forest' },
+    { points: [[0.89, 0.0], [1.0, 0.0], [1.0, 1.0], [0.89, 1.0]], label: 'Dense forest' },
+    { points: [[0.11, 0.0], [0.89, 0.0], [0.89, 0.11], [0.11, 0.11]], label: 'Dense forest' },
   ],
   backdropImage: '/src/assets/images/cutscene_l4_sunless_ruins_v2_1795472137783.jpg',
   pathUv: [
@@ -2023,40 +2080,49 @@ export const LEVEL4: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'splitter', count: 3, gap: 3.8 },
-        { type: 'bat', count: 8, gap: 1.2, delay: 6.5 },
+        { type: 'splitter', count: 4, gap: 3.4 },
+        { type: 'bat', count: 10, gap: 1.1, delay: 5.5 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.16,
       groups: [
-        { type: 'splitter', count: 4, gap: 3.1 },
-        { type: 'bramble', count: 4, gap: 2.9, delay: 5.5 },
-        { type: 'bat', count: 9, gap: 1.0, delay: 10.5 },
+        { type: 'splitter', count: 5, gap: 2.9 },
+        { type: 'bramble', count: 5, gap: 2.7, delay: 5 },
+        { type: 'bat', count: 11, gap: 0.95, delay: 9.5 },
       ],
     },
     {
-      hp: 1.42,
+      hp: 1.36,
       groups: [
-        { type: 'splitter', count: 6, gap: 2.6 },
-        { type: 'bat', count: 13, gap: 0.82, delay: 4.5 },
-        { type: 'bramble', count: 6, gap: 2.5, delay: 11.5 },
+        { type: 'splitter', count: 7, gap: 2.5 },
+        { type: 'bat', count: 14, gap: 0.8, delay: 4.5 },
+        { type: 'bramble', count: 7, gap: 2.3, delay: 10 },
       ],
     },
     {
-      hp: 1.7,
+      hp: 1.6,
       groups: [
-        { type: 'splitter', count: 8, gap: 2.3 },
-        { type: 'bramble', count: 8, gap: 2.2, delay: 5 },
-        { type: 'bat', count: 15, gap: 0.72, delay: 11 },
+        { type: 'splitter', count: 9, gap: 2.2 },
+        { type: 'bramble', count: 9, gap: 2.05, delay: 4.5 },
+        { type: 'bat', count: 16, gap: 0.72, delay: 10 },
       ],
     },
     {
-      hp: 2.02,
+      hp: 1.88,
       groups: [
-        { type: 'splitter', count: 10, gap: 2.05 },
-        { type: 'bat', count: 17, gap: 0.68, delay: 4 },
-        { type: 'bramble', count: 9, gap: 1.95, delay: 10 },
+        { type: 'splitter', count: 11, gap: 1.95 },
+        { type: 'bat', count: 19, gap: 0.65, delay: 4 },
+        { type: 'bramble', count: 10, gap: 1.85, delay: 9.5 },
+      ],
+    },
+    {
+      hp: 2.18,
+      groups: [
+        { type: 'splitter', count: 13, gap: 1.8 },
+        { type: 'bramble', count: 12, gap: 1.75, delay: 3.5 },
+        { type: 'bat', count: 22, gap: 0.6, delay: 9 },
+        { type: 'wisp', count: 18, gap: 0.55, delay: 15 },
       ],
     },
   ],
@@ -2225,9 +2291,9 @@ export const LEVEL5: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla'],
   runeRate: 0.32,
   startCrystals: 255,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 6,
   bonusSurgeWaves: 0,
   mastery: {
     window: 6,
@@ -2240,11 +2306,18 @@ export const LEVEL5: LevelConfig = {
   finalBoost: 1.2,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Giant gnarled thorn-tree trunk & central crystal chasm
-    { u: 0.41, v: 0.14, r: 0.085, label: 'Ancient trunk' },
-    { u: 0.45, v: 0.45, r: 0.055, label: 'Thorn chasm' },
-    { u: 0.52, v: 0.63, r: 0.065, label: 'Thorn chasm' },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Giant gnarled thorn-tree trunk at top-center
+    { points: [[0.26, 0.0], [0.54, 0.0], [0.51, 0.31], [0.30, 0.31]], label: 'Ancient trunk' },
+    // Central dark thorn chasm beneath the root bridge
+    { points: [[0.36, 0.35], [0.54, 0.35], [0.61, 0.64], [0.50, 0.88], [0.42, 0.72], [0.34, 0.56]], label: 'Thorn chasm' },
+    // Massive thorn arch top-right
+    { points: [[0.79, 0.0], [1.0, 0.0], [1.0, 0.50], [0.85, 0.34]], label: 'Thorn thicket' },
+    // Left cliff and crystal rim
+    { points: [[0.0, 0.42], [0.13, 0.46], [0.16, 0.84], [0.38, 0.86], [0.42, 1.0], [0.0, 1.0]], label: 'Thorn cliff' },
+    // Right bramble tangle above citadel
+    { points: [[0.70, 0.55], [0.86, 0.50], [0.86, 0.66], [0.72, 0.68]], label: 'Thorn thicket' },
   ],
   backdropImage: '/src/assets/images/cutscene_l5_thornking_heart_v2_1795472137644.jpg',
   pathUv: [
@@ -2290,44 +2363,54 @@ export const LEVEL5: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'brute', count: 2, gap: 4.8 },
-        { type: 'bat', count: 9, gap: 1.1, delay: 4.5 },
-        { type: 'splitter', count: 3, gap: 3.5, delay: 11 },
+        { type: 'brute', count: 3, gap: 4.2 },
+        { type: 'bat', count: 10, gap: 1.0, delay: 4 },
+        { type: 'splitter', count: 4, gap: 3.1, delay: 10 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.15,
       groups: [
-        { type: 'brute', count: 3, gap: 3.8 },
-        { type: 'splitter', count: 5, gap: 2.8, delay: 5.5 },
-        { type: 'bramble', count: 5, gap: 2.5, delay: 11.5 },
+        { type: 'brute', count: 4, gap: 3.5 },
+        { type: 'splitter', count: 6, gap: 2.6, delay: 5 },
+        { type: 'bramble', count: 6, gap: 2.3, delay: 10.5 },
       ],
     },
     {
       hp: 1.32,
       groups: [
+        { type: 'brute', count: 5, gap: 3.1 },
+        { type: 'bat', count: 14, gap: 0.82, delay: 4 },
+        { type: 'splitter', count: 6, gap: 2.4, delay: 9.5 },
+        { type: 'bramble', count: 6, gap: 2.1, delay: 14.5 },
+      ],
+    },
+    {
+      hp: 1.5,
+      groups: [
         { type: 'thornking', count: 1, gap: 1.0, delay: 4.5 },
-        { type: 'brute', count: 4, gap: 3.6, delay: 1 },
-        { type: 'bat', count: 13, gap: 0.88, delay: 7.5 },
-        { type: 'splitter', count: 4, gap: 2.7, delay: 14.5 },
+        { type: 'brute', count: 5, gap: 3.1, delay: 1 },
+        { type: 'bat', count: 15, gap: 0.78, delay: 7 },
+        { type: 'splitter', count: 5, gap: 2.4, delay: 13.5 },
       ],
     },
     {
-      hp: 1.62,
+      hp: 1.75,
       groups: [
-        { type: 'thornking', count: 1, gap: 1.0, delay: 3 },
-        { type: 'brute', count: 5, gap: 3.05, delay: 1 },
-        { type: 'splitter', count: 6, gap: 2.25, delay: 8 },
-        { type: 'bat', count: 15, gap: 0.76, delay: 13 },
+        { type: 'brute', count: 7, gap: 2.65 },
+        { type: 'splitter', count: 8, gap: 2.1, delay: 4.5 },
+        { type: 'bramble', count: 8, gap: 1.95, delay: 9.5 },
+        { type: 'bat', count: 18, gap: 0.68, delay: 14 },
       ],
     },
     {
-      hp: 1.92,
+      hp: 2.02,
       groups: [
-        { type: 'thornking', count: 1, gap: 1.0, delay: 2 },
-        { type: 'brute', count: 7, gap: 2.75, delay: 1 },
-        { type: 'splitter', count: 8, gap: 2.15, delay: 7 },
-        { type: 'bramble', count: 7, gap: 2.05, delay: 13 },
+        { type: 'thornking', count: 1, gap: 1.0, delay: 2.5 },
+        { type: 'brute', count: 8, gap: 2.5, delay: 1 },
+        { type: 'splitter', count: 9, gap: 1.95, delay: 6.5 },
+        { type: 'bramble', count: 8, gap: 1.85, delay: 12 },
+        { type: 'bat', count: 16, gap: 0.66, delay: 16.5 },
       ],
     },
   ],
@@ -2498,9 +2581,9 @@ export const W2_LEVEL1: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla'],
   runeRate: 0.28,
   startCrystals: 225,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 6,
   bonusSurgeWaves: 3,
   mastery: {
     window: 11,
@@ -2513,13 +2596,17 @@ export const W2_LEVEL1: LevelConfig = {
   finalBoost: 1.25,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Molten lava lake along right edge & upper smelter skyline
-    { u: 0.87, v: 0.20, r: 0.11, label: 'Molten lava' },
-    { u: 0.93, v: 0.46, r: 0.10, label: 'Molten lava' },
-    { u: 0.55, v: 0.06, r: 0.08, label: 'Factory cliff' },
-    // Bottom-left lava drop-off
-    { u: 0.11, v: 0.89, r: 0.09, label: 'Molten lava' },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Molten lava lake and volcanic cliffs along right edge
+    { points: [[0.71, 0.0], [1.0, 0.0], [1.0, 0.66], [0.86, 0.52], [0.81, 0.24], [0.69, 0.13]], label: 'Molten lava' },
+    // Top-left rift cliffs and upper foundry skyline
+    { points: [[0.0, 0.0], [0.42, 0.0], [0.36, 0.15], [0.18, 0.38], [0.0, 0.54]], label: 'Volcanic cliff' },
+    { points: [[0.40, 0.0], [0.73, 0.0], [0.68, 0.12], [0.40, 0.12]], label: 'Factory cliff' },
+    // Bottom-left molten lava gorge
+    { points: [[0.0, 0.56], [0.15, 0.68], [0.27, 0.90], [0.24, 1.0], [0.0, 1.0]], label: 'Molten lava' },
+    // Anchor camp tents bottom-right
+    { points: [[0.75, 0.70], [1.0, 0.66], [1.0, 1.0], [0.70, 1.0]], label: 'Anchor camp' },
   ],
   backdropImage: '/src/assets/images/cutscene_w2_l1_opening_1795525103158.jpg',
   pathUv: [
@@ -2573,41 +2660,51 @@ export const W2_LEVEL1: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'cinderimp', count: 10, gap: 0.85 },
-        { type: 'bramble', count: 3, gap: 3.2, delay: 6.5 },
+        { type: 'cinderimp', count: 12, gap: 0.78 },
+        { type: 'bramble', count: 4, gap: 3.0, delay: 5.5 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.15,
       groups: [
-        { type: 'cinderimp', count: 14, gap: 0.68 },
-        { type: 'bat', count: 8, gap: 1.05, delay: 5.5 },
-        { type: 'bramble', count: 4, gap: 2.8, delay: 11 },
+        { type: 'cinderimp', count: 16, gap: 0.65 },
+        { type: 'bat', count: 10, gap: 0.95, delay: 5 },
+        { type: 'bramble', count: 5, gap: 2.6, delay: 10.5 },
       ],
     },
     {
-      hp: 1.4,
+      hp: 1.35,
       groups: [
-        { type: 'cinderimp', count: 18, gap: 0.58 },
-        { type: 'splitter', count: 4, gap: 2.9, delay: 5 },
-        { type: 'bat', count: 10, gap: 0.9, delay: 11.5 },
+        { type: 'cinderimp', count: 20, gap: 0.56 },
+        { type: 'splitter', count: 5, gap: 2.6, delay: 4.5 },
+        { type: 'bat', count: 12, gap: 0.85, delay: 10.5 },
       ],
     },
     {
-      hp: 1.66,
+      hp: 1.58,
       groups: [
-        { type: 'cinderimp', count: 22, gap: 0.52 },
-        { type: 'brute', count: 3, gap: 3.6, delay: 4.5 },
-        { type: 'splitter', count: 5, gap: 2.6, delay: 10.5 },
+        { type: 'cinderimp', count: 24, gap: 0.5 },
+        { type: 'brute', count: 3, gap: 3.3, delay: 4.5 },
+        { type: 'splitter', count: 6, gap: 2.4, delay: 9.5 },
+        { type: 'bramble', count: 6, gap: 2.1, delay: 14 },
       ],
     },
     {
-      hp: 1.95,
+      hp: 1.84,
       groups: [
-        { type: 'cinderimp', count: 26, gap: 0.46 },
-        { type: 'brute', count: 4, gap: 3.1, delay: 4 },
-        { type: 'bat', count: 14, gap: 0.78, delay: 9 },
-        { type: 'splitter', count: 6, gap: 2.3, delay: 14 },
+        { type: 'cinderimp', count: 28, gap: 0.46 },
+        { type: 'brute', count: 4, gap: 2.9, delay: 4 },
+        { type: 'bat', count: 15, gap: 0.74, delay: 8.5 },
+        { type: 'splitter', count: 7, gap: 2.2, delay: 13.5 },
+      ],
+    },
+    {
+      hp: 2.12,
+      groups: [
+        { type: 'cinderimp', count: 32, gap: 0.42 },
+        { type: 'brute', count: 5, gap: 2.65, delay: 3.5 },
+        { type: 'bat', count: 18, gap: 0.68, delay: 8.5 },
+        { type: 'splitter', count: 8, gap: 2.0, delay: 13.5 },
       ],
     },
   ],
@@ -2780,9 +2877,9 @@ export const W2_LEVEL2: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail'],
   runeRate: 0.28,
   startCrystals: 245,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 6,
   bonusSurgeWaves: 3,
   mastery: {
     window: 8,
@@ -2795,13 +2892,19 @@ export const W2_LEVEL2: LevelConfig = {
   finalBoost: 1.25,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Open molten lava basin beneath and right of the viaduct
-    { u: 0.86, v: 0.18, r: 0.11, label: 'Molten lava' },
-    { u: 0.93, v: 0.46, r: 0.09, label: 'Molten lava' },
-    { u: 0.58, v: 0.61, r: 0.075, label: 'Molten lava' },
-    { u: 0.72, v: 0.63, r: 0.075, label: 'Molten lava' },
-    { u: 0.65, v: 0.91, r: 0.085, label: 'Molten lava' },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Upper molten lava chasm & cross-bridge beneath the viaduct
+    { points: [[0.39, 0.34], [0.64, 0.28], [0.65, 0.42], [0.43, 0.48]], label: 'Molten lava' },
+    // Lower molten lava basin, bridge pillars & smelter pipes
+    { points: [[0.48, 0.50], [0.70, 0.44], [0.84, 0.64], [0.50, 0.72]], label: 'Molten lava' },
+    // Bottom molten lava river under the lower arch bridge
+    { points: [[0.58, 0.76], [0.74, 0.76], [0.74, 1.0], [0.56, 1.0]], label: 'Molten lava' },
+    // Far-right lava lake and volcanic cliff wall
+    { points: [[0.79, 0.0], [1.0, 0.0], [1.0, 0.66], [0.85, 0.46], [0.80, 0.20], [0.70, 0.12]], label: 'Molten lava' },
+    // Top-left rift cliff, brass smelter pipes, and background skyline
+    { points: [[0.0, 0.0], [0.42, 0.0], [0.42, 0.20], [0.22, 0.32], [0.16, 0.50], [0.0, 0.54]], label: 'Foundry cliff' },
+    { points: [[0.42, 0.0], [0.76, 0.0], [0.70, 0.12], [0.42, 0.12]], label: 'Foundry cliff' },
   ],
   backdropImage: '/src/assets/images/cutscene_w2_l2_opening_1795606912950.jpg',
   pathUv: [
@@ -2855,42 +2958,52 @@ export const W2_LEVEL2: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'shieldbearer', count: 4, gap: 3.4 },
-        { type: 'cinderimp', count: 8, gap: 0.9, delay: 5.5 },
+        { type: 'shieldbearer', count: 5, gap: 3.1 },
+        { type: 'cinderimp', count: 10, gap: 0.82, delay: 5 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.15,
       groups: [
-        { type: 'shieldbearer', count: 6, gap: 2.9 },
-        { type: 'cinderimp', count: 12, gap: 0.72, delay: 4.5 },
-        { type: 'bat', count: 8, gap: 1.0, delay: 10 },
+        { type: 'shieldbearer', count: 7, gap: 2.7 },
+        { type: 'cinderimp', count: 14, gap: 0.68, delay: 4 },
+        { type: 'bat', count: 10, gap: 0.95, delay: 9.5 },
       ],
     },
     {
-      hp: 1.4,
+      hp: 1.35,
       groups: [
-        { type: 'shieldbearer', count: 8, gap: 2.5 },
-        { type: 'bramble', count: 5, gap: 2.6, delay: 5 },
-        { type: 'cinderimp', count: 14, gap: 0.62, delay: 10.5 },
+        { type: 'shieldbearer', count: 9, gap: 2.35 },
+        { type: 'bramble', count: 6, gap: 2.4, delay: 4.5 },
+        { type: 'cinderimp', count: 16, gap: 0.58, delay: 10 },
       ],
     },
     {
-      hp: 1.66,
+      hp: 1.58,
       groups: [
-        { type: 'shieldbearer', count: 10, gap: 2.2 },
-        { type: 'splitter', count: 4, gap: 2.8, delay: 4.5 },
-        { type: 'bat', count: 12, gap: 0.82, delay: 9.5 },
-        { type: 'cinderimp', count: 16, gap: 0.55, delay: 14 },
+        { type: 'shieldbearer', count: 11, gap: 2.1 },
+        { type: 'splitter', count: 5, gap: 2.6, delay: 4 },
+        { type: 'bat', count: 13, gap: 0.78, delay: 9 },
+        { type: 'cinderimp', count: 18, gap: 0.52, delay: 13.5 },
       ],
     },
     {
-      hp: 1.96,
+      hp: 1.84,
       groups: [
-        { type: 'shieldbearer', count: 12, gap: 1.95 },
-        { type: 'brute', count: 3, gap: 3.3, delay: 4 },
-        { type: 'cinderimp', count: 20, gap: 0.5, delay: 8.5 },
-        { type: 'splitter', count: 5, gap: 2.4, delay: 13.5 },
+        { type: 'shieldbearer', count: 13, gap: 1.9 },
+        { type: 'brute', count: 3, gap: 3.1, delay: 4 },
+        { type: 'cinderimp', count: 22, gap: 0.48, delay: 8.5 },
+        { type: 'splitter', count: 6, gap: 2.25, delay: 13 },
+      ],
+    },
+    {
+      hp: 2.12,
+      groups: [
+        { type: 'shieldbearer', count: 15, gap: 1.75 },
+        { type: 'brute', count: 4, gap: 2.8, delay: 3.5 },
+        { type: 'bat', count: 16, gap: 0.7, delay: 8 },
+        { type: 'cinderimp', count: 26, gap: 0.44, delay: 12.5 },
+        { type: 'splitter', count: 7, gap: 2.1, delay: 16.5 },
       ],
     },
   ],
@@ -3057,9 +3170,9 @@ export const W2_LEVEL3: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail'],
   runeRate: 0.32,
   startCrystals: 255,
-  waveEvery: 10,
+  waveEvery: 8,
   anchor: 20,
-  minWaves: 4,
+  minWaves: 6,
   bonusSurgeWaves: 3,
   mastery: {
     window: 8,
@@ -3073,13 +3186,17 @@ export const W2_LEVEL3: LevelConfig = {
   hasWalkthrough: false,
   freePlacement: true,
   noBuildZones: [
-    // Deep molten lava gorge surrounding the central island plateau
-    { u: 0.21, v: 0.53, r: 0.085, label: 'Molten lava' },
-    { u: 0.49, v: 0.23, r: 0.08, label: 'Molten lava' },
-    { u: 0.80, v: 0.59, r: 0.085, label: 'Molten lava' },
-    { u: 0.69, v: 0.90, r: 0.085, label: 'Molten lava' },
-    // Upper background smelters
-    { u: 0.88, v: 0.16, r: 0.12, label: 'Foundry wall' },
+    { u: 0.535, v: 0.305, r: 0.038, label: 'Jagged rock' },
+  ],
+  noBuildPolys: [
+    // Upper smelters, cranes, and molten lava gorge
+    { points: [[0.22, 0.0], [1.0, 0.0], [1.0, 0.42], [0.74, 0.38], [0.60, 0.27], [0.42, 0.29], [0.26, 0.22]], label: 'Foundry gorge' },
+    // Left molten lava river beneath the suspension bridge
+    { points: [[0.0, 0.30], [0.30, 0.40], [0.28, 0.64], [0.0, 0.56]], label: 'Molten lava' },
+    // Right molten lava gorge beneath the steel bridges
+    { points: [[0.74, 0.40], [1.0, 0.40], [1.0, 0.72], [0.80, 0.72], [0.71, 0.58]], label: 'Molten lava' },
+    // Bottom molten lava chasm beneath the Anchor bridge
+    { points: [[0.56, 0.76], [0.78, 0.78], [0.80, 1.0], [0.52, 1.0]], label: 'Molten lava' },
   ],
   backdropImage: '/src/assets/images/cutscene_w2_l3_opening_1795608966519.jpg',
   pathUv: [
@@ -3131,42 +3248,52 @@ export const W2_LEVEL3: LevelConfig = {
     {
       hp: 1.0,
       groups: [
-        { type: 'shrieker', count: 5, gap: 2.5 },
-        { type: 'cinderimp', count: 9, gap: 0.85, delay: 4.5 },
+        { type: 'shrieker', count: 6, gap: 2.3 },
+        { type: 'cinderimp', count: 11, gap: 0.78, delay: 4.5 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.16,
       groups: [
-        { type: 'shieldbearer', count: 5, gap: 2.9 },
-        { type: 'shrieker', count: 7, gap: 2.0, delay: 3.5 },
-        { type: 'bat', count: 8, gap: 0.9, delay: 10 },
+        { type: 'shieldbearer', count: 6, gap: 2.7 },
+        { type: 'shrieker', count: 8, gap: 1.85, delay: 3.5 },
+        { type: 'bat', count: 10, gap: 0.85, delay: 9.5 },
       ],
     },
     {
-      hp: 1.4,
+      hp: 1.35,
       groups: [
-        { type: 'shrieker', count: 9, gap: 1.8 },
-        { type: 'shieldbearer', count: 7, gap: 2.5, delay: 4 },
-        { type: 'cinderimp', count: 14, gap: 0.6, delay: 9.5 },
+        { type: 'shrieker', count: 10, gap: 1.65 },
+        { type: 'shieldbearer', count: 8, gap: 2.35, delay: 4 },
+        { type: 'cinderimp', count: 16, gap: 0.56, delay: 9 },
       ],
     },
     {
-      hp: 1.66,
+      hp: 1.58,
       groups: [
-        { type: 'shrieker', count: 11, gap: 1.55 },
-        { type: 'shieldbearer', count: 8, gap: 2.2, delay: 3.5 },
-        { type: 'splitter', count: 4, gap: 2.7, delay: 8.5 },
-        { type: 'bat', count: 12, gap: 0.78, delay: 13 },
+        { type: 'shrieker', count: 12, gap: 1.45 },
+        { type: 'shieldbearer', count: 9, gap: 2.1, delay: 3.5 },
+        { type: 'splitter', count: 5, gap: 2.5, delay: 8 },
+        { type: 'bat', count: 14, gap: 0.74, delay: 12.5 },
       ],
     },
     {
-      hp: 1.98,
+      hp: 1.84,
       groups: [
-        { type: 'shrieker', count: 14, gap: 1.35 },
-        { type: 'shieldbearer', count: 10, gap: 2.0, delay: 3.5 },
-        { type: 'brute', count: 3, gap: 3.2, delay: 7.5 },
-        { type: 'cinderimp', count: 18, gap: 0.5, delay: 12 },
+        { type: 'shrieker', count: 15, gap: 1.3 },
+        { type: 'shieldbearer', count: 11, gap: 1.9, delay: 3.5 },
+        { type: 'brute', count: 3, gap: 3.0, delay: 7.5 },
+        { type: 'cinderimp', count: 20, gap: 0.48, delay: 12 },
+      ],
+    },
+    {
+      hp: 2.14,
+      groups: [
+        { type: 'shrieker', count: 18, gap: 1.18 },
+        { type: 'shieldbearer', count: 13, gap: 1.75, delay: 3 },
+        { type: 'brute', count: 4, gap: 2.75, delay: 7 },
+        { type: 'splitter', count: 6, gap: 2.2, delay: 11.5 },
+        { type: 'cinderimp', count: 22, gap: 0.44, delay: 15.5 },
       ],
     },
   ],
@@ -3345,9 +3472,9 @@ export const W2_LEVEL4: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
   runeRate: 0.32,
   startCrystals: 265,
-  waveEvery: 10,
+  waveEvery: 7,
   anchor: 20,
-  minWaves: 4,
+  minWaves: 7,
   bonusSurgeWaves: 3,
   mastery: {
     window: 8,
@@ -3361,11 +3488,17 @@ export const W2_LEVEL4: LevelConfig = {
   hasWalkthrough: false,
   freePlacement: true,
   noBuildZones: [
-    // Central molten crucible cauldron & active lava channels
-    { u: 0.39, v: 0.36, r: 0.055, label: 'Molten lava' },
-    { u: 0.64, v: 0.40, r: 0.055, label: 'Molten crucible' },
-    { u: 0.50, v: 0.84, r: 0.05, label: 'Molten lava' },
-    { u: 0.89, v: 0.60, r: 0.055, label: 'Molten lava' },
+    { u: 0.62, v: 0.44, r: 0.068, label: 'Molten crucible' },
+  ],
+  noBuildPolys: [
+    // Top cavern wall & glowing furnace arches
+    { points: [[0.0, 0.0], [1.0, 0.0], [1.0, 0.22], [0.84, 0.17], [0.48, 0.14], [0.22, 0.16], [0.0, 0.24]], label: 'Foundry wall' },
+    // Upper-center molten cauldron and lava river
+    { points: [[0.33, 0.08], [0.54, 0.12], [0.44, 0.42], [0.34, 0.42], [0.32, 0.29]], label: 'Molten lava' },
+    // Left molten cauldron and lower lava canyon
+    { points: [[0.0, 0.36], [0.09, 0.37], [0.16, 0.58], [0.47, 0.70], [0.54, 1.0], [0.44, 1.0], [0.41, 0.75], [0.08, 0.62], [0.0, 0.56]], label: 'Molten lava' },
+    // Right lava waterfall and pool
+    { points: [[0.79, 0.58], [0.92, 0.39], [1.0, 0.36], [1.0, 0.64], [0.79, 0.63]], label: 'Molten lava' },
   ],
   backdropImage: '/src/assets/images/cutscene_w2_l4_opening_1795713155111.jpg',
   pathUv: [
@@ -3419,46 +3552,70 @@ export const W2_LEVEL4: LevelConfig = {
   ],
   waves: [
     {
-      hp: 1.0,
+      hp: 1.05,
       groups: [
-        { type: 'shieldbearer', count: 4, gap: 2.8 },
-        { type: 'weaver', count: 2, gap: 4.5, delay: 3.2 },
-        { type: 'cinderimp', count: 8, gap: 0.85, delay: 6.5 },
+        { type: 'shieldbearer', count: 5, gap: 2.6 },
+        { type: 'weaver', count: 2, gap: 4.2, delay: 3.0 },
+        { type: 'cinderimp', count: 10, gap: 0.78, delay: 6.0 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.2,
       groups: [
-        { type: 'shrieker', count: 6, gap: 2.1 },
-        { type: 'shieldbearer', count: 5, gap: 2.5, delay: 2.8 },
-        { type: 'weaver', count: 3, gap: 3.8, delay: 5.5 },
+        { type: 'shrieker', count: 7, gap: 1.95 },
+        { type: 'shieldbearer', count: 6, gap: 2.35, delay: 2.8 },
+        { type: 'weaver', count: 3, gap: 3.6, delay: 5.5 },
+        { type: 'cinderimp', count: 12, gap: 0.65, delay: 9.0 },
       ],
     },
     {
-      hp: 1.4,
+      hp: 1.38,
       groups: [
-        { type: 'shieldbearer', count: 6, gap: 2.2 },
-        { type: 'weaver', count: 4, gap: 3.2, delay: 3.0 },
-        { type: 'shrieker', count: 8, gap: 1.75, delay: 6.5 },
-        { type: 'cinderimp', count: 14, gap: 0.6, delay: 11.0 },
+        { type: 'shieldbearer', count: 7, gap: 2.15 },
+        { type: 'weaver', count: 4, gap: 3.1, delay: 2.8 },
+        { type: 'shrieker', count: 9, gap: 1.65, delay: 6.0 },
+        { type: 'splitter', count: 5, gap: 2.3, delay: 9.5 },
+        { type: 'cinderimp', count: 16, gap: 0.55, delay: 12.5 },
       ],
     },
     {
-      hp: 1.68,
+      hp: 1.6,
       groups: [
-        { type: 'shieldbearer', count: 8, gap: 2.0 },
-        { type: 'weaver', count: 5, gap: 2.8, delay: 2.5 },
-        { type: 'shrieker', count: 10, gap: 1.5, delay: 6.0 },
-        { type: 'brute', count: 3, gap: 3.2, delay: 10.5 },
+        { type: 'shieldbearer', count: 9, gap: 1.95 },
+        { type: 'weaver', count: 5, gap: 2.75, delay: 2.5 },
+        { type: 'shrieker', count: 11, gap: 1.45, delay: 5.5 },
+        { type: 'brute', count: 4, gap: 2.8, delay: 9.5 },
       ],
     },
     {
-      hp: 1.98,
+      hp: 1.85,
       groups: [
-        { type: 'shieldbearer', count: 10, gap: 1.85 },
-        { type: 'weaver', count: 6, gap: 2.4, delay: 2.0 },
-        { type: 'shrieker', count: 12, gap: 1.35, delay: 5.5 },
-        { type: 'cinderimp', count: 18, gap: 0.5, delay: 11.5 },
+        { type: 'shieldbearer', count: 11, gap: 1.8 },
+        { type: 'weaver', count: 6, gap: 2.45, delay: 2.2 },
+        { type: 'shrieker', count: 13, gap: 1.32, delay: 5.0 },
+        { type: 'splitter', count: 6, gap: 2.1, delay: 8.5 },
+        { type: 'cinderimp', count: 20, gap: 0.48, delay: 11.5 },
+      ],
+    },
+    {
+      hp: 2.12,
+      groups: [
+        { type: 'shieldbearer', count: 12, gap: 1.7 },
+        { type: 'weaver', count: 7, gap: 2.25, delay: 2.0 },
+        { type: 'brute', count: 5, gap: 2.6, delay: 5.0 },
+        { type: 'shrieker', count: 15, gap: 1.22, delay: 9.0 },
+        { type: 'cinderimp', count: 20, gap: 0.46, delay: 13.0 },
+      ],
+    },
+    {
+      hp: 2.4,
+      groups: [
+        { type: 'shieldbearer', count: 14, gap: 1.6 },
+        { type: 'weaver', count: 8, gap: 2.1, delay: 2.0 },
+        { type: 'shrieker', count: 17, gap: 1.12, delay: 5.0 },
+        { type: 'brute', count: 6, gap: 2.4, delay: 9.0 },
+        { type: 'splitter', count: 7, gap: 1.95, delay: 12.0 },
+        { type: 'cinderimp', count: 24, gap: 0.42, delay: 15.0 },
       ],
     },
   ],
@@ -3636,9 +3793,9 @@ export const W2_LEVEL5: LevelConfig = {
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
   runeRate: 0.34,
   startCrystals: 280,
-  waveEvery: 10,
+  waveEvery: 7,
   anchor: 20,
-  minWaves: 4,
+  minWaves: 7,
   bonusSurgeWaves: 0,
   mastery: {
     window: 7,
@@ -3653,11 +3810,19 @@ export const W2_LEVEL5: LevelConfig = {
   freePlacement: true,
   noBuildZones: [
     // Central blazing molten furnace core cauldron
-    { u: 0.495, v: 0.485, r: 0.12, label: 'Furnace core' },
-    // Deep lava pits flanking the outer furnace bridge
-    { u: 0.74, v: 0.56, r: 0.065, label: 'Molten lava' },
-    { u: 0.16, v: 0.54, r: 0.065, label: 'Molten lava' },
-    { u: 0.54, v: 0.88, r: 0.065, label: 'Molten lava' },
+    { u: 0.495, v: 0.495, r: 0.132, label: 'Furnace core' },
+  ],
+  noBuildPolys: [
+    // Upper cavern ceiling, stalactites, and lava waterfalls
+    { points: [[0.0, 0.0], [1.0, 0.0], [1.0, 0.26], [0.78, 0.20], [0.54, 0.08], [0.30, 0.15], [0.18, 0.12], [0.0, 0.16]], label: 'Cavern wall' },
+    // Left molten lava moat under the bridge
+    { points: [[0.0, 0.30], [0.22, 0.38], [0.29, 0.66], [0.18, 0.66], [0.0, 0.54]], label: 'Molten lava' },
+    // Right inner molten lava moat
+    { points: [[0.70, 0.30], [0.83, 0.38], [0.82, 0.60], [0.70, 0.58]], label: 'Molten lava' },
+    // Bottom molten lava chasm
+    { points: [[0.42, 0.79], [0.68, 0.74], [0.70, 1.0], [0.40, 1.0]], label: 'Molten lava' },
+    // Far-right molten lava pool
+    { points: [[0.89, 0.26], [1.0, 0.26], [1.0, 0.66], [0.89, 0.64]], label: 'Molten lava' },
   ],
   backdropImage: '/src/assets/images/cutscene_w2_l5_opening_1795713159897.jpg',
   pathUv: [
@@ -3706,48 +3871,73 @@ export const W2_LEVEL5: LevelConfig = {
   ],
   waves: [
     {
-      hp: 1.0,
+      hp: 1.08,
       groups: [
-        { type: 'shieldbearer', count: 5, gap: 2.6 },
-        { type: 'weaver', count: 2, gap: 4.0, delay: 3.0 },
-        { type: 'shrieker', count: 6, gap: 2.1, delay: 5.5 },
+        { type: 'shieldbearer', count: 6, gap: 2.5 },
+        { type: 'weaver', count: 2, gap: 3.8, delay: 3.0 },
+        { type: 'shrieker', count: 7, gap: 1.95, delay: 5.5 },
+        { type: 'cinderimp', count: 12, gap: 0.65, delay: 9.0 },
       ],
     },
     {
-      hp: 1.2,
+      hp: 1.24,
       groups: [
-        { type: 'shieldbearer', count: 6, gap: 2.3 },
-        { type: 'weaver', count: 4, gap: 3.4, delay: 2.5 },
-        { type: 'shrieker', count: 8, gap: 1.8, delay: 6.0 },
-        { type: 'cinderimp', count: 14, gap: 0.6, delay: 10.5 },
+        { type: 'shieldbearer', count: 7, gap: 2.2 },
+        { type: 'weaver', count: 4, gap: 3.2, delay: 2.5 },
+        { type: 'shrieker', count: 9, gap: 1.7, delay: 5.5 },
+        { type: 'cinderimp', count: 16, gap: 0.56, delay: 10.0 },
       ],
     },
     {
-      hp: 1.38,
+      hp: 1.42,
       groups: [
-        { type: 'shieldbearer', count: 7, gap: 2.1 },
-        { type: 'weaver', count: 4, gap: 3.0, delay: 2.5 },
-        { type: 'shrieker', count: 10, gap: 1.55, delay: 5.5 },
-        { type: 'brute', count: 3, gap: 3.0, delay: 9.5 },
+        { type: 'shieldbearer', count: 8, gap: 2.0 },
+        { type: 'weaver', count: 4, gap: 2.9, delay: 2.5 },
+        { type: 'shrieker', count: 11, gap: 1.5, delay: 5.5 },
+        { type: 'splitter', count: 6, gap: 2.15, delay: 8.5 },
+        { type: 'brute', count: 3, gap: 2.9, delay: 11.0 },
       ],
     },
     {
-      hp: 1.48,
+      hp: 1.62,
+      groups: [
+        { type: 'shieldbearer', count: 10, gap: 1.85 },
+        { type: 'weaver', count: 5, gap: 2.6, delay: 2.2 },
+        { type: 'shrieker', count: 12, gap: 1.4, delay: 5.0 },
+        { type: 'brute', count: 4, gap: 2.7, delay: 9.0 },
+        { type: 'cinderimp', count: 18, gap: 0.5, delay: 13.0 },
+      ],
+    },
+    {
+      hp: 1.82,
       groups: [
         { type: 'ironwarden', count: 1, gap: 1.0, delay: 4.0 },
-        { type: 'shieldbearer', count: 6, gap: 2.2, delay: 1.0 },
-        { type: 'weaver', count: 4, gap: 3.2, delay: 5.0 },
-        { type: 'shrieker', count: 10, gap: 1.5, delay: 9.5 },
-      ],
-    },
-    {
-      hp: 1.78,
-      groups: [
-        { type: 'ironwarden', count: 1, gap: 1.0, delay: 2.5 },
         { type: 'shieldbearer', count: 8, gap: 2.0, delay: 1.0 },
         { type: 'weaver', count: 5, gap: 2.8, delay: 4.5 },
         { type: 'shrieker', count: 12, gap: 1.35, delay: 8.5 },
-        { type: 'cinderimp', count: 16, gap: 0.5, delay: 13.0 },
+        { type: 'cinderimp', count: 16, gap: 0.5, delay: 12.5 },
+      ],
+    },
+    {
+      hp: 2.05,
+      groups: [
+        { type: 'shieldbearer', count: 11, gap: 1.75 },
+        { type: 'weaver', count: 6, gap: 2.4, delay: 2.0 },
+        { type: 'shrieker', count: 14, gap: 1.25, delay: 5.0 },
+        { type: 'splitter', count: 7, gap: 2.0, delay: 8.5 },
+        { type: 'brute', count: 5, gap: 2.5, delay: 11.5 },
+        { type: 'cinderimp', count: 22, gap: 0.46, delay: 14.5 },
+      ],
+    },
+    {
+      hp: 2.3,
+      groups: [
+        { type: 'ironwarden', count: 1, gap: 1.0, delay: 2.5 },
+        { type: 'shieldbearer', count: 10, gap: 1.85, delay: 1.0 },
+        { type: 'weaver', count: 6, gap: 2.5, delay: 4.0 },
+        { type: 'shrieker', count: 15, gap: 1.2, delay: 8.0 },
+        { type: 'brute', count: 4, gap: 2.6, delay: 11.5 },
+        { type: 'cinderimp', count: 24, gap: 0.44, delay: 15.0 },
       ],
     },
   ],
@@ -3906,16 +4096,16 @@ export const W3_LEVEL1: LevelConfig = {
   headline: 'Free Placement at Dawnbreak Terrace',
   description:
     'Place towers anywhere on the open alpine terraces and snap trail traps anywhere along the mountain road. Slow down dashing Gale Wraiths while mastering silent-e long vowels (a_e and i_e).',
-  enemiesSummary: 'Gale Wraiths, Shieldbearers, Rift Shriekers, and Forge Weavers',
+  enemiesSummary: 'Gale Wraiths, Shieldbearers, Cinder Imps, Rift Shriekers, Forge Weavers, and Brutes',
   wordsSummary: 'silent-e long a (a_e) & long i (i_e), plus runes',
   rewardSummary: 'Free Placement unlocked for World 3',
   vowels: ['a_e', 'i_e'],
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
   runeRate: 0.25,
   startCrystals: 260,
-  waveEvery: 10,
+  waveEvery: 7,
   anchor: 20,
-  minWaves: 3,
+  minWaves: 7,
   bonusSurgeWaves: 3,
   mastery: {
     window: 10,
@@ -3928,20 +4118,14 @@ export const W3_LEVEL1: LevelConfig = {
   finalBoost: 1.25,
   hasWalkthrough: false,
   freePlacement: true,
-  noBuildZones: [
-    // Right sky clouds & outer cliff drop
-    { u: 0.92, v: 0.12, r: 0.16 },
-    { u: 0.96, v: 0.32, r: 0.14 },
-    { u: 0.96, v: 0.50, r: 0.12 },
-    { u: 0.97, v: 0.65, r: 0.08 },
-    // Bottom-left cliff drop & clouds
-    { u: 0.06, v: 0.88, r: 0.15 },
-    { u: 0.05, v: 0.68, r: 0.10 },
-    // Top-left fortress masonry & upper cliff rim
-    { u: 0.06, v: 0.12, r: 0.14 },
-    { u: 0.24, v: 0.08, r: 0.12 },
-    { u: 0.42, v: 0.06, r: 0.10 },
-    { u: 0.60, v: 0.04, r: 0.08 },
+  noBuildZones: [],
+  noBuildPolys: [
+    // Upper fortress masonry & cliff face
+    { points: [[0.0, 0.0], [0.70, 0.0], [0.68, 0.12], [0.38, 0.18], [0.31, 0.25], [0.0, 0.36]], label: 'Fortress wall' },
+    // Right sky clouds & sheer cliff drop-off
+    { points: [[0.68, 0.0], [1.0, 0.0], [1.0, 0.70], [0.86, 0.52], [0.84, 0.28], [0.72, 0.14]], label: 'Cliff drop' },
+    // Bottom-left sheer cliff drop & clouds
+    { points: [[0.0, 0.44], [0.09, 0.60], [0.19, 0.82], [0.24, 1.0], [0.0, 1.0]], label: 'Cliff drop' },
   ],
   backdropImage: '/src/assets/images/cutscene_w3_l1_opening_1795720712774.jpg',
   pathUv: [
@@ -3971,45 +4155,73 @@ export const W3_LEVEL1: LevelConfig = {
   pads: [],
   waves: [
     {
-      hp: 1.0,
+      hp: 1.12,
       groups: [
-        { type: 'galewraith', count: 5, gap: 2.4 },
-        { type: 'shieldbearer', count: 3, gap: 3.1, delay: 4.5 },
+        { type: 'galewraith', count: 6, gap: 2.1 },
+        { type: 'shieldbearer', count: 5, gap: 2.7, delay: 3.5 },
+        { type: 'cinderimp', count: 10, gap: 0.72, delay: 7.5 },
       ],
     },
     {
-      hp: 1.18,
+      hp: 1.3,
       groups: [
-        { type: 'galewraith', count: 7, gap: 1.9 },
-        { type: 'shrieker', count: 6, gap: 2.1, delay: 3.5 },
-        { type: 'shieldbearer', count: 4, gap: 2.7, delay: 7.5 },
+        { type: 'galewraith', count: 8, gap: 1.75 },
+        { type: 'shrieker', count: 8, gap: 1.85, delay: 3.0 },
+        { type: 'shieldbearer', count: 6, gap: 2.4, delay: 6.5 },
+        { type: 'cinderimp', count: 14, gap: 0.6, delay: 10.5 },
       ],
     },
     {
-      hp: 1.35,
+      hp: 1.5,
       groups: [
-        { type: 'galewraith', count: 9, gap: 1.65 },
-        { type: 'weaver', count: 3, gap: 3.5, delay: 3.0 },
-        { type: 'shrieker', count: 8, gap: 1.8, delay: 6.5 },
+        { type: 'galewraith', count: 10, gap: 1.5 },
+        { type: 'weaver', count: 4, gap: 3.0, delay: 2.5 },
+        { type: 'shrieker', count: 10, gap: 1.55, delay: 5.5 },
+        { type: 'splitter', count: 6, gap: 2.2, delay: 9.0 },
       ],
     },
     {
-      hp: 1.52,
+      hp: 1.74,
       groups: [
-        { type: 'shieldbearer', count: 6, gap: 2.2 },
-        { type: 'galewraith', count: 10, gap: 1.45, delay: 2.5 },
-        { type: 'weaver', count: 4, gap: 3.1, delay: 5.5 },
-        { type: 'shrieker', count: 9, gap: 1.6, delay: 9.0 },
-      ],
-    },
-    {
-      hp: 1.75,
-      groups: [
-        { type: 'galewraith', count: 12, gap: 1.25 },
-        { type: 'shieldbearer', count: 7, gap: 2.0, delay: 2.0 },
-        { type: 'weaver', count: 4, gap: 2.9, delay: 5.0 },
+        { type: 'shieldbearer', count: 8, gap: 1.95 },
+        { type: 'galewraith', count: 12, gap: 1.35, delay: 2.5 },
+        { type: 'weaver', count: 5, gap: 2.7, delay: 5.5 },
         { type: 'shrieker', count: 11, gap: 1.4, delay: 8.5 },
-        { type: 'brute', count: 2, gap: 3.4, delay: 12.0 },
+        { type: 'cinderimp', count: 18, gap: 0.5, delay: 12.0 },
+      ],
+    },
+    {
+      hp: 2.0,
+      groups: [
+        { type: 'galewraith', count: 14, gap: 1.2 },
+        { type: 'shieldbearer', count: 10, gap: 1.8, delay: 2.2 },
+        { type: 'weaver', count: 6, gap: 2.5, delay: 5.0 },
+        { type: 'shrieker', count: 13, gap: 1.3, delay: 8.0 },
+        { type: 'brute', count: 4, gap: 2.8, delay: 11.0 },
+        { type: 'splitter', count: 6, gap: 2.0, delay: 14.0 },
+      ],
+    },
+    {
+      hp: 2.28,
+      groups: [
+        { type: 'galewraith', count: 16, gap: 1.1 },
+        { type: 'shieldbearer', count: 11, gap: 1.7, delay: 2.0 },
+        { type: 'weaver', count: 7, gap: 2.3, delay: 4.5 },
+        { type: 'shrieker', count: 15, gap: 1.2, delay: 7.5 },
+        { type: 'brute', count: 5, gap: 2.55, delay: 11.0 },
+        { type: 'cinderimp', count: 22, gap: 0.44, delay: 14.5 },
+      ],
+    },
+    {
+      hp: 2.55,
+      groups: [
+        { type: 'galewraith', count: 18, gap: 1.0 },
+        { type: 'shieldbearer', count: 13, gap: 1.6, delay: 2.0 },
+        { type: 'weaver', count: 8, gap: 2.1, delay: 4.5 },
+        { type: 'shrieker', count: 16, gap: 1.12, delay: 7.5 },
+        { type: 'brute', count: 6, gap: 2.35, delay: 11.0 },
+        { type: 'splitter', count: 7, gap: 1.9, delay: 14.0 },
+        { type: 'cinderimp', count: 26, gap: 0.4, delay: 16.5 },
       ],
     },
   ],

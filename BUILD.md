@@ -50,7 +50,7 @@ Follow these rules in all game text, cutscene scripts, UI labels, docs, and chat
 2. **Avoid "not X, it's Y" phrasing**: State what something is directly instead of using "not X, it's Y" contrasts.
 3. **Never begin a paragraph with the word "On"**: Rephrase paragraph openings so none start with "On".
 4. **Classroom-Safe Word Audit**: Review every real word and nonsense rune for unintended slang, profanity, or awkward homophones before shipping (for example, `shid`, `chem`, and `chod` were replaced with `shib`, `chep`, and `chot` in World 2 Level 1).
-5. **Wave Pacing Lock (`waveEvery <= 15`)**: Keep `waveEvery` at `10` words (strictly `15` maximum) between waves across every level so students get fast, fun battle rhythm and frequent voice repetition across `3` to `4` minimum waves (`minWaves`) instead of long worksheet-style word grinds.
+5. **Wave Pacing Lock (`waveEvery <= 15`)**: Keep `waveEvery` at `7` to `8` words (strictly `15` maximum) between waves across campaign levels across `5` to `7` escalating waves (`minWaves`), with one-third slower attacker speeds and matching one-third lower defender weapon damage so students get time to build up Free Placement defenses while keeping reading momentum brisk.
 
 ## 4. Speech Verification and Calibration Rules (`src/lib/speech.ts`)
 

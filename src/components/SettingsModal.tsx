@@ -18,6 +18,7 @@ import {
   DIFFICULTY_ORDER,
   getPatternRule,
   LevelConfig,
+  LEVEL_ORDER,
   LEVELS,
   PatternKey,
   WARDEN_SAMPLE_LINE,
@@ -45,6 +46,7 @@ interface SettingsModalProps {
   onChange: (next: GameSettings) => void;
   onClearActiveLocks: () => void;
   onClearAllLocks: () => void;
+  onClearPlacement?: () => void;
   onOpenEll: () => void;
   onClose: () => void;
 }
@@ -58,6 +60,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChange,
   onClearActiveLocks,
   onClearAllLocks,
+  onClearPlacement,
   onOpenEll,
   onClose,
 }) => {
@@ -104,6 +107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       locks,
       snapshot: currentSnapshot,
       levelNameLookup: (id) => {
+        if (id === 'placement') return 'Runner Basic Training (Placement)';
         if (!id || !LEVELS[id]) return 'Level 1: Thornwood Edge';
         return `Lv ${LEVELS[id].num}: ${LEVELS[id].name}`;
       },
@@ -289,6 +293,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
             {locksNote && <p className="text-xs font-medium text-rose-200">{locksNote}</p>}
+          </section>
+
+          {/* Teacher Level Access & Basic Training Placement */}
+          <section className="space-y-3 rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-emerald-200">
+                  Teacher Level Access &amp; Placement
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Unlock All Levels lets a teacher jump into any shipped stage without clearing Basic Training or earlier levels first.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => update('unlockAllLevels', !settings.unlockAllLevels)}
+                className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  settings.unlockAllLevels
+                    ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
+                    : 'border border-slate-600 bg-slate-900 text-slate-200 hover:border-emerald-400 hover:text-white'
+                }`}
+              >
+                {settings.unlockAllLevels ? 'All Levels Open: On' : 'Unlock All Levels: Off'}
+              </button>
+            </div>
+
+            {progress.placement && (() => {
+              const recLv = LEVELS[progress.placement.recommendedLevelId] || LEVELS['w1-l1'];
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/25 pt-2.5 text-xs">
+                  <div className="text-slate-200">
+                    <span className="font-semibold text-emerald-300">Saved Basic Training: </span>
+                    <span>
+                      {recLv.worldName}, Level {recLv.num}: {recLv.name}
+                    </span>
+                    <span className="text-slate-400"> · </span>
+                    <span className="font-tabular text-cyan-200">
+                      {progress.placement.unlockedLevelIds.length} of {LEVEL_ORDER.length} levels open
+                    </span>
+                  </div>
+                  {onClearPlacement && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClearPlacement();
+                        setLocksNote('Basic Training placement cleared. Levels returned to campaign lock state.');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-rose-400 hover:text-white cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reset Placement
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </section>
 
           {/* Rift Warden Voice Audition */}
@@ -859,7 +919,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   {recentBattles.map((b, idx) => {
                     const lvName =
-                      b.levelId && LEVELS[b.levelId]
+                      b.levelId === 'placement'
+                        ? 'Runner Basic Training'
+                        : b.levelId && LEVELS[b.levelId]
                         ? `Lv ${LEVELS[b.levelId].num}: ${LEVELS[b.levelId].name}`
                         : 'Lv 1: Thornwood Edge';
                     const pct = b.words > 0 ? Math.round((b.firstTry / b.words) * 100) : 0;

@@ -1,5 +1,16 @@
 import React from 'react';
-import { Film, Languages, Lock, Play, Settings, Shield, Star, Volume2 } from 'lucide-react';
+import {
+  Check,
+  Compass,
+  Film,
+  Languages,
+  Lock,
+  Play,
+  Settings,
+  Shield,
+  Star,
+  Volume2,
+} from 'lucide-react';
 import { assetUrl } from '../lib/assetUrl';
 import {
   CutsceneId,
@@ -8,13 +19,19 @@ import {
   DifficultyId,
   LevelConfig,
   LevelId,
+  LEVEL_ORDER,
   LEVELS,
   PatternKey,
   WORLD_ORDER,
   WORLDS,
 } from '../data/level1';
 import { sound } from '../lib/audio';
-import { countActiveEllSupports, PatternLockStatus, StoredProgress } from '../lib/metrics';
+import {
+  countActiveEllSupports,
+  getUnlockedLevelIds,
+  PatternLockStatus,
+  StoredProgress,
+} from '../lib/metrics';
 
 interface TitleScreenProps {
   activeLevel: LevelConfig;
@@ -23,6 +40,7 @@ interface TitleScreenProps {
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
   onSelectLevel: (id: LevelId) => void;
   onChangeDifficulty: (diff: DifficultyId) => void;
+  onStartBasicTraining: () => void;
   onStartWithCutscene: () => void;
   onStartDirect: () => void;
   onOpenCutscene: (id: CutsceneId) => void;
@@ -38,6 +56,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   azureStatus,
   onSelectLevel,
   onChangeDifficulty,
+  onStartBasicTraining,
   onStartWithCutscene,
   onStartDirect,
   onOpenCutscene,
@@ -47,13 +66,21 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 }) => {
   const ellActiveCount = countActiveEllSupports(progress.settings);
   const activeDiff = DIFFICULTIES[progress.settings.difficulty] || DIFFICULTIES.normal;
-  const activeBestStars = progress.levelStars?.[activeLevel.id] ?? (activeLevel.id === 'w1-l1' ? progress.bestStars : 0);
+  const activeBestStars =
+    progress.levelStars?.[activeLevel.id] ?? (activeLevel.id === 'w1-l1' ? progress.bestStars : 0);
   const activeWorld = WORLDS[activeLevel.worldId] || WORLDS.w1;
   const worldLevelIds = activeWorld.levelIds;
   const isWorld2 = activeWorld.id === 'w2';
   const isWorld3 = activeWorld.id === 'w3';
   const playableWorldLevelId =
     worldLevelIds.find((id) => !LEVELS[id]?.comingSoon) || worldLevelIds[0];
+
+  const unlockedIds = getUnlockedLevelIds(progress);
+  const isActiveUnlocked = unlockedIds.has(activeLevel.id);
+  const unlockedCampaignCount = LEVEL_ORDER.filter((id) => unlockedIds.has(id)).length;
+  const recommendedLevel = progress.placement
+    ? LEVELS[progress.placement.recommendedLevelId] || LEVELS['w1-l1']
+    : null;
 
   return (
     <div className="fixed inset-0 flex h-[100dvh] w-full flex-col justify-between overflow-y-auto bg-[#070a13] text-slate-100 select-none">
@@ -144,6 +171,81 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       {/* Hero Center Content */}
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 items-center px-8 py-6">
         <div className="w-full max-w-4xl">
+          {/* Runner Basic Training Placement Strip */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-400/45 bg-[#0b1b1c]/88 px-4 py-3">
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+              <Compass className="mt-0.5 h-4 w-4 text-emerald-300 shrink-0" />
+              <div className="min-w-0 leading-snug">
+                {progress.placement && recommendedLevel ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-x-2 text-xs font-bold text-emerald-200">
+                      <span>Runner Basic Training Complete</span>
+                      <span className="text-slate-500" aria-hidden="true">·</span>
+                      <span className="font-tabular text-cyan-200">
+                        {unlockedCampaignCount} of {LEVEL_ORDER.length} levels open
+                      </span>
+                      {progress.settings.unlockAllLevels && (
+                        <>
+                          <span className="text-slate-500" aria-hidden="true">·</span>
+                          <span className="text-amber-300">Teacher Unlock All active</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-200">
+                      Recommended start:{' '}
+                      <span className="font-bold text-white">
+                        {recommendedLevel.worldName}, Level {recommendedLevel.num}: {recommendedLevel.name}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-x-2 text-xs font-bold text-emerald-200">
+                      <span>Runner Basic Training</span>
+                      <span className="text-slate-500" aria-hidden="true">·</span>
+                      <span className="font-tabular text-cyan-200">
+                        {unlockedCampaignCount} of {LEVEL_ORDER.length} levels open
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-300">
+                      Play one short proving-ground battle to automatically open every level whose skills you already know.
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {progress.placement && recommendedLevel && activeLevel.id !== recommendedLevel.id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('tap');
+                    onSelectLevel(recommendedLevel.id);
+                  }}
+                  className="rounded-lg bg-emerald-400 px-3.5 py-2 text-xs font-extrabold text-slate-950 hover:bg-emerald-300 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Go to Level {recommendedLevel.num}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  sound.sfx('select');
+                  onStartBasicTraining();
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap ${
+                  progress.placement
+                    ? 'border border-emerald-400/60 bg-emerald-950/60 text-emerald-100 hover:border-emerald-300 hover:text-white'
+                    : 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
+                }`}
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                <span>{progress.placement ? 'Retake Basic Training' : 'Start Basic Training'}</span>
+              </button>
+            </div>
+          </div>
+
           {/* World Switcher (appears automatically when World 2+ are added) & 5-Node Interactive Trail Map */}
           <div className="mb-5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-300 mb-2.5">
@@ -199,8 +301,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 const lv = LEVELS[id];
                 const selected = lv.id === activeLevel.id;
                 const isUpcoming = Boolean(lv.comingSoon);
+                const isUnlocked = unlockedIds.has(lv.id);
+                const isRecommended = progress.placement?.recommendedLevelId === lv.id;
                 const lvStars =
                   progress.levelStars?.[lv.id] ?? (lv.id === 'w1-l1' ? progress.bestStars : 0);
+                const isPlacedPast = Boolean(
+                  progress.placement &&
+                    !progress.settings.unlockAllLevels &&
+                    isUnlocked &&
+                    lvStars === 0 &&
+                    !isRecommended &&
+                    lv.id !== 'w1-l1'
+                );
                 const shortSkill = isUpcoming
                   ? lv.num === 5
                     ? 'Boss · Next'
@@ -228,6 +340,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                           : 'border-cyan-300 bg-[#122645]/95 text-white shadow-[0_0_20px_rgba(56,224,255,0.22)]'
                         : isUpcoming
                         ? 'border-slate-700/65 bg-[#0b0f1b]/78 text-slate-300 hover:border-amber-400/50 hover:bg-[#1a1314]/88'
+                        : !isUnlocked
+                        ? 'border-slate-800/85 bg-[#090e1c]/75 text-slate-400 opacity-75 hover:opacity-100 hover:border-slate-600'
+                        : isRecommended
+                        ? 'border-emerald-400/75 bg-[#0d1f26]/92 text-slate-100 hover:border-emerald-300'
                         : 'border-slate-700/85 bg-[#0b1122]/88 text-slate-200 hover:border-cyan-400/60 hover:bg-[#111932]/92'
                     }`}
                   >
@@ -240,8 +356,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                               : isWorld3
                               ? 'bg-sky-300 text-slate-950'
                               : 'bg-cyan-400 text-slate-950'
+                            : isRecommended
+                            ? 'bg-emerald-400 text-slate-950'
                             : lvStars > 0
                             ? 'bg-amber-400/20 text-amber-300 border border-amber-400/50'
+                            : !isUnlocked
+                            ? 'bg-slate-900 text-slate-500'
                             : 'bg-slate-800 text-slate-300'
                         }`}
                       >
@@ -249,6 +369,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       </span>
                       {isUpcoming ? (
                         <span className="text-[10px] font-semibold text-amber-300/85">Preview</span>
+                      ) : !isUnlocked ? (
+                        <Lock className="h-3.5 w-3.5 text-slate-500" aria-label="Locked" />
+                      ) : isRecommended && lvStars === 0 ? (
+                        <span className="text-[10px] font-extrabold text-emerald-300">Next</span>
+                      ) : isPlacedPast ? (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-300">
+                          <Check className="h-3 w-3" />
+                          <span>Open</span>
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-0.5">
                           {[1, 2, 3].map((n) => (
@@ -275,6 +404,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                             : isWorld3
                             ? 'text-sky-300'
                             : 'text-cyan-300'
+                          : isRecommended
+                          ? 'text-emerald-300'
                           : 'text-slate-400'
                       }`}
                     >
@@ -365,6 +496,36 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 <div className="text-xs font-medium text-amber-200/90">
                   Upcoming stage · Enemies: {activeLevel.enemiesSummary} · Unlock: {activeLevel.rewardSummary}
                 </div>
+              </>
+            ) : !isActiveUnlocked ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('select');
+                    onStartBasicTraining();
+                  }}
+                  className="inline-flex items-center gap-2.5 rounded-xl bg-emerald-400 px-7 py-4 text-base font-bold text-slate-950 shadow-lg hover:bg-emerald-300 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <Compass className="h-5 w-5" />
+                  Start Runner Basic Training
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('tap');
+                    onOpenSettings();
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/90 px-5 py-4 text-sm font-semibold text-slate-100 hover:border-emerald-400 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <Settings className="h-4 w-4 text-emerald-300" />
+                  Teacher: Unlock All in Settings
+                </button>
+
+                <p className="w-full text-xs text-slate-300">
+                  Pass earlier skills in Runner Basic Training or seal the prior level to open {activeLevel.worldName}, Level {activeLevel.num}: {activeLevel.name}.
+                </p>
               </>
             ) : (
               <>

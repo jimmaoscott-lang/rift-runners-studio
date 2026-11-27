@@ -1,6 +1,8 @@
 import React from 'react';
 import {
+  Check,
   ChevronRight,
+  Crosshair,
   FastForward,
   Flame,
   Gem,
@@ -36,7 +38,8 @@ import {
   LevelConfig,
   PatternKey,
 } from '../data/level1';
-import { BattleSnapshot } from '../game/CanvasBattleEngine';
+import { PLACEMENT_STAGES, PlacementRunState } from '../data/placement';
+import { BattleSnapshot, TargetPriority } from '../game/CanvasBattleEngine';
 import { sound } from '../lib/audio';
 import { PatternLockStatus } from '../lib/metrics';
 
@@ -61,6 +64,7 @@ interface BattleHUDProps {
   level: LevelConfig;
   snap: BattleSnapshot;
   locks: PatternLockStatus[];
+  placementRun?: PlacementRunState | null;
   toast: string;
   waveBanner: WaveBannerInfo | null;
   walkthrough: WalkthroughInfo | null;
@@ -71,6 +75,7 @@ interface BattleHUDProps {
   onToggleWalkthrough: () => void;
   onClearLocks: (pattern?: PatternKey) => void;
   onUpgrade: (spec?: 'a' | 'b') => void;
+  onSetTargetMode: (mode: TargetPriority) => void;
   onSell: () => void;
   onClosePopup: () => void;
   onCastPower: (id: HeroPowerId) => void;
@@ -141,10 +146,17 @@ function getLockStyle(pattern: PatternKey, index: number) {
   return VOWEL_LOCK_STYLES[pattern] || LOCK_STYLE_PALETTE[index % LOCK_STYLE_PALETTE.length];
 }
 
+const TARGET_PRIORITY_OPTIONS: Array<{ id: TargetPriority; label: string; labelEs: string }> = [
+  { id: 'first', label: 'First', labelEs: 'Primero' },
+  { id: 'last', label: 'Last', labelEs: 'Último' },
+  { id: 'strong', label: 'Strong', labelEs: 'Fuerte' },
+];
+
 export const BattleHUD: React.FC<BattleHUDProps> = ({
   level,
   snap,
   locks,
+  placementRun = null,
   toast,
   waveBanner,
   walkthrough,
@@ -155,6 +167,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
   onToggleWalkthrough,
   onClearLocks,
   onUpgrade,
+  onSetTargetMode,
   onSell,
   onClosePopup,
   onCastPower,
@@ -585,112 +598,153 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
         </div>
       )}
 
-      {/* Compact Horizontal RIFT LOCKS Bar tucked tightly along bottom-left so it never blocks build pads */}
-      <div
-        className={`pointer-events-auto absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-xl border-2 bg-[#161030]/94 px-2.5 py-1.5 shadow-xl transition-all ${
-          lockBonusFlash
-            ? 'border-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.55)]'
-            : highlightLocks
-            ? 'border-amber-300 animate-tutorial-pulse'
-            : 'border-purple-500/75'
-        }`}
-      >
-        {lockBonusFlash && (
-          <div className="pointer-events-none absolute -top-8 left-2 flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-400 px-2.5 py-0.5 text-[11px] font-extrabold text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.75)] animate-bounce">
-            <Gem className="h-3.5 w-3.5 text-slate-950 fill-cyan-300" />
-            <span>Lock Sealed! +{lockBonusFlash.amount} Crystals</span>
+      {/* Compact Bottom-Left Bar: Placement Skill Ladder in Basic Training, or Rift Locks in Campaign */}
+      {level.isPlacement && placementRun ? (
+        <div className="pointer-events-auto absolute bottom-2 left-2 z-20 flex max-w-[calc(100%-16px)] items-center gap-1.5 overflow-x-auto rounded-xl border-2 border-emerald-400/70 bg-[#121a2d]/95 px-2.5 py-1.5 shadow-xl">
+          <div className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-emerald-500/35 text-[9px] font-extrabold tracking-wider text-emerald-200 uppercase shrink-0">
+            <Sparkles className="h-3 w-3 text-emerald-300" />
+            <span>Tiers</span>
           </div>
-        )}
-        <button
-          type="button"
-          onClick={() => onClearLocks()}
-          title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals. Click to clear all Level ${level.num} Rift Locks.`}
-          className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase hover:text-rose-200 cursor-pointer transition-colors shrink-0"
-        >
-          <Lock className="h-3 w-3 text-cyan-300" />
-          <span>Locks</span>
-        </button>
-
-        <div className="flex items-center gap-1.5">
-          {locks.map((lk, idx) => {
-            const st = getLockStyle(lk.vowel, idx);
-            const fillCount = lk.done ? lk.need : Math.min(lk.need, lk.recentCorrect);
-            const shortTag = getPatternRule(lk.vowel).shortLabel || lk.vowel;
-            const justSealed = Boolean(lockBonusFlash?.patterns.includes(lk.vowel));
-            return (
-              <div
-                key={lk.vowel}
-                className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 transition-all ${
-                  justSealed
-                    ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.55)]'
-                    : 'border-purple-500/35 bg-[#0e0a22]/85'
-                }`}
-              >
-                {/* Tappable pattern label to hear the phoneme */}
-                <button
-                  type="button"
-                  onClick={() => sound.speakPhoneme(shortTag)}
-                  title={`Tap to hear ${lk.label}`}
-                  className={`flex h-5 min-w-5 px-1 text-[11px] items-center justify-center rounded-md border font-reading font-extrabold transition-colors cursor-pointer ${st.btn}`}
+          <div className="flex items-center gap-1">
+            {PLACEMENT_STAGES.map((st, idx) => {
+              const res = placementRun.stageResults[idx];
+              const isCurrent = !placementRun.settled && idx === placementRun.stageIdx;
+              const isPassed = res?.status === 'passed';
+              const isPlacedHere = res?.status === 'placed_here';
+              return (
+                <div
+                  key={st.id}
+                  title={`${st.label}${isPassed ? ' (Cleared)' : isPlacedHere ? ' (Starting skill)' : isCurrent ? ` (Testing: ${placementRun.wordIdx}/${st.probeWords.length})` : ''}`}
+                  className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-bold whitespace-nowrap transition-colors ${
+                    isPassed
+                      ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-100'
+                      : isPlacedHere
+                      ? 'border-amber-400/80 bg-amber-500/20 text-amber-100'
+                      : isCurrent
+                      ? 'border-cyan-300 bg-cyan-500/25 text-white shadow-[0_0_10px_rgba(56,224,255,0.35)]'
+                      : 'border-slate-700/80 bg-[#0d1222]/85 text-slate-400'
+                  }`}
                 >
-                  {shortTag}
-                </button>
-
-                {/* Clickable status + compact horizontal pip bar to clear ONLY this lock on the active level */}
-                <button
-                  type="button"
-                  onClick={() => onClearLocks(lk.vowel)}
-                  title={
-                    lk.done
-                      ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)! Click to clear only this lock on Level ${level.num}`
-                      : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked). Click to clear on Level ${level.num}`
-                  }
-                  className="group flex flex-col items-start gap-0.5 rounded px-0.5 hover:bg-rose-500/20 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-0.5 font-tabular text-[10px] font-extrabold leading-none text-slate-200 group-hover:text-rose-200">
-                    {lk.done ? (
-                      <>
-                        <Lock className={`h-2.5 w-2.5 ${st.icon} group-hover:text-rose-300`} />
-                        <span className={st.icon}>Done</span>
-                      </>
-                    ) : (
-                      <span>
-                        {fillCount}/{lk.need}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-[2px]">
-                    {Array.from({ length: lk.need }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-1.5 ${lk.need > 6 ? 'w-1' : 'w-1.5'} rounded-[1px] border ${
-                          i < fillCount ? st.filled : 'border-purple-700/80 bg-[#0d0920]'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </button>
-              </div>
-            );
-          })}
+                  {isPassed && <Check className="h-2.5 w-2.5 text-emerald-300 shrink-0" />}
+                  <span>{st.shortLabel}</span>
+                  {isCurrent && (
+                    <span className="font-tabular text-cyan-200">
+                      {placementRun.wordIdx}/{st.probeWords.length}
+                    </span>
+                  )}
+                  {isPlacedHere && <span className="text-amber-300">Start</span>}
+                </div>
+              );
+            })}
+          </div>
         </div>
-
-        {/* Testing utility: one-click Clear Level Locks reset */}
-        <button
-          type="button"
-          onClick={() => onClearLocks()}
-          title={`Reset only Level ${level.num} Rift Locks to 0`}
-          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-rose-400/55 bg-rose-950/55 px-2 text-[10px] font-bold text-rose-200 hover:border-rose-300 hover:bg-rose-500/25 hover:text-white cursor-pointer shrink-0"
+      ) : (
+        <div
+          className={`pointer-events-auto absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-xl border-2 bg-[#161030]/94 px-2.5 py-1.5 shadow-xl transition-all ${
+            lockBonusFlash
+              ? 'border-amber-300 shadow-[0_0_24px_rgba(251,191,36,0.55)]'
+              : highlightLocks
+              ? 'border-amber-300 animate-tutorial-pulse'
+              : 'border-purple-500/75'
+          }`}
         >
-          <RotateCcw className="h-3 w-3" />
-          <span>Clear</span>
-        </button>
-      </div>
+          {lockBonusFlash && (
+            <div className="pointer-events-none absolute -top-8 left-2 flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-400 px-2.5 py-0.5 text-[11px] font-extrabold text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.75)] animate-bounce">
+              <Gem className="h-3.5 w-3.5 text-slate-950 fill-cyan-300" />
+              <span>Lock Sealed! +{lockBonusFlash.amount} Crystals</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onClearLocks()}
+            title={`Seal each Rift Lock for +${FORGE_CONFIG.lockBonus} bonus crystals. Click to clear all Level ${level.num} Rift Locks.`}
+            className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-purple-500/40 text-[9px] font-extrabold tracking-wider text-purple-200 uppercase hover:text-rose-200 cursor-pointer transition-colors shrink-0"
+          >
+            <Lock className="h-3 w-3 text-cyan-300" />
+            <span>Locks</span>
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            {locks.map((lk, idx) => {
+              const st = getLockStyle(lk.vowel, idx);
+              const fillCount = lk.done ? lk.need : Math.min(lk.need, lk.recentCorrect);
+              const shortTag = getPatternRule(lk.vowel).shortLabel || lk.vowel;
+              const justSealed = Boolean(lockBonusFlash?.patterns.includes(lk.vowel));
+              return (
+                <div
+                  key={lk.vowel}
+                  className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 transition-all ${
+                    justSealed
+                      ? 'border-amber-300 bg-amber-400/20 shadow-[0_0_14px_rgba(251,191,36,0.55)]'
+                      : 'border-purple-500/35 bg-[#0e0a22]/85'
+                  }`}
+                >
+                  {/* Tappable pattern label to hear the phoneme */}
+                  <button
+                    type="button"
+                    onClick={() => sound.speakPhoneme(shortTag)}
+                    title={`Tap to hear ${lk.label}`}
+                    className={`flex h-5 min-w-5 px-1 text-[11px] items-center justify-center rounded-md border font-reading font-extrabold transition-colors cursor-pointer ${st.btn}`}
+                  >
+                    {shortTag}
+                  </button>
+
+                  {/* Clickable status + compact horizontal pip bar to clear ONLY this lock on the active level */}
+                  <button
+                    type="button"
+                    onClick={() => onClearLocks(lk.vowel)}
+                    title={
+                      lk.done
+                        ? `${lk.label} locked (+${FORGE_CONFIG.lockBonus} crystals awarded)! Click to clear only this lock on Level ${level.num}`
+                        : `${lk.label}: ${fillCount}/${lk.need} (+${FORGE_CONFIG.lockBonus} crystals when locked). Click to clear on Level ${level.num}`
+                    }
+                    className="group flex flex-col items-start gap-0.5 rounded px-0.5 hover:bg-rose-500/20 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-0.5 font-tabular text-[10px] font-extrabold leading-none text-slate-200 group-hover:text-rose-200">
+                      {lk.done ? (
+                        <>
+                          <Lock className={`h-2.5 w-2.5 ${st.icon} group-hover:text-rose-300`} />
+                          <span className={st.icon}>Done</span>
+                        </>
+                      ) : (
+                        <span>
+                          {fillCount}/{lk.need}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-[2px]">
+                      {Array.from({ length: lk.need }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`h-1.5 ${lk.need > 6 ? 'w-1' : 'w-1.5'} rounded-[1px] border ${
+                            i < fillCount ? st.filled : 'border-purple-700/80 bg-[#0d0920]'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Testing utility: one-click Clear Level Locks reset */}
+          <button
+            type="button"
+            onClick={() => onClearLocks()}
+            title={`Reset only Level ${level.num} Rift Locks to 0`}
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-rose-400/55 bg-rose-950/55 px-2 text-[10px] font-bold text-rose-200 hover:border-rose-300 hover:bg-rose-500/25 hover:text-white cursor-pointer shrink-0"
+          >
+            <RotateCcw className="h-3 w-3" />
+            <span>Clear</span>
+          </button>
+        </div>
+      )}
 
       {/* Placed Defender Upgrade / Specialty / Sell Popover (kept safely inside battlefield viewport) */}
       {snap.selectedDef && selectedDefCfg && (() => {
         const isSpecialtyPicker = snap.selectedDef.level === 3 && !snap.selectedDef.spec;
-        const placeBelow = snap.selectedDef.screenY < 260;
+        const placeBelow = snap.selectedDef.screenY < 290;
         const sideRight = snap.selectedDef.screenX < 380;
         const popoverStyle: React.CSSProperties = isSpecialtyPicker
           ? {
@@ -702,8 +756,8 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
           : {
               left: `clamp(142px, ${Math.round(snap.selectedDef.screenX)}px, calc(100% - 142px))`,
               top: placeBelow
-                ? `clamp(52px, ${Math.round(snap.selectedDef.screenY + 26)}px, calc(100% - 220px))`
-                : `clamp(220px, ${Math.round(snap.selectedDef.screenY - 22)}px, calc(100% - 14px))`,
+                ? `clamp(52px, ${Math.round(snap.selectedDef.screenY + 26)}px, calc(100% - 255px))`
+                : `clamp(255px, ${Math.round(snap.selectedDef.screenY - 22)}px, calc(100% - 14px))`,
             };
         return (
           <div
@@ -747,6 +801,50 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
               <X className="h-4 w-4" />
             </button>
           </div>
+
+          {['archer', 'ember', 'tesla', 'rail'].includes(snap.selectedDef.type) && (
+            <div className="mt-2 rounded-xl border border-cyan-500/30 bg-slate-950/70 p-1.5">
+              <div className="mb-1 flex items-center justify-between px-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                <span className="inline-flex items-center gap-1 text-cyan-200">
+                  <Crosshair className="h-3 w-3 text-cyan-400" />
+                  Target
+                </span>
+                {spanishCaptions && (
+                  <span className="font-semibold normal-case tracking-normal text-cyan-300/90">
+                    Objetivo
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {TARGET_PRIORITY_OPTIONS.map((opt) => {
+                  const active = snap.selectedDef!.targetMode === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onSetTargetMode(opt.id)}
+                      className={`rounded-lg px-1.5 py-1 text-center text-[11px] font-extrabold transition-colors cursor-pointer ${
+                        active
+                          ? 'bg-cyan-400 text-slate-950 shadow-[0_0_12px_rgba(56,224,255,0.45)]'
+                          : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <div>{opt.label}</div>
+                      {spanishCaptions && (
+                        <div
+                          className={`text-[9px] font-semibold leading-tight ${
+                            active ? 'text-slate-900/85' : 'text-cyan-300/80'
+                          }`}
+                        >
+                          {opt.labelEs}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-2 space-y-1.5">
             {nextUpCost !== null && (

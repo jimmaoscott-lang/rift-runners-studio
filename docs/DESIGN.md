@@ -31,8 +31,9 @@ This document holds the core game design, pedagogical rules, economy numbers, to
 - **Mega Charge**: Triggers at `8` streak pips (`megaPips: 8`), granting `115` crystals plus a `25`-damage battlefield blast (`megaBlast: 25`)
 - **Rift Lock Seal Bonus**: Sealing any Rift Lock immediately awards `+100` bonus crystals (`lockBonus: 100`) with a gold-and-cyan crystal burst at the Anchor, a chime, and a floating bonus badge above the Rift Locks bar
 - **Fast-guess guard**: `1500ms` threshold, cooldown `5s` first / `10s` later
-- **Wave Pacing Cap (`waveEvery <= 15`)**: Every level uses `10` words between waves (strictly `15` maximum) paired with `3` to `4` minimum waves (`minWaves`) and calibrated Rift Lock targets (`9/10` on Level 1, `10/11` on 2-lock stages, `7/8` on 3-lock and 4-lock stages, `5/6` to `6/7` on 5-lock stages) so locks seal naturally right before the Final Wave while keeping gameplay snappy and engaging.
-- **Playtest Simulation Tools**: Keep the 10-word Playtest buttons (`Fluent`, `Steady`, `Guided`) available in the Rune Forge for fast pacing and crystal balance testing.
+- **Wave Pacing Cap (`waveEvery <= 15`) & 5-to-7 Wave Siege Arc**: Campaign levels trigger a fresh wave every `8` words (`w1-l1` through `w2-l3`) or `7` words (`w2-l4`, `w2-l5`, `w3-l1`) across `5` to `7` handcrafted escalating waves (`minWaves`: `5` on `w1-l1` to `w1-l3`, `6` on `w1-l4` to `w2-l3`, `7` on `w2-l4`, `w2-l5`, and `w3-l1`) paired with calibrated Rift Lock targets so students have time to build and upgrade full Free Placement defenses.
+- **Combat Tempo Rebalance (One-Third Slower & Proportional Damage)**: All 13 enemy types march one-third slower (`~0.67x` speed, with Stone Golem melee hits scaled `~0.75x`) and all 8 defenders' base, upgrade, and Level 3 Specialty damage values are scaled down proportionally by one-third (`~0.67x`), preserving total damage per tile traveled while making battles calmer and easier to read.
+- **Playtest Simulation Tools**: Keep the per-wave Playtest buttons (`Fluent`, `Steady`, `Guided`) available in the Rune Forge for fast pacing and crystal balance testing.
 
 ## 4. Defenders and Hero Powers
 
@@ -77,16 +78,24 @@ Status: **Complete (Levels 1 to 5 Shipped)**
 | 4 | `w2-l4` | Crucible Bastion | **Shipped** | Initial S-blends and final blends (`sp`, `st`, `nd`, `mp`) + runes | Forge Weavers (healers/shielders), Rift Shriekers, Shieldbearers | Unlocks Gravity Snare and The Furnace Core boss finale. Multi-voice Azure S-blend/final-blend calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
 | 5 | `w2-l5` | The Furnace Core | **Shipped** | Boss Finale: World 2 digraphs and blends (`sh`, `th`, `bl`, `st`, `mp`) + runes | The Iron Warden (Boss), Forge Weavers, Rift Shriekers, Shieldbearers | Full 8-defender World 2 toolkit finale with Iron Aegis shield slams and Cinder Imp summons. Unlocks World 3: The Silver Spires. |
 
-## 7. World 3: The Silver Spires (Silent-E Long Vowels & Free Placement)
+## 7. World 3: The Silver Spires (Silent-E Long Vowels)
 
 Status: **In Progress (Level 1 Shipped)**
 
 | Level | ID | Name | Status | Phonics Focus | Enemies | Unlocks / Notes |
 | :---: | :--- | :--- | :---: | :--- | :--- | :--- |
-| 1 | `w3-l1` | Dawnbreak Terrace | **Shipped** | Silent-E long vowels (`a_e`, `i_e`) + VCe runes | Gale Wraiths (Wind Dash), Shieldbearers, Rift Shriekers, Forge Weavers | Introduces **Free Placement** (`freePlacement: true`): place ranged towers anywhere on open grass with live range/footprint preview and snap road traps anywhere along the stone trail. Multi-voice Azure Silent-E calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
+| 1 | `w3-l1` | Dawnbreak Terrace | **Shipped** | Silent-E long vowels (`a_e`, `i_e`) + VCe runes | Gale Wraiths (Wind Dash), Shieldbearers, Rift Shriekers, Forge Weavers | Uses **Free Placement** (`freePlacement: true`), now enabled across all 11 campaign levels and Runner Basic Training. Multi-voice Azure Silent-E calibration, Leda audio, painterly cutscenes, and Spanish ELL support active. |
 
-## 8. Approved Feature Backlog
+## 8. Runner Basic Training (Adaptive Skill Placement)
+
+Status: **Shipped (`id: 'placement'`)**
+
+- **Adaptive 8-Tier Staircase (`src/data/placement.ts`)**: Runs a live Free Placement proving-grounds defense battle while probing skills in sequence (`a/i`, `o/u`, `e/CVC`, `sh/ch`, `th/wh/-ck`, `L/R Blends`, `S & End Blends`, `Silent-E a_e/i_e`) with 4 curated words per tier (3 real words plus 1 nonsense rune from existing Leda-voiced banks).
+- **Tier Mastery & Level Unlocking**: Achieving `>= 3/4` clean first-try reads passes a tier, awards `+75` bonus crystals with an Anchor burst, immediately opens the corresponding campaign level(s), and advances to the next tier. Scoring `< 3/4` settles with zero shame, opens the matched starting level, launches the Final Graduation Wave, and records a full `PlacementReport` with a copyable IEP/PLAAF teacher note.
+- **Teacher Preview Toggle**: Settings includes an **Unlock All Levels** toggle (`settings.unlockAllLevels`) plus a **Reset Placement** button so teachers can jump to any stage immediately.
+
+## 9. Approved Feature Backlog
 
 1. **World 2, Level 1 Painterly Cutscene Refresh**: Regenerate the `w2-l1` opening, victory, and defeat cutscenes using `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` as the visual anchor so they match World 1's painterly style and canonical Rift Warden/Runner cast.
 2. **Optional World 1 Level 1 Word Voice Refresh**: Because Mr. Scott prefers the Leda voice used in World 2 word readings, World 1 Level 1's older recorded words can be refreshed to Leda in a future pass if desired.
-3. **Free Placement Rollout Decision**: After playtesting World 3, Level 1 (`Dawnbreak Terrace`), decide whether Free Placement stays a signature World 3 reward or expands into earlier worlds.
+3. **World 3 Expansion**: Build World 3, Level 2 (`o_e`, `u_e`) and remaining Silver Spires levels.

@@ -60,10 +60,23 @@ export interface SimRoundResult {
   runeClean: number;
 }
 
+export interface PlacementForgeGuide {
+  stageNum: number;
+  stageTotal: number;
+  stageLabel: string;
+  wordNum: number;
+  wordTotal: number;
+  forcedWord: WordEntry | null;
+  settled: boolean;
+  settledLevelLabel?: string;
+  practicePool?: WordEntry[];
+}
+
 interface RuneForgePanelProps {
   level: LevelConfig;
   settings: GameSettings;
   unlockedPatterns?: PatternKey[];
+  placementGuide?: PlacementForgeGuide | null;
   disabled: boolean;
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
   tutorialHighlight?: boolean;
@@ -190,6 +203,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   level,
   settings,
   unlockedPatterns = [],
+  placementGuide = null,
   disabled,
   azureStatus,
   tutorialHighlight = false,
@@ -201,7 +215,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   onRuleHold,
   onOpenEll,
 }) => {
-  const [cur, setCur] = useState<WordEntry>(() => level.realWords[0]);
+  const [cur, setCur] = useState<WordEntry>(() => placementGuide?.forcedWord || level.realWords[0]);
   const [choices, setChoices] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [eliminated, setEliminated] = useState<number[]>([]);
@@ -264,10 +278,39 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   const voiceCheckOfferedRef = useRef<Set<string>>(new Set());
   const unlockedPatternsRef = useRef<PatternKey[]>(unlockedPatterns);
   unlockedPatternsRef.current = unlockedPatterns;
+  const placementGuideRef = useRef<PlacementForgeGuide | null>(placementGuide);
+  placementGuideRef.current = placementGuide;
+
+  const loadWordEntry = useCallback((next: WordEntry) => {
+    recentWordsRef.current = [next.w, ...recentWordsRef.current].slice(0, 6);
+    setCur(next);
+    setChoices(shuffle([next.w, next.options[0], next.options[1]]));
+    setSelectedIdx(null);
+    setEliminated([]);
+    setShakeIdx(null);
+    setTries(0);
+    setSpeakTries(0);
+    setUsedHelp(false);
+    setRevealed(false);
+    setShowTiles(false);
+    setShowMeaning(false);
+    setBlendTileIdx(null);
+    shownAtRef.current = performance.now();
+  }, []);
 
   const pickNextWord = useCallback(() => {
+    const pg = placementGuideRef.current;
+    if (pg && !pg.settled && pg.forcedWord) {
+      loadWordEntry(pg.forcedWord);
+      return;
+    }
+
     let next: WordEntry;
-    if (practiceQueueRef.current.length > 0 && Math.random() < 0.35) {
+    if (pg && pg.settled && pg.practicePool && pg.practicePool.length > 0) {
+      const fresh = pg.practicePool.filter((w) => !recentWordsRef.current.includes(w.w));
+      const candidates = fresh.length ? fresh : pg.practicePool;
+      next = candidates[Math.floor(Math.random() * candidates.length)];
+    } else if (practiceQueueRef.current.length > 0 && Math.random() < 0.35) {
       next = practiceQueueRef.current.shift()!;
     } else {
       const wantRune = Math.random() < level.runeRate;
@@ -289,21 +332,8 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
       next = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
-    recentWordsRef.current = [next.w, ...recentWordsRef.current].slice(0, 6);
-    setCur(next);
-    setChoices(shuffle([next.w, next.options[0], next.options[1]]));
-    setSelectedIdx(null);
-    setEliminated([]);
-    setShakeIdx(null);
-    setTries(0);
-    setSpeakTries(0);
-    setUsedHelp(false);
-    setRevealed(false);
-    setShowTiles(false);
-    setShowMeaning(false);
-    setBlendTileIdx(null);
-    shownAtRef.current = performance.now();
-  }, [level]);
+    loadWordEntry(next);
+  }, [level, loadWordEntry]);
 
   useEffect(() => {
     recentWordsRef.current = [];
@@ -314,6 +344,24 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     setSessionShowChoices(false);
     pickNextWord();
   }, [pickNextWord]);
+
+  // Keep Basic Training locked strictly to the active diagnostic probe word,
+  // and switch cleanly to confidence-zone practice once placement settles.
+  useEffect(() => {
+    if (!placementGuide) return;
+    if (!placementGuide.settled && placementGuide.forcedWord) {
+      loadWordEntry(placementGuide.forcedWord);
+    } else if (placementGuide.settled) {
+      pickNextWord();
+    }
+  }, [
+    placementGuide?.stageNum,
+    placementGuide?.wordNum,
+    placementGuide?.settled,
+    placementGuide?.forcedWord?.w,
+    loadWordEntry,
+    pickNextWord,
+  ]);
 
   // Overheat countdown timer
   useEffect(() => {
@@ -461,7 +509,10 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         }
       }
 
-      pickNextWord();
+      // During active Basic Training tiers, the parent updates placementGuide.forcedWord immediately
+      if (!placementGuideRef.current || placementGuideRef.current.settled) {
+        pickNextWord();
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cur, onMegaForge, onPay, onWordForged, pickNextWord, revealed, streak, tries, usedHelp]
@@ -822,6 +873,28 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Basic Training Tier Progress Line */}
+        {placementGuide && (
+          <div className="mt-2 rounded-xl border border-emerald-400/45 bg-emerald-950/35 px-2.5 py-1.5 text-[11px] leading-snug shrink-0">
+            {placementGuide.settled ? (
+              <div className="font-semibold text-emerald-200">
+                Starting Level Ready:{' '}
+                <span className="text-white">{placementGuide.settledLevelLabel}</span>
+                <span className="text-emerald-300/80"> · Finish the Graduation Wave</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-1 text-emerald-100">
+                <span className="font-bold text-emerald-300">
+                  Tier {placementGuide.stageNum}/{placementGuide.stageTotal}: {placementGuide.stageLabel}
+                </span>
+                <span className="font-tabular font-extrabold text-cyan-200">
+                  Word {placementGuide.wordNum} of {placementGuide.wordTotal}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

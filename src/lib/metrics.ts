@@ -1,4 +1,12 @@
-import { DifficultyId, getPatternRule, LevelId, PatternKey, WardenVoiceId } from '../data/level1';
+import {
+  DifficultyId,
+  getPatternRule,
+  LEVEL_ORDER,
+  LevelId,
+  LEVELS,
+  PatternKey,
+  WardenVoiceId,
+} from '../data/level1';
 
 const STORAGE_KEY = 'rift_runners_gemini_w1l1_v1';
 
@@ -19,6 +27,7 @@ export interface GameSettings {
   musicVol: number;
   effectsVol: number;
   wardenVoice: WardenVoiceId;
+  unlockAllLevels: boolean;
 }
 
 export interface PatternHistory {
@@ -50,6 +59,25 @@ export interface BattleRecord {
   accommodations?: AccommodationSnapshot;
 }
 
+export interface PlacementStageResult {
+  stageId: string;
+  label: string;
+  targetLevelId: LevelId;
+  correct: number;
+  total: number;
+  passed: boolean;
+  status: 'passed' | 'placed_here' | 'not_tested';
+}
+
+export interface PlacementReport {
+  completedAt: number;
+  recommendedLevelId: LevelId;
+  unlockedLevelIds: LevelId[];
+  clearedStageIds: string[];
+  allMastered: boolean;
+  stages: PlacementStageResult[];
+}
+
 export interface StoredProgress {
   settings: GameSettings;
   patterns: Record<string, PatternHistory>;
@@ -61,6 +89,7 @@ export interface StoredProgress {
   seenHalfSpeedTip: boolean;
   levelStars: Record<string, number>;
   levelWins: Record<string, number>;
+  placement?: PlacementReport | null;
   battles: BattleRecord[];
 }
 
@@ -81,6 +110,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   musicVol: 5,
   effectsVol: 8,
   wardenVoice: 'Leda',
+  unlockAllLevels: false,
 };
 
 export function countActiveEllSupports(s: GameSettings): number {
@@ -212,6 +242,72 @@ export function formatBattleTeacherNote(params: {
   return lines.join('\n');
 }
 
+export function formatPlacementTeacherNote(params: {
+  report: PlacementReport;
+  recommendedLabel: string;
+  forged: number;
+  firstTry: number;
+  practice: string[];
+  snapshot: AccommodationSnapshot;
+  date?: Date;
+}): string {
+  const dt = (params.date || new Date()).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  const accPct = params.forged > 0 ? Math.round((params.firstTry / params.forged) * 100) : 0;
+  const stageLines = params.report.stages
+    .filter((s) => s.status !== 'not_tested')
+    .map(
+      (s) =>
+        `- ${s.label}: ${s.correct}/${s.total} (${s.passed ? 'Mastered / Placed past' : 'Recommended starting skill'})`
+    );
+
+  const lines = [
+    `Rift Runners Basic Training Placement Report (${dt})`,
+    `Assigned Starting Level: ${params.recommendedLabel}${params.report.allMastered ? ' (Cleared all 8 placement tiers)' : ''}`,
+    `Opened Campaign Levels: ${params.report.unlockedLevelIds.length} of ${LEVEL_ORDER.length}`,
+    `Overall Training Reads: ${params.forged} words forged, ${accPct}% first-try accuracy (${params.firstTry}/${params.forged})`,
+    'Diagnostic Skill Tiers:',
+    ...(stageLines.length > 0 ? stageLines : ['- No tiers completed yet.']),
+    `Practice words: ${params.practice.length > 0 ? params.practice.join(', ') : 'None'}`,
+    `ELL supports active: ${params.snapshot.ellSupports.length > 0 ? params.snapshot.ellSupports.join(', ') : 'None'}`,
+    `Reading/display supports: ${params.snapshot.readingSupports.length > 0 ? params.snapshot.readingSupports.join(', ') : 'Standard'}`,
+    `Voice adaptations: ${params.snapshot.voiceAdaptations.length > 0 ? params.snapshot.voiceAdaptations.join('; ') : 'None'}`,
+  ];
+  return lines.join('\n');
+}
+
+export function getUnlockedLevelIds(progress: StoredProgress): Set<LevelId> {
+  const unlocked = new Set<LevelId>(['placement', 'w1-l1']);
+  if (progress.settings.unlockAllLevels) {
+    for (const id of LEVEL_ORDER) unlocked.add(id);
+    return unlocked;
+  }
+
+  if (progress.placement?.unlockedLevelIds) {
+    for (const id of progress.placement.unlockedLevelIds) {
+      unlocked.add(id);
+    }
+  }
+
+  // Winning any level opens that level plus the next level in campaign order
+  for (const id of LEVEL_ORDER) {
+    const won =
+      (progress.levelWins?.[id] ?? 0) > 0 ||
+      (progress.levelStars?.[id] ?? 0) > 0 ||
+      (id === 'w1-l1' && progress.wins > 0);
+    if (won) {
+      unlocked.add(id);
+      const nextId = LEVELS[id]?.nextLevelId;
+      if (nextId) unlocked.add(nextId);
+    }
+  }
+
+  return unlocked;
+}
+
 export function formatOverallTeacherNote(params: {
   progress: StoredProgress;
   activeLevelLabel: string;
@@ -281,6 +377,7 @@ function defaultProgress(): StoredProgress {
     seenHalfSpeedTip: false,
     levelStars: { 'w1-l1': 0, 'w1-l2': 0, 'w1-l3': 0, 'w1-l4': 0, 'w1-l5': 0 },
     levelWins: { 'w1-l1': 0, 'w1-l2': 0, 'w1-l3': 0, 'w1-l4': 0, 'w1-l5': 0 },
+    placement: null,
     battles: [],
   };
 }
@@ -386,6 +483,10 @@ export function loadProgress(): StoredProgress {
       seenHalfSpeedTip: Boolean(parsed.seenHalfSpeedTip),
       levelStars: parsedStars,
       levelWins: parsedWins,
+      placement:
+        parsed.placement && typeof parsed.placement === 'object'
+          ? (parsed.placement as PlacementReport)
+          : null,
       battles: parsedBattles,
     };
   } catch {

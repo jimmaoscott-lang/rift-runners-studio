@@ -2,6 +2,102 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-26 (Part 9): Strict Lava Pit & Terrain Exclusion Masking for Free Placement
+
+### Completed
+- **Pixel-Accurate Map Hazard Masking (`src/game/CanvasBattleEngine.ts`)**:
+  - Added an offscreen `320x180` terrain mask sampled once when each level's battlefield artwork loads (`initTerrainMask()` + `sampleTerrainHazard()`), checking a 17-point disc under the tower's foundation footprint to automatically reject glowing molten lava pits and streams (World 2), river basins (World 1), and sky/cloud cliff drops (World 3) regardless of irregular bridge or pit shapes.
+  - Added polygon exclusion support (`isInsideNoBuildPoly()` with `12px` edge clearance) alongside wider river clearance (`46px`) so tower bases never overlap cliff faces, lava rims, or ruined walls.
+- **Visually Audited `noBuildPolys` Across All 11 Campaign Maps (`src/data/level1.ts`)**:
+  - Audited every battlefield map (`w1-l1` through `w3-l1`) and traced exact polygon exclusion zones over under-bridge molten lava chasms (including `Smelter Causeway`'s central viaduct lava pit), foundry cranes and furnace walls, volcanic cliffs, deep canyon gorges, giant thorn chasms, ruined sanctuary walls, dense pine borders, boulders, and alpine cliff drop-offs while preserving full free placement on all open stone and grass terrain.
+
+### Next Up
+1. Playtest tower placement around lava pits, bridges, cliffs, and rivers (especially `Smelter Causeway`, `Ironrift Crossing`, `Crucible Bastion`, `The Furnace Core`, and `Dawnbreak Terrace`), then push to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 8): Enemy Damage & Control Resistances, DoT Bug Fix, & Gravity/Frost Rebalance
+
+### Completed
+- **Fixed Per-Frame DoT Rounding Exploit (`src/game/CanvasBattleEngine.ts`)**:
+  - `damageCreature()` previously applied `Math.max(1, Math.round(mitigated))` on every animation frame for continuous DoT towers (`Blizzard Totem`, `Spike Pit`, `Gravity Snare`), turning 5 DPS into 60 DPS at 60 FPS (or 120 DPS on 120Hz displays) and letting 1 Blizzard + 1 Archer or 1 Singularity Well solo entire levels.
+  - Added exact floating-point `isDot` damage subtraction with accumulated floating damage readouts (`dotAccum`) and removed hidden DPS multipliers on Spike Pit and Gravity Snare so tower DPS matches stats honestly across all refresh rates.
+- **Gravity Snare & Frost Totem Rebalance (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Added a `5.5s` gravity pull recovery window (`pullImmuneTimer`) so no single Singularity Well can infinitely pull enemies backward until death, trimmed Gravity Snare DPS/slow/pull strength, and kept Singularity Well's armor-shredding tactical support role without armor-piercing DoT.
+  - Made `Glacier Totem` and `Stasis Anchor` freezes respect enemy `slowResist` / `gravityResist`, boss freeze reduction (`0.45x`), and a `3.5s` post-freeze recovery window (`freezeImmuneTimer`), while Hero Power `Time Freeze` retains full impact.
+- **Multi-Type Enemy Resistance Matrix & Visual Badges (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Added `gravityResist`, `fireResist`, `electricResist`, and `arrowResist` alongside `armor` and `slowResist` across the 13-creature roster: `Thornback` (25% arrow resist), `Bramble Stalker` (45% frost/slow resist), `Rift Splitter` (50% shock resist), `Ironbark Brute` (30% armor, 85% gravity resist), `The Thornking` (30% armor, 55% slow resist, 90% gravity resist), `Cinder Imp` (85% frost/slow resist, 65% fire resist), `Shieldbearer` (50% armor, 45% arrow resist, 50% gravity resist), `Rift Shrieker` (flying, 40% armor, 70% gravity resist), `Forge Weaver` (20% armor, 60% fire resist, 45% shock resist), `The Iron Warden` (50% armor, 65% slow resist, 95% gravity resist, 50% fire resist), and `Gale Wraith` (15% armor, 25% arrow resist, 50% shock resist, 90% gravity resist).
+  - Rendered compact color-coded resistance pips (`I` Ice, `G` Gravity, `F` Fire, `Z` Shock, `A` Arrow) beside enemy HP bars and throttled floating resistance callouts (`FIRE RESIST`, `SHOCK RESIST`, `ARROW RESIST`, `FROST RESIST!`, `GRAV RESIST!`).
+- **Richer Mixed-Resistance Waves (`src/data/level1.ts`)**:
+  - Enriched `W2-L4`, `W2-L5`, and `W3-L1` (`Dawnbreak Terrace`) waves with combined mixes of `Cinder Imps`, `Shieldbearers`, `Gale Wraiths`, `Rift Shriekers`, `Forge Weavers`, `Rift Splitters`, and `Ironbark Brutes` plus firmer late-wave HP scaling so players must combine complementary towers and targeting modes.
+
+### Next Up
+1. Playtest World 2 (`Crucible Bastion`, `The Furnace Core`) and World 3 (`Dawnbreak Terrace`) with Gravity Singularity, Frost Blizzard/Glacier, and mixed defenses, then push to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 7): Tower Targeting Priority (First / Last / Strong)
+
+### Completed
+- **Per-Tower Targeting Engine (`src/game/CanvasBattleEngine.ts`)**:
+  - Exported `TargetPriority` (`'first' | 'last' | 'strong'`) and added `targetMode` to `DefenderRuntime` and `SelectedDefenderInfo`.
+  - Defaulted `Rail Turret` to `'strong'` (preserving its natural armored/boss sniping behavior while allowing manual override) and `Archer Tower`, `Ember Cannon`, and `Tesla Spire` to `'first'`.
+  - Added unified `sortTargetsByPriority()` sorting across all 4 ranged targeting towers (`archer` including multi-shot, `ember`, `tesla` both Chain Lightning and Overcharge Beam, and `rail` with armored-target preference when set to `strong`).
+  - Added `setSelectedTargetMode(mode)` which resets an active Overcharge Beam lock for immediate retargeting, plays tactile tap audio, floats a `TARGET: FIRST / LAST / STRONG` callout above the tower, and emits an updated HUD snapshot.
+- **Tower Inspector Target Selector (`src/components/BattleHUD.tsx`, `src/App.tsx`)**:
+  - Added a 3-button segmented **Target** selector (`First` / `Last` / `Strong`, with bilingual Spanish captions `Objetivo`: `Primero` / `Último` / `Fuerte` when enabled) inside the placed-tower popover for ranged towers (`archer`, `ember`, `tesla`, `rail`), omitting it on area/zone defenders (`spike`, `frost`, `gravity`, `golem`).
+
+### Next Up
+1. Playtest First / Last / Strong targeting across ranged towers (including multi-shot Archer, Overcharge Beam Tesla, and Rail Turret), then push the verified milestone to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 6): Bigger Multi-Stage Explosions & Layered Weapon Sound Effects
+
+### Completed
+- **Layered Web Audio Weapon & Explosion Sound Engine (`src/lib/audio.ts`)**:
+  - Added a shared `DynamicsCompressorNode` limiter on `fxMasterGain` so simultaneous explosions sound huge without speaker clipping while preserving instant mic ducking (`duck(2)`).
+  - Added a lazily cached broadband white-noise buffer and resonant filtered noise synthesizer (`noise()`) plus subtle pitch randomization so rapid shots stay organic and punchy.
+  - Overhauled all weapon and combat SFX with distinct multi-layered synthesis: bowstring twang plus feathered whoosh (`arrow`), woody impact (`arrowHit`), heavy mortar launch (`cannonFire`), booming multi-layer fiery detonation (`cannon`/`explosion`), screaming sky-fall whistle (`meteorLaunch`), seismic megablast (`meteorImpact`), high-voltage electric arc crack-snap (`zap`), hypervelocity railgun chirp plus sonic boom (`rail`), seismic boulder crush (`golemSlam`), crystalline ice shatter (`frost`), metallic blade slice (`spike`), graviton vortex implosion (`gravity`), enemy shatter pops (`enemyDie`), and boss chain-detonations (`bossDie`).
+- **Multi-Stage Explosions, Craters & Weapon VFX (`src/game/CanvasBattleEngine.ts`)**:
+  - Added a dedicated `ExplosionFX` multi-lobe billowing fireball/plasma/frost/earth/gravity/boss explosion renderer (`drawExplosions`) with additive hot flash cores, directional streaking sparks (`streak`), rotating crystal/rock shrapnel (`shard`), rising dark smoke clouds (`smoke`), and fading glowing ground scorch craters (`drawCraters`).
+  - Added live smoke-and-ember flight trails behind Ember Cannon shells and falling Meteors, fiery muzzle flash blasts on Ember Cannon and Rail Turret, secondary crackling lightning filaments on Tesla Spire and Rail Turret, tactile micro screen-shake on big impacts (respecting `focusMode`), and corrected the World 2 boss defeat callout to display `IRON WARDEN FALLS!`.
+
+### Next Up
+1. Playtest the upgraded explosions, craters, and layered weapon sound effects across World 1, World 2, and World 3, then push the verified milestone to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 5): 5-to-7 Wave Siege Expansion & One-Third Slower Combat Tempo
+
+### Completed
+- **One-Third Slower Attackers & Proportional Defender Damage (`src/data/level1.ts`)**:
+  - Slowed all 13 creature types' movement `speed` by one-third (`~0.67x`) and scaled melee `hit` damage against Stone Golems (`~0.75x`) so battles feel readable and tactical instead of rushed.
+  - Scaled all 8 defenders' `dmg` and `dps` values proportionally by one-third (`~0.67x`) across Levels 1 to 3 and both Level 3 Specialties (`archer`, `spike`, `golem`, `frost` Blizzard DPS, `ember`, `tesla`, `rail`, `gravity`), keeping damage-per-tile-traveled balanced alongside `HERO_POWERS.meteor.dmg` (`55`).
+- **5-to-7 Wave Siege Arc Across All 11 Campaign Levels (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`, `src/App.tsx`, `src/data/ellSpanish.ts`)**:
+  - Expanded all 11 campaign stages (`w1-l1` through `w3-l1`) from `3` to `4` waves up to `5` to `7` handcrafted escalating waves (`minWaves`: `5` on `w1-l1` to `w1-l3`, `6` on `w1-l4` to `w2-l3`, `7` on `w2-l4`, `w2-l5`, and `w3-l1`) with bigger multi-group formations suited for Free Placement.
+  - Tightened wave cadence to `waveEvery: 8` on World 1 and early World 2 (`w1-l1` to `w2-l3`) and `waveEvery: 7` on late World 2 and World 3 (`w2-l4`, `w2-l5`, `w3-l1`), while keeping `BASIC_TRAINING_LEVEL` as a fast placement battle (`waveEvery: 8`, `minWaves: 1`).
+  - Updated the Level 1 walkthrough Step 5 copy (`8 words` / `8 palabras`) and the "All Rift Locks filled" toast in `CanvasBattleEngine.ts` to report remaining waves clearly when locks finish ahead of the Final Wave.
+
+### Next Up
+1. Playtest the calmer attacker pace, proportional tower damage, and longer 5-to-7 wave siege arc across World 1, World 2, and World 3, then push to GitHub once verified.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
+## 2026-11-26 (Part 4): Runner Basic Training (Adaptive Phonics Placement Level) & Real Level Unlocking
+
+### Completed
+- **Runner Basic Training (`src/data/placement.ts`, `src/data/level1.ts`, `src/game/sprites.ts`, `src/game/CanvasBattleEngine.ts`, `src/App.tsx`)**:
+  - Built a full playable Free Placement proving-grounds level (`id: 'placement'`, `worldId: 'training'`, `startCrystals: 145`, `waveEvery: 8`, `minWaves: 1`, core 4 defenders) with a custom sunlit proving-grounds battlefield (`map_basic_training_1795737203102.jpg`, `155 KB`) and cast-locked opening/victory briefing art (`cutscene_basic_training_1795737205953.jpg`, `98 KB`).
+  - Implemented an 8-stage adaptive skill staircase covering every shipped skill (`a/i`, `o/u`, `e/CVC`, `sh/ch`, `th/wh/-ck`, `L/R Blends`, `S & End Blends`, `Silent-E a_e/i_e`) using 32 verified Leda-voiced words and nonsense runes (3 real + 1 rune per tier).
+  - Clearing `>= 3/4` clean first-try reads on a tier triggers a golden-emerald Anchor celebration (`triggerPlacementTierClear`), grants `+75` bonus crystals, immediately saves newly opened campaign levels to `progress.placement`, and steps to the next skill tier.
+  - Scoring `< 3/4` on a tier (or clearing all 8 tiers) settles with zero shame, opens the student's matched starting level, triggers the Final Graduation Wave, and switches the Rune Forge into confidence-zone practice words from their assigned level.
+- **Real Campaign Level Unlocking, Placement HUD, & Teacher Controls (`src/lib/metrics.ts`, `src/components/TitleScreen.tsx`, `src/components/BattleHUD.tsx`, `src/components/RuneForgePanel.tsx`, `src/components/ResultsScreen.tsx`, `src/components/SettingsModal.tsx`)**:
+  - Added `getUnlockedLevelIds(progress)` so campaign levels open progressively via Runner Basic Training, by beating prior levels, or all at once via the new **Unlock All Levels (Teacher Preview)** toggle in Settings (`settings.unlockAllLevels`), alongside a **Reset Placement** button.
+  - Added a Runner Basic Training mission strip and lock/open/recommended indicators on the Title Screen while keeping locked levels clickable to preview with direct CTAs to Basic Training or Settings.
+  - Added the compact 8-stage Placement Skill Ladder in `BattleHUD.tsx`, sequential tier progress line in `RuneForgePanel.tsx`, full Placement Report + `Start [Recommended Level]` button + copyable IEP/PLAAF `formatPlacementTeacherNote()` in `ResultsScreen.tsx`, and added the missing `gravity` defender thumbnail in `App.tsx`.
+- **Leda Audio & Spanish ELL (`public/assets/audio/tts-cache/`, `src/data/ellSpanish.ts`)**:
+  - Generated 4 Leda cutscene `.mp3` clips (`bt-open-v1-1`, `bt-open-v1-2`, `bt-vic-v1-1`, `bt-def-v1-1`) at 48 kbps mono with loudnorm and added bilingual Spanish cutscene subtitles in `SPANISH_CUTSCENE_CAPTIONS`.
+
+### Next Up
+1. Playtest Runner Basic Training (clearing early tiers, settling cleanly, checking Title Screen unlocks, ResultsScreen Placement Report, and Teacher Unlock All toggle), then push to GitHub.
+2. Continue World 3 with Level 2 (`o_e`, `u_e`).
+
 ## 2026-11-26 (Part 3): Game-Wide Free Tower Placement & Rebuilt Level 1 Walkthrough
 
 ### Completed

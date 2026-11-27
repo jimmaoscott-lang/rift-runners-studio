@@ -17,11 +17,14 @@ import { GameSpriteBank, loadGameSprites, SpriteKey } from './sprites';
 
 export type CameraPreset = 'tactical' | 'action' | 'rift' | 'camp';
 
+export type TargetPriority = 'first' | 'last' | 'strong';
+
 export interface SelectedDefenderInfo {
   padId: string;
   type: DefenderType;
   level: number;
   spec: 'a' | 'b' | null;
+  targetMode: TargetPriority;
   spent: number;
   screenX: number;
   screenY: number;
@@ -110,6 +113,7 @@ interface DefenderRuntime {
   pad: PadRuntime;
   level: number;
   spec: 'a' | 'b' | null;
+  targetMode: TargetPriority;
   spent: number;
   cd: number;
   freezeCd: number;
@@ -144,8 +148,12 @@ interface CreatureRuntime {
   slowMult: number;
   slowTimer: number;
   freezeTimer: number;
+  freezeImmuneTimer: number;
+  pullImmuneTimer: number;
   armorShredTimer: number;
   shieldTimer: number;
+  dotAccum: number;
+  resistTextCd: number;
   abilityCd: number;
   dashTimer: number;
   summonsUsed: number;
@@ -193,6 +201,11 @@ interface Particle {
   age: number;
   life: number;
   glow?: boolean;
+  kind?: 'dot' | 'streak' | 'smoke' | 'shard';
+  gravity?: number;
+  drag?: number;
+  rot?: number;
+  vrot?: number;
 }
 
 interface RingEffect {
@@ -205,6 +218,34 @@ interface RingEffect {
   age: number;
   life: number;
   fillAlpha?: number;
+}
+
+type ExplosionTheme = 'fire' | 'inferno' | 'plasma' | 'electric' | 'frost' | 'earth' | 'gravity' | 'boss';
+
+interface ExplosionLobe {
+  ox: number;
+  oy: number;
+  scale: number;
+  delay: number;
+}
+
+interface ExplosionFX {
+  x: number;
+  y: number;
+  radius: number;
+  age: number;
+  life: number;
+  theme: ExplosionTheme;
+  lobes: ExplosionLobe[];
+}
+
+interface CraterDecal {
+  x: number;
+  y: number;
+  radius: number;
+  age: number;
+  life: number;
+  glowColor: string;
 }
 
 interface MeteorFX {
@@ -341,6 +382,9 @@ export class BattleEngine {
   private callbacks: BattleEngineCallbacks;
 
   private sprites: GameSpriteBank | null = null;
+  private readonly terrainMaskW = 320;
+  private readonly terrainMaskH = 180;
+  private terrainPixels: Uint8ClampedArray | null = null;
   private path: SmoothPath;
   private riverPath: SmoothPath | null;
   private riftPos: Vec2;
@@ -393,6 +437,8 @@ export class BattleEngine {
   private projectiles: ProjectileRuntime[] = [];
   private particles: Particle[] = [];
   private rings: RingEffect[] = [];
+  private explosions: ExplosionFX[] = [];
+  private craters: CraterDecal[] = [];
   private floatingTexts: FloatingText[] = [];
   private meteors: MeteorFX[] = [];
   private lightningArcs: LightningArcFX[] = [];
@@ -459,6 +505,7 @@ export class BattleEngine {
       .then((bank) => {
         if (!this.disposed) {
           this.sprites = bank;
+          this.initTerrainMask();
         }
       })
       .catch(() => {
@@ -565,6 +612,99 @@ export class BattleEngine {
     return best;
   }
 
+  private initTerrainMask() {
+    const mapImg = this.sprites?.maps[this.level.id] || this.sprites?.map;
+    if (!mapImg || !mapImg.complete || mapImg.naturalWidth === 0) return;
+    try {
+      const off = document.createElement('canvas');
+      off.width = this.terrainMaskW;
+      off.height = this.terrainMaskH;
+      const octx = off.getContext('2d', { willReadFrequently: true });
+      if (!octx) return;
+      octx.drawImage(mapImg, 0, 0, this.terrainMaskW, this.terrainMaskH);
+      this.terrainPixels = octx.getImageData(0, 0, this.terrainMaskW, this.terrainMaskH).data;
+    } catch {
+      this.terrainPixels = null;
+    }
+  }
+
+  private sampleTerrainHazard(wx: number, wy: number): string | null {
+    const data = this.terrainPixels;
+    if (!data) return null;
+    const w = this.terrainMaskW;
+    const h = this.terrainMaskH;
+    const sxScale = w / MAP_W;
+    const syScale = h / MAP_H;
+
+    // Sample a 17-point footprint disc where the tower foundation sits (center + 2 rings)
+    const sampleOffsets: Array<[number, number]> = [[0, 2]];
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      sampleOffsets.push([Math.cos(ang) * 11, 2 + Math.sin(ang) * 11]);
+      sampleOffsets.push([Math.cos(ang) * 22, 2 + Math.sin(ang) * 22]);
+    }
+
+    let lavaHits = 0;
+    let waterHits = 0;
+    let skyHits = 0;
+
+    for (const [ox, oy] of sampleOffsets) {
+      const px = Math.max(0, Math.min(w - 1, Math.round((wx + ox) * sxScale)));
+      const py = Math.max(0, Math.min(h - 1, Math.round((wy + oy) * syScale)));
+      const idx = (py * w + px) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+
+      if (this.level.worldId === 'w2') {
+        if ((r >= 188 && r - b >= 92 && g >= 58 && b <= 120) || (r >= 225 && g >= 145 && b <= 110)) {
+          lavaHits += 1;
+        }
+      } else if (this.level.worldId === 'w1') {
+        if (b >= 118 && b - r >= 28 && g >= 98) {
+          waterHits += 1;
+        }
+      } else if (this.level.worldId === 'w3') {
+        if (r >= 188 && g >= 200 && b >= 212 && b >= r - 8) {
+          skyHits += 1;
+        }
+      }
+    }
+
+    if (lavaHits >= 2) return 'Molten lava';
+    if (waterHits >= 3) return 'Over water';
+    if (skyHits >= 4) return 'Cliff drop';
+    return null;
+  }
+
+  private isInsideNoBuildPoly(
+    wx: number,
+    wy: number,
+    points: [number, number][],
+    marginPx = 12
+  ): boolean {
+    if (points.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i][0] * MAP_W;
+      const yi = points[i][1] * MAP_H;
+      const xj = points[j][0] * MAP_W;
+      const yj = points[j][1] * MAP_H;
+
+      // Edge proximity check so tower bases never hang over lava or cliff edges
+      const dx = xj - xi;
+      const dy = yj - yi;
+      const lenSq = dx * dx + dy * dy;
+      const t = lenSq > 0 ? Math.max(0, Math.min(1, ((wx - xi) * dx + (wy - yi) * dy) / lenSq)) : 0;
+      const dist = Math.hypot(wx - (xi + t * dx), wy - (yi + t * dy));
+      if (dist < marginPx) return true;
+
+      const intersect = yi > wy !== yj > wy && wx < ((xj - xi) * (wy - yi)) / (yj - yi + 1e-9) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   private evaluateFreePlacement(
     wx: number,
     wy: number,
@@ -610,7 +750,7 @@ export class BattleEngine {
     if (nearest.dist < 36) {
       return { x: wx, y: wy, s: 0, valid: false, reason: 'Too close to trail', kind: 'tower' };
     }
-    if (this.riverPath && this.riverPath.nearestPoint(wx, wy).dist < 38) {
+    if (this.riverPath && this.riverPath.nearestPoint(wx, wy).dist < 46) {
       return {
         x: wx,
         y: wy,
@@ -642,6 +782,31 @@ export class BattleEngine {
           };
         }
       }
+    }
+    if (this.level.noBuildPolys) {
+      for (const poly of this.level.noBuildPolys) {
+        if (this.isInsideNoBuildPoly(wx, wy, poly.points, 12)) {
+          return {
+            x: wx,
+            y: wy,
+            s: 0,
+            valid: false,
+            reason: poly.label || 'Blocked terrain',
+            kind: 'tower',
+          };
+        }
+      }
+    }
+    const pixelHazard = this.sampleTerrainHazard(wx, wy);
+    if (pixelHazard) {
+      return {
+        x: wx,
+        y: wy,
+        s: 0,
+        valid: false,
+        reason: pixelHazard,
+        kind: 'tower',
+      };
     }
     for (const def of this.defenders) {
       if (Math.hypot(wx - def.pad.x, wy - def.pad.y) < 48) {
@@ -943,10 +1108,15 @@ export class BattleEngine {
 
     const lockNames = fresh.map((lk) => lk.label).join(' & ');
     if (allLocksDone && !this.bonusActive && !this.bankedWin) {
+      const wavesLeft = this.level.minWaves - this.wave - 1;
+      const tail =
+        wavesLeft <= 0
+          ? 'The next wave is the Final Wave.'
+          : wavesLeft === 1
+          ? 'Clear 1 more wave to unlock the Final Wave.'
+          : `Clear ${wavesLeft} more waves to reach the Final Wave.`;
       this.callbacks.onToast(
-        this.wave + 1 >= this.level.minWaves
-          ? `${lockNames} Lock Sealed (+${bonusAmount} bonus crystals)! All Rift Locks filled. The next wave is the Final Wave.`
-          : `${lockNames} Lock Sealed (+${bonusAmount} bonus crystals)! All Rift Locks filled. Clear the next wave to unlock the Final Wave.`
+        `${lockNames} Lock Sealed (+${bonusAmount} bonus crystals)! All Rift Locks filled. ${tail}`
       );
     } else {
       this.callbacks.onToast(
@@ -956,6 +1126,54 @@ export class BattleEngine {
 
     this.emitSnapshot();
     return bonusAmount;
+  }
+
+  public triggerPlacementTierClear(
+    tierLabel: string,
+    openedLabel: string,
+    bonusCrystals: number
+  ) {
+    this.crystals += bonusCrystals;
+    this.shards += bonusCrystals;
+    this.wardenCastTimer = Math.max(this.wardenCastTimer, 0.85);
+    this.shakeTimer = Math.max(this.shakeTimer, 0.22);
+    this.shakeStrength = Math.max(this.shakeStrength, 4.5);
+
+    this.rings.push({
+      x: this.campPos.x,
+      y: this.campPos.y,
+      r0: 22,
+      r1: 360,
+      color: '#fbbf24',
+      lineWidth: 7,
+      age: 0,
+      life: 0.65,
+      fillAlpha: 0.14,
+    });
+    this.rings.push({
+      x: this.campPos.x,
+      y: this.campPos.y,
+      r0: 14,
+      r1: 260,
+      color: '#34d399',
+      lineWidth: 5,
+      age: 0,
+      life: 0.55,
+    });
+    this.spawnBurst(this.campPos.x, this.campPos.y, '#fbbf24', 20);
+    this.spawnBurst(this.campPos.x, this.campPos.y, '#34d399', 14);
+    this.spawnFloatingText(
+      this.campPos.x,
+      this.campPos.y - 82,
+      `${tierLabel.toUpperCase()} CLEARED! +${bonusCrystals}`,
+      '#34d399',
+      1.35
+    );
+    sound.sfx('power');
+    this.callbacks.onToast(
+      `${tierLabel} cleared (+${bonusCrystals} crystals)! ${openedLabel} opened!`
+    );
+    this.emitSnapshot();
   }
 
   public onWordRead(
@@ -973,12 +1191,21 @@ export class BattleEngine {
 
     const awardedLockBonus = this.triggerLockSealBonus(newlyLocked, allLocksDone);
 
-    if (justCompletedLocks && awardedLockBonus === 0 && !this.bonusActive && !this.bankedWin) {
-      this.callbacks.onToast(
-        this.wave + 1 >= this.level.minWaves
-          ? 'All Rift Locks filled! The next wave is the Final Wave.'
-          : 'All Rift Locks filled! Clear the next wave to unlock the Final Wave.'
-      );
+    if (
+      justCompletedLocks &&
+      awardedLockBonus === 0 &&
+      !this.bonusActive &&
+      !this.bankedWin &&
+      !this.level.isPlacement
+    ) {
+      const wavesLeft = this.level.minWaves - this.wave - 1;
+      const tail =
+        wavesLeft <= 0
+          ? 'The next wave is the Final Wave.'
+          : wavesLeft === 1
+          ? 'Clear 1 more wave to unlock the Final Wave.'
+          : `Clear ${wavesLeft} more waves to reach the Final Wave.`;
+      this.callbacks.onToast(`All Rift Locks filled! ${tail}`);
     }
 
     if (this.phase === 'build' || this.phase === 'between') {
@@ -1018,12 +1245,21 @@ export class BattleEngine {
 
     const awardedLockBonus = this.triggerLockSealBonus(newlyLocked, allLocksDone);
 
-    if (justCompletedLocks && awardedLockBonus === 0 && !this.bonusActive && !this.bankedWin) {
-      this.callbacks.onToast(
-        this.wave + 1 >= this.level.minWaves
-          ? 'All Rift Locks filled! The next wave is the Final Wave.'
-          : 'All Rift Locks filled! Clear the next wave to unlock the Final Wave.'
-      );
+    if (
+      justCompletedLocks &&
+      awardedLockBonus === 0 &&
+      !this.bonusActive &&
+      !this.bankedWin &&
+      !this.level.isPlacement
+    ) {
+      const wavesLeft = this.level.minWaves - this.wave - 1;
+      const tail =
+        wavesLeft <= 0
+          ? 'The next wave is the Final Wave.'
+          : wavesLeft === 1
+          ? 'Clear 1 more wave to unlock the Final Wave.'
+          : `Clear ${wavesLeft} more waves to reach the Final Wave.`;
+      this.callbacks.onToast(`All Rift Locks filled! ${tail}`);
     }
 
     this.emitSnapshot();
@@ -1060,12 +1296,14 @@ export class BattleEngine {
       age: 0,
       life: 0.65,
     });
+    this.spawnExplosion(this.campPos.x, this.campPos.y - 12, 130, 'plasma', { shake: 11, crater: false });
     this.spawnBurst(this.campPos.x, this.campPos.y, '#38e0ff', 28);
     this.spawnFloatingText(this.campPos.x, this.campPos.y - 75, 'MEGA FORGE!', '#fbbf24', 1.45);
 
     for (const cr of this.creatures) {
       if (!cr.alive) continue;
-      this.damageCreature(cr, FORGE_CONFIG.megaBlast, { armorPierce: true });
+      this.spawnBurst(cr.x, cr.y - 16, '#fbbf24', 8);
+      this.damageCreature(cr, FORGE_CONFIG.megaBlast, { armorPierce: true, damageType: 'true' });
     }
     sound.sfx('mega');
     this.emitSnapshot();
@@ -1119,10 +1357,10 @@ export class BattleEngine {
         tx: targetPos.x,
         ty: targetPos.y,
         age: 0,
-        life: 0.42,
+        life: 0.44,
         impacted: false,
       });
-      sound.sfx('mega');
+      sound.sfx('meteorLaunch');
       this.callbacks.onToast('Meteor strike incoming!', 'power.meteor');
     } else if (id === 'freeze') {
       this.freezeTimer = cfg.time || 5;
@@ -1219,6 +1457,20 @@ export class BattleEngine {
     this.emitSnapshot();
   }
 
+  public setSelectedTargetMode(mode: TargetPriority) {
+    const def = this.selectedDef;
+    if (!def || def.targetMode === mode) return;
+    def.targetMode = mode;
+    if (def.beamTargetId) {
+      def.beamTargetId = null;
+      def.beamStacks = 0;
+    }
+    sound.sfx('tap');
+    const label = mode === 'first' ? 'FIRST' : mode === 'last' ? 'LAST' : 'STRONG';
+    this.spawnFloatingText(def.pad.x, def.pad.y - 62, `TARGET: ${label}`, '#67e8f9', 0.92);
+    this.emitSnapshot();
+  }
+
   public sellSelected() {
     const def = this.selectedDef;
     if (!def) return;
@@ -1250,6 +1502,34 @@ export class BattleEngine {
     return { ...cfg.levels[Math.min(def.level - 1, cfg.levels.length - 1)] };
   }
 
+  private sortTargetsByPriority(
+    candidates: CreatureRuntime[],
+    mode: TargetPriority,
+    preferArmor = false
+  ): CreatureRuntime[] {
+    if (mode === 'last') {
+      return candidates.sort((a, b) => a.s - b.s);
+    }
+    if (mode === 'strong') {
+      return candidates.sort((a, b) => {
+        const aCfg = CREATURES[a.type];
+        const bCfg = CREATURES[b.type];
+        const aBoss = aCfg.isBoss ? 1 : 0;
+        const bBoss = bCfg.isBoss ? 1 : 0;
+        if (aBoss !== bBoss) return bBoss - aBoss;
+        if (preferArmor) {
+          const aArmor = (aCfg.armor || 0) > 0 && a.armorShredTimer <= 0 ? 1 : 0;
+          const bArmor = (bCfg.armor || 0) > 0 && b.armorShredTimer <= 0 ? 1 : 0;
+          if (aArmor !== bArmor) return bArmor - aArmor;
+        }
+        if (b.hp !== a.hp) return b.hp - a.hp;
+        if (b.maxHp !== a.maxHp) return b.maxHp - a.maxHp;
+        return b.s - a.s;
+      });
+    }
+    return candidates.sort((a, b) => b.s - a.s);
+  }
+
   private placeDefender(pad: PadRuntime, type: DefenderType) {
     const cfg = DEFENDERS[type];
     this.crystals -= cfg.cost;
@@ -1260,6 +1540,7 @@ export class BattleEngine {
       pad,
       level: 1,
       spec: null,
+      targetMode: type === 'rail' ? 'strong' : 'first',
       spent: cfg.cost,
       cd: 0,
       freezeCd: 4,
@@ -1397,8 +1678,12 @@ export class BattleEngine {
       slowMult: 1,
       slowTimer: 0,
       freezeTimer: 0,
+      freezeImmuneTimer: 0,
+      pullImmuneTimer: 0,
       armorShredTimer: 0,
       shieldTimer: 0,
+      dotAccum: 0,
+      resistTextCd: 0,
       abilityCd: type === 'weaver' ? 2.4 : type === 'ironwarden' ? 4.8 : type === 'galewraith' ? 3.2 : 0,
       dashTimer: 0,
       summonsUsed: 0,
@@ -1416,7 +1701,12 @@ export class BattleEngine {
   private damageCreature(
     cr: CreatureRuntime,
     dmg: number,
-    opts?: { armorPierce?: boolean; armorShred?: number }
+    opts?: {
+      armorPierce?: boolean;
+      armorShred?: number;
+      damageType?: 'arrow' | 'fire' | 'electric' | 'frost' | 'gravity' | 'physical' | 'rail' | 'true';
+      isDot?: boolean;
+    }
   ) {
     if (!cr.alive) return;
     const cfg = CREATURES[cr.type];
@@ -1424,10 +1714,85 @@ export class BattleEngine {
     const shieldArmor = cr.shieldTimer > 0 ? 0.25 : 0;
     const effectiveArmor = cr.armorShredTimer > 0 ? 0 : Math.min(0.65, baseArmor + shieldArmor);
     const armorActive = effectiveArmor > 0;
-    const mitigated = armorActive && !opts?.armorPierce ? dmg * (1 - effectiveArmor) : dmg;
-    const rounded = Math.max(1, Math.round(mitigated));
-    cr.hp -= rounded;
-    cr.hitFlash = 0.14;
+    const dType = opts?.damageType || 'physical';
+
+    let typeResist = 0;
+    let resistLabel = '';
+    if (dType === 'fire') {
+      typeResist = cfg.fireResist || 0;
+      resistLabel = 'FIRE RESIST';
+    } else if (dType === 'electric') {
+      typeResist = cfg.electricResist || 0;
+      resistLabel = 'SHOCK RESIST';
+    } else if (dType === 'arrow') {
+      typeResist = cfg.arrowResist || 0;
+      resistLabel = 'ARROW RESIST';
+    } else if (dType === 'frost') {
+      typeResist = cfg.slowResist || 0;
+      resistLabel = 'FROST RESIST';
+    } else if (dType === 'gravity') {
+      typeResist = cfg.gravityResist || 0;
+      resistLabel = 'GRAV RESIST';
+    }
+
+    const armorFactor = armorActive && !opts?.armorPierce && dType !== 'true' ? 1 - effectiveArmor : 1;
+    const typeFactor = dType !== 'true' ? 1 - typeResist : 1;
+    const totalMult = Math.max(0.22, armorFactor * typeFactor);
+    const mitigated = dmg * totalMult;
+    const heavilyResisted = typeResist >= 0.4 || (armorActive && !opts?.armorPierce && dType !== 'true');
+
+    if (opts?.isDot) {
+      cr.hp -= mitigated;
+      cr.dotAccum += mitigated;
+      if (cr.dotAccum >= 6) {
+        const shown = Math.round(cr.dotAccum);
+        cr.dotAccum = 0;
+        cr.hitFlash = Math.max(cr.hitFlash, 0.08);
+        const dmgColor = heavilyResisted
+          ? '#94a3b8'
+          : dType === 'frost'
+          ? '#7dd3fc'
+          : dType === 'gravity'
+          ? '#c084fc'
+          : '#fbbf24';
+        this.spawnFloatingText(
+          cr.x + (Math.random() - 0.5) * 18,
+          cr.y - 38,
+          `-${shown}`,
+          dmgColor,
+          0.85
+        );
+      }
+    } else {
+      const rounded = Math.max(1, Math.round(mitigated));
+      cr.hp -= rounded;
+      cr.hitFlash = 0.14;
+
+      if (typeResist >= 0.4 && resistLabel && cr.resistTextCd <= 0) {
+        cr.resistTextCd = 2.6;
+        this.spawnFloatingText(cr.x, cr.y - 56, resistLabel, '#cbd5e1', 0.78);
+      }
+
+      if (armorActive && !opts?.armorPierce && dmg >= 8 && Math.random() < 0.32) {
+        this.spawnBurst(cr.x, cr.y - 26, '#fbbf24', 3);
+      }
+
+      if (rounded >= 4 || Math.random() < 0.35) {
+        const dmgColor =
+          opts?.armorPierce && armorActive
+            ? '#38e0ff'
+            : heavilyResisted
+            ? '#94a3b8'
+            : '#fbbf24';
+        this.spawnFloatingText(
+          cr.x + (Math.random() - 0.5) * 18,
+          cr.y - 38,
+          `-${rounded}`,
+          dmgColor,
+          rounded >= 25 ? 1.2 : 0.95
+        );
+      }
+    }
 
     if (opts?.armorShred && opts.armorShred > 0) {
       const wasIntact = cr.armorShredTimer <= 0 && (baseArmor > 0 || cr.shieldTimer > 0);
@@ -1436,25 +1801,6 @@ export class BattleEngine {
       if (wasIntact) {
         this.spawnFloatingText(cr.x, cr.y - 68, 'ARMOR CRACKED!', '#38e0ff', 1.05);
       }
-    }
-
-    if (armorActive && !opts?.armorPierce && dmg >= 8 && Math.random() < 0.32) {
-      this.spawnBurst(cr.x, cr.y - 26, '#fbbf24', 3);
-    }
-
-    if (rounded >= 4 || Math.random() < 0.35) {
-      const dmgColor = opts?.armorPierce && armorActive
-        ? '#38e0ff'
-        : armorActive && !opts?.armorPierce
-        ? '#cbd5e1'
-        : '#fbbf24';
-      this.spawnFloatingText(
-        cr.x + (Math.random() - 0.5) * 18,
-        cr.y - 38,
-        `-${rounded}`,
-        dmgColor,
-        rounded >= 25 ? 1.2 : 0.95
-      );
     }
 
     if (cr.hp <= 0) {
@@ -1511,24 +1857,39 @@ export class BattleEngine {
       }
 
       if (cfg.isBoss) {
-        this.shakeTimer = 0.45;
-        this.shakeStrength = 10;
+        const bossTitle = cr.type === 'ironwarden' ? 'IRON WARDEN FALLS!' : 'THORNKING FALLS!';
+        this.spawnExplosion(cr.x, cr.y - 26, 175, 'boss', { shake: 15, crater: true });
         this.rings.push({
           x: cr.x,
           y: cr.y,
           r0: 20,
-          r1: 220,
+          r1: 255,
           color: '#fbbf24',
-          lineWidth: 8,
+          lineWidth: 9,
           age: 0,
-          life: 0.72,
-          fillAlpha: 0.2,
+          life: 0.78,
+          fillAlpha: 0.24,
         });
-        this.spawnBurst(cr.x, cr.y - 30, '#fbbf24', 24);
-        this.spawnFloatingText(cr.x, cr.y - 96, 'THORNKING FALLS!', '#fbbf24', 1.4);
+        this.rings.push({
+          x: cr.x,
+          y: cr.y,
+          r0: 12,
+          r1: 195,
+          color: '#e879f9',
+          lineWidth: 6,
+          age: 0,
+          life: 0.62,
+        });
+        this.spawnFloatingText(cr.x, cr.y - 96, bossTitle, '#fbbf24', 1.45);
+      } else {
+        this.spawnExplosion(cr.x, cr.y - 14, 34, cr.type === 'cinderimp' ? 'fire' : 'plasma', {
+          shake: 0,
+          crater: false,
+          light: true,
+        });
       }
 
-      sound.sfx(cfg.isBoss ? 'mega' : 'arrowHit');
+      sound.sfx(cfg.isBoss ? 'bossDie' : 'enemyDie', cfg.isBoss ? 0 : 60);
     }
   }
 
@@ -1545,21 +1906,176 @@ export class BattleEngine {
     });
   }
 
+  private pushParticle(p: Particle) {
+    const cap = this.focusMode ? 90 : 340;
+    if (this.particles.length >= cap) {
+      this.particles.shift();
+    }
+    this.particles.push(p);
+  }
+
+  private addShake(strength: number, duration = 0.28) {
+    if (this.focusMode || strength <= 0) return;
+    this.shakeStrength = Math.max(this.shakeStrength, strength);
+    this.shakeTimer = Math.max(this.shakeTimer, duration);
+  }
+
+  private spawnExplosion(
+    x: number,
+    y: number,
+    radius: number,
+    theme: ExplosionTheme,
+    opts?: { shake?: number; crater?: boolean; light?: boolean }
+  ) {
+    const isLight = Boolean(opts?.light);
+    const scale = this.focusMode ? 0.68 : 1;
+    const r = radius * scale;
+    const lobeCount = isLight ? 3 : this.focusMode ? 4 : theme === 'inferno' || theme === 'boss' ? 8 : 6;
+    const lobes: ExplosionLobe[] = [];
+    for (let i = 0; i < lobeCount; i++) {
+      const ang = (Math.PI * 2 * i) / lobeCount + (Math.random() - 0.5) * 0.55;
+      const dist = i === 0 ? 0 : r * (0.22 + Math.random() * 0.28);
+      lobes.push({
+        ox: Math.cos(ang) * dist,
+        oy: Math.sin(ang) * dist * 0.72,
+        scale: i === 0 ? 0.85 : 0.42 + Math.random() * 0.34,
+        delay: i === 0 ? 0 : Math.random() * 0.14,
+      });
+    }
+
+    if (this.explosions.length >= 28) this.explosions.shift();
+    this.explosions.push({
+      x,
+      y,
+      radius: r,
+      age: 0,
+      life: isLight ? 0.28 : theme === 'inferno' || theme === 'boss' ? 0.72 : 0.5,
+      theme,
+      lobes,
+    });
+
+    if (opts?.crater && !this.focusMode) {
+      if (this.craters.length >= 14) this.craters.shift();
+      const glowColor =
+        theme === 'fire' || theme === 'inferno'
+          ? '#f97316'
+          : theme === 'boss'
+          ? '#fbbf24'
+          : theme === 'frost'
+          ? '#38e0ff'
+          : theme === 'gravity'
+          ? '#a855f7'
+          : '#94a3b8';
+      this.craters.push({
+        x,
+        y: y + 6,
+        radius: Math.min(110, r * 0.56),
+        age: 0,
+        life: 3.4,
+        glowColor,
+      });
+    }
+
+    if (opts?.shake) {
+      this.addShake(opts.shake, theme === 'inferno' || theme === 'boss' ? 0.48 : 0.26);
+    }
+
+    if (isLight) return;
+
+    // Directional streaking sparks + shards + rising smoke plume
+    const palette: Record<ExplosionTheme, { sparks: string[]; shard: string; smoke?: string }> = {
+      fire: { sparks: ['#fef08a', '#fbbf24', '#f97316', '#ef4444'], shard: '#fb923c', smoke: 'rgba(30, 27, 26, 0.58)' },
+      inferno: { sparks: ['#ffffff', '#fef08a', '#fb923c', '#ef4444'], shard: '#f97316', smoke: 'rgba(24, 18, 16, 0.66)' },
+      plasma: { sparks: ['#ffffff', '#67e8f9', '#38e0ff', '#fbbf24'], shard: '#38e0ff' },
+      electric: { sparks: ['#ffffff', '#67e8f9', '#38e0ff', '#c084fc'], shard: '#a5f3fc' },
+      frost: { sparks: ['#ffffff', '#bae6fd', '#38e0ff'], shard: '#e0f2fe' },
+      earth: { sparks: ['#fef08a', '#d6d3d1', '#a8a29e'], shard: '#78716c', smoke: 'rgba(68, 64, 60, 0.48)' },
+      gravity: { sparks: ['#f5d0fe', '#c084fc', '#38e0ff'], shard: '#a855f7' },
+      boss: { sparks: ['#ffffff', '#fef08a', '#fbbf24', '#e879f9'], shard: '#fbbf24', smoke: 'rgba(28, 16, 38, 0.58)' },
+    };
+    const pal = palette[theme];
+    const sparkCount = this.focusMode ? 6 : Math.min(28, Math.max(10, Math.round(r * 0.2)));
+    for (let i = 0; i < sparkCount; i++) {
+      const ang = (Math.PI * 2 * i) / sparkCount + (Math.random() - 0.5) * 0.45;
+      const spd = (95 + Math.random() * 210) * Math.min(1.5, Math.max(0.75, r / 85));
+      this.pushParticle({
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 8,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd * 0.8 - 35,
+        r: 2.2 + Math.random() * 2.6,
+        color: pal.sparks[i % pal.sparks.length],
+        age: 0,
+        life: 0.3 + Math.random() * 0.34,
+        glow: true,
+        kind: 'streak',
+        drag: 2.2,
+        gravity: 170,
+      });
+    }
+
+    const shardCount = this.focusMode ? 3 : Math.min(14, Math.max(5, Math.round(r * 0.09)));
+    for (let i = 0; i < shardCount; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 70 + Math.random() * 160;
+      this.pushParticle({
+        x,
+        y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd * 0.75 - 55,
+        r: 3.4 + Math.random() * 3.8,
+        color: pal.shard,
+        age: 0,
+        life: 0.42 + Math.random() * 0.32,
+        glow: theme !== 'earth',
+        kind: 'shard',
+        drag: 1.4,
+        gravity: 240,
+        rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 14,
+      });
+    }
+
+    if (pal.smoke && !this.focusMode) {
+      const smokeCount = Math.min(10, Math.max(4, Math.round(r * 0.07)));
+      for (let i = 0; i < smokeCount; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 18 + Math.random() * 44;
+        this.pushParticle({
+          x: x + (Math.random() - 0.5) * r * 0.35,
+          y: y + (Math.random() - 0.5) * r * 0.25,
+          vx: Math.cos(ang) * spd,
+          vy: -24 - Math.random() * 38,
+          r: 10 + Math.random() * (r * 0.16),
+          color: pal.smoke,
+          age: 0,
+          life: 0.65 + Math.random() * 0.55,
+          kind: 'smoke',
+          drag: 1.8,
+          gravity: -22,
+        });
+      }
+    }
+  }
+
   private spawnBurst(x: number, y: number, color: string, count: number) {
     if (this.focusMode) count = Math.min(count, 4);
     for (let i = 0; i < count; i++) {
       const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
-      const spd = 45 + Math.random() * 125;
-      this.particles.push({
+      const spd = 55 + Math.random() * 145;
+      this.pushParticle({
         x,
         y,
         vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd - 20,
-        r: 2.4 + Math.random() * 3.4,
+        vy: Math.sin(ang) * spd - 24,
+        r: 2.5 + Math.random() * 3.4,
         color,
         age: 0,
-        life: 0.35 + Math.random() * 0.32,
+        life: 0.34 + Math.random() * 0.32,
         glow: true,
+        kind: i % 2 === 0 ? 'streak' : 'dot',
+        drag: 1.8,
+        gravity: 110,
       });
     }
   }
@@ -1616,6 +2132,15 @@ export class BattleEngine {
       }
       if (cr.shieldTimer > 0) {
         cr.shieldTimer = Math.max(0, cr.shieldTimer - dt);
+      }
+      if (cr.pullImmuneTimer > 0) {
+        cr.pullImmuneTimer = Math.max(0, cr.pullImmuneTimer - dt);
+      }
+      if (cr.freezeImmuneTimer > 0) {
+        cr.freezeImmuneTimer = Math.max(0, cr.freezeImmuneTimer - dt);
+      }
+      if (cr.resistTextCd > 0) {
+        cr.resistTextCd = Math.max(0, cr.resistTextCd - dt);
       }
 
       if (cr.freezeTimer > 0) {
@@ -1887,9 +2412,12 @@ export class BattleEngine {
         def.cd -= dt * rateBoost;
         if (def.cd <= 0) {
           const rangePx = (st.range || 6.8) * this.RANGE_UNIT_PX;
-          const inRange = this.creatures
-            .filter((cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx)
-            .sort((a, b) => b.s - a.s);
+          const inRange = this.sortTargetsByPriority(
+            this.creatures.filter(
+              (cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx
+            ),
+            def.targetMode
+          );
           const maxShots = st.multi || 1;
           const targets = inRange.slice(0, maxShots);
           if (targets.length > 0) {
@@ -1913,22 +2441,21 @@ export class BattleEngine {
                 color: def.spec === 'b' ? '#fbbf24' : '#38e0ff',
               });
             }
-            sound.sfx('arrow');
+            this.spawnBurst(def.pad.x, def.pad.y - 54, def.spec === 'b' ? '#fbbf24' : '#67e8f9', 3);
+            sound.sfx('arrow', 45);
           }
         }
       } else if (def.type === 'ember') {
         def.cd -= dt * rateBoost;
         if (def.cd <= 0) {
           const rangePx = (st.range || 6.6) * this.RANGE_UNIT_PX;
-          let target: CreatureRuntime | null = null;
-          let bestS = -1;
-          for (const cr of this.creatures) {
-            if (!cr.alive) continue;
-            if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx && cr.s > bestS) {
-              bestS = cr.s;
-              target = cr;
-            }
-          }
+          const inRange = this.sortTargetsByPriority(
+            this.creatures.filter(
+              (cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx
+            ),
+            def.targetMode
+          );
+          const target = inRange[0] || null;
           if (target) {
             def.cd = 1 / (st.rate || 0.65);
             def.recoil = 0.72;
@@ -1949,8 +2476,10 @@ export class BattleEngine {
               splashRadius: (st.splash || 2.3) * this.RANGE_UNIT_PX,
               color: def.spec === 'a' ? '#f97316' : '#fbbf24',
             });
-            this.spawnBurst(def.pad.x, def.pad.y - 54, '#fb923c', 6);
-            sound.sfx('cannon');
+            // Fiery muzzle flash blast & smoke kickback
+            this.spawnExplosion(def.pad.x, def.pad.y - 58, 28, 'fire', { shake: 0, light: true });
+            this.spawnBurst(def.pad.x, def.pad.y - 56, '#fbbf24', 8);
+            sound.sfx('cannonFire', 60);
           }
         }
       } else if (def.type === 'tesla') {
@@ -1973,18 +2502,13 @@ export class BattleEngine {
               if (existing) target = existing;
             }
             if (!target) {
-              let bestScore = -1;
-              for (const cr of this.creatures) {
-                if (!cr.alive) continue;
-                if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
-                  const bossBonus = CREATURES[cr.type].isBoss ? 10000 : 0;
-                  const score = bossBonus + cr.hp * 2 + cr.s * 120;
-                  if (score > bestScore) {
-                    bestScore = score;
-                    target = cr;
-                  }
-                }
-              }
+              const inRange = this.sortTargetsByPriority(
+                this.creatures.filter(
+                  (cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx
+                ),
+                def.targetMode
+              );
+              target = inRange[0] || null;
             }
 
             if (target) {
@@ -2006,28 +2530,39 @@ export class BattleEngine {
                 points: this.buildJaggedArcPoints(orbX, orbY, target.x, ty, 11 + stacks * 1.4),
                 color: stacks >= 4 ? '#e879f9' : '#38e0ff',
                 coreColor: '#ffffff',
-                width: 3.4 + stacks * 0.65,
+                width: 3.8 + stacks * 0.72,
                 age: 0,
-                life: 0.24,
+                life: 0.26,
               });
-              this.spawnBurst(target.x, ty, stacks >= 4 ? '#f0abfc' : '#67e8f9', 6);
-              this.damageCreature(target, hitDmg);
-              sound.sfx('zap');
+              // Secondary crackling plasma filament
+              this.lightningArcs.push({
+                points: this.buildJaggedArcPoints(orbX, orbY, target.x, ty, 19 + stacks * 2),
+                color: stacks >= 4 ? '#c084fc' : '#67e8f9',
+                coreColor: '#ffffff',
+                width: 1.6 + stacks * 0.2,
+                age: 0,
+                life: 0.18,
+              });
+              this.spawnExplosion(target.x, ty, 34 + stacks * 7, 'electric', {
+                shake: stacks >= 4 ? 3.5 : 0,
+                light: stacks < 3,
+              });
+              this.spawnBurst(target.x, ty, stacks >= 4 ? '#f0abfc' : '#67e8f9', 8 + stacks);
+              this.damageCreature(target, hitDmg, { damageType: 'electric' });
+              sound.sfx('zap', 60);
             } else {
               def.beamTargetId = null;
               def.beamStacks = 0;
             }
           } else {
             // Chain Lightning mode (hits primary target and arcs across nearby enemies, ground & air)
-            let primary: CreatureRuntime | null = null;
-            let bestS = -1;
-            for (const cr of this.creatures) {
-              if (!cr.alive) continue;
-              if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx && cr.s > bestS) {
-                bestS = cr.s;
-                primary = cr;
-              }
-            }
+            const inRange = this.sortTargetsByPriority(
+              this.creatures.filter(
+                (cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx
+              ),
+              def.targetMode
+            );
+            const primary = inRange[0] || null;
             if (primary) {
               def.cd = 1 / (st.rate || 0.9);
               def.recoil = 0.55;
@@ -2058,24 +2593,48 @@ export class BattleEngine {
               let prevX = orbX;
               let prevY = orbY;
               const baseDmg = st.dmg || 20;
+              this.spawnExplosion(orbX, orbY, 24, 'electric', { shake: 0, light: true });
               struck.forEach((cr, hopIdx) => {
                 const ty = cr.y - (CREATURES[cr.type].flying ? 34 : 20);
                 const hopMult = Math.max(0.55, Math.pow(0.86, hopIdx));
                 const hopDmg = Math.round(baseDmg * hopMult);
                 this.lightningArcs.push({
-                  points: this.buildJaggedArcPoints(prevX, prevY, cr.x, ty, hopIdx === 0 ? 12 : 9),
+                  points: this.buildJaggedArcPoints(prevX, prevY, cr.x, ty, hopIdx === 0 ? 13 : 10),
                   color: def.spec === 'a' ? '#a855f7' : '#38e0ff',
                   coreColor: '#e0f2fe',
-                  width: Math.max(2.2, 4.2 - hopIdx * 0.4),
+                  width: Math.max(2.4, 4.6 - hopIdx * 0.4),
                   age: 0,
-                  life: 0.22,
+                  life: 0.25,
                 });
-                this.spawnBurst(cr.x, ty, '#38e0ff', hopIdx === 0 ? 7 : 4);
-                this.damageCreature(cr, hopDmg);
+                if (hopIdx === 0) {
+                  this.lightningArcs.push({
+                    points: this.buildJaggedArcPoints(prevX, prevY, cr.x, ty, 22),
+                    color: def.spec === 'a' ? '#e879f9' : '#67e8f9',
+                    coreColor: '#ffffff',
+                    width: 1.6,
+                    age: 0,
+                    life: 0.17,
+                  });
+                  this.spawnExplosion(cr.x, ty, 44, 'electric', { shake: 2.2 });
+                } else {
+                  this.spawnExplosion(cr.x, ty, 28, 'electric', { shake: 0, light: true });
+                }
+                this.rings.push({
+                  x: cr.x,
+                  y: ty,
+                  r0: 6,
+                  r1: hopIdx === 0 ? 46 : 30,
+                  color: def.spec === 'a' ? '#c084fc' : '#38e0ff',
+                  lineWidth: 2.5,
+                  age: 0,
+                  life: 0.24,
+                });
+                this.spawnBurst(cr.x, ty, '#38e0ff', hopIdx === 0 ? 10 : 6);
+                this.damageCreature(cr, hopDmg, { damageType: 'electric' });
                 prevX = cr.x;
                 prevY = ty;
               });
-              sound.sfx('zap');
+              sound.sfx('zap', 60);
             }
           }
         }
@@ -2083,22 +2642,14 @@ export class BattleEngine {
         def.cd -= dt * rateBoost;
         if (def.cd <= 0) {
           const rangePx = (st.range || 8.6) * this.RANGE_UNIT_PX;
-          // Prioritize armored enemies & bosses in range, then furthest along the path
-          let primary: CreatureRuntime | null = null;
-          let bestScore = -1;
-          for (const cr of this.creatures) {
-            if (!cr.alive) continue;
-            if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
-              const cfg = CREATURES[cr.type];
-              const armorBonus = (cfg.armor || 0) > 0 && cr.armorShredTimer <= 0 ? 500 : 0;
-              const bossBonus = cfg.isBoss ? 1200 : 0;
-              const score = bossBonus + armorBonus + cr.s * 300;
-              if (score > bestScore) {
-                bestScore = score;
-                primary = cr;
-              }
-            }
-          }
+          const inRange = this.sortTargetsByPriority(
+            this.creatures.filter(
+              (cr) => cr.alive && Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx
+            ),
+            def.targetMode,
+            true
+          );
+          const primary = inRange[0] || null;
           if (primary) {
             def.cd = 1 / (st.rate || 0.72);
             def.recoil = 0.72;
@@ -2149,44 +2700,56 @@ export class BattleEngine {
               ],
               color: def.spec === 'b' ? '#f59e0b' : '#22d3ee',
               coreColor: '#ffffff',
-              width: def.spec ? 5.2 : 4.2,
+              width: def.spec ? 6.4 : 5.2,
               age: 0,
-              life: 0.24,
+              life: 0.28,
             });
+            // Crackling electromagnetic helix around rail slug
+            this.lightningArcs.push({
+              points: this.buildJaggedArcPoints(muzzleX, muzzleY, endX, endY, 10),
+              color: def.spec === 'b' ? '#fde047' : '#67e8f9',
+              coreColor: '#ffffff',
+              width: 1.8,
+              age: 0,
+              life: 0.2,
+            });
+            this.spawnExplosion(muzzleX, muzzleY, 32, 'plasma', { shake: 0, light: true });
             this.rings.push({
               x: muzzleX,
               y: muzzleY,
               r0: 6,
-              r1: 28,
-              color: '#38e0ff',
-              lineWidth: 3,
+              r1: 38,
+              color: def.spec === 'b' ? '#fbbf24' : '#38e0ff',
+              lineWidth: 3.5,
               age: 0,
-              life: 0.22,
+              life: 0.24,
             });
 
             const baseDmg = st.dmg || 34;
             hitTargets.forEach((cr, idx) => {
               const cy = cr.y - (CREATURES[cr.type].flying ? 34 : 24);
               const hitDmg = idx === 0 ? baseDmg : Math.round(baseDmg * 0.85);
-              this.spawnBurst(cr.x, cy, def.spec === 'b' ? '#fbbf24' : '#38e0ff', idx === 0 ? 10 : 6);
-              if (def.spec === 'b') {
-                this.rings.push({
-                  x: cr.x,
-                  y: cy,
-                  r0: 10,
-                  r1: 52,
-                  color: '#fbbf24',
-                  lineWidth: 3.5,
-                  age: 0,
-                  life: 0.34,
-                });
-              }
+              this.spawnExplosion(cr.x, cy, def.spec === 'b' ? 66 : 48, def.spec === 'b' ? 'fire' : 'plasma', {
+                shake: idx === 0 ? (def.spec ? 4.8 : 3.2) : 0,
+              });
+              this.rings.push({
+                x: cr.x,
+                y: cy,
+                r0: 10,
+                r1: def.spec === 'b' ? 68 : 48,
+                color: def.spec === 'b' ? '#fbbf24' : '#38e0ff',
+                lineWidth: 4,
+                age: 0,
+                life: 0.34,
+                fillAlpha: 0.16,
+              });
               this.damageCreature(cr, hitDmg, {
                 armorPierce: Boolean(st.armorPierce),
                 armorShred: st.armorShred,
+                damageType: 'rail',
               });
             });
-            sound.sfx('rail');
+            sound.sfx('rail', 70);
           }
         }
       } else if (def.type === 'spike') {
@@ -2196,7 +2759,10 @@ export class BattleEngine {
           if (!cr.alive || CREATURES[cr.type].flying) continue;
           if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
             hitAny = true;
-            this.damageCreature(cr, (st.dps || 18) * rateBoost * dt * 1.4);
+            this.damageCreature(cr, (st.dps || 12) * rateBoost * dt, {
+              damageType: 'physical',
+              isDot: true,
+            });
             if (st.slow) {
               const resist = CREATURES[cr.type].slowResist || 0;
               const mult = 1 - st.slow * (1 - resist);
@@ -2208,35 +2774,39 @@ export class BattleEngine {
         if (hitAny) {
           def.recoil = Math.max(def.recoil, 0.35);
           if (Math.random() < dt * 8) {
-            this.spawnBurst(def.pad.x + (Math.random() - 0.5) * 28, def.pad.y, st.slow ? '#a855f7' : '#38e0ff', 3);
+            this.spawnBurst(def.pad.x + (Math.random() - 0.5) * 32, def.pad.y, st.slow ? '#a855f7' : '#38e0ff', 4);
+            sound.sfx('spike', 155);
           }
         }
       } else if (def.type === 'gravity') {
-        const rangePx = (st.radius || 2.35) * this.RANGE_UNIT_PX;
+        const rangePx = (st.radius || 2.25) * this.RANGE_UNIT_PX;
         let hitAny = false;
         const trapped: CreatureRuntime[] = [];
         for (const cr of this.creatures) {
           if (!cr.alive) continue;
-          if (CREATURES[cr.type].flying && !st.hitsAir) continue;
+          const cfg = CREATURES[cr.type];
+          if (cfg.flying && !st.hitsAir) continue;
           if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= rangePx) {
             hitAny = true;
             trapped.push(cr);
-            this.damageCreature(cr, (st.dps || 14) * rateBoost * dt * 1.25, {
+            this.damageCreature(cr, (st.dps || 9) * rateBoost * dt, {
               armorPierce: Boolean(st.armorPierce),
+              damageType: 'gravity',
+              isDot: true,
             });
             if (st.slow) {
-              const resist = (CREATURES[cr.type].slowResist || 0) * 0.5;
-              const mult = 1 - st.slow * (1 - resist);
+              const gravResist = Math.max(cfg.gravityResist || 0, (cfg.slowResist || 0) * 0.55);
+              const mult = 1 - st.slow * (1 - gravResist);
               if (mult < cr.slowMult) cr.slowMult = mult;
-              cr.slowTimer = Math.max(cr.slowTimer, 0.55);
+              cr.slowTimer = Math.max(cr.slowTimer, 0.5 * (1 - gravResist * 0.5));
             }
           }
         }
 
-        // Periodic graviton pull-back pulse (drags enemies back along path + optional armor shred)
-        def.pullCd = (def.pullCd ?? (st.pullEvery || 2.8)) - dt * rateBoost;
+        // Periodic graviton pull-back pulse (drags lighter foes back, grants 5.5s pull anchor recovery, optional armor shred)
+        def.pullCd = (def.pullCd ?? (st.pullEvery || 3.2)) - dt * rateBoost;
         if (def.pullCd <= 0 && trapped.length > 0) {
-          def.pullCd = st.pullEvery || 2.8;
+          def.pullCd = st.pullEvery || 3.2;
           def.recoil = 0.65;
           this.rings.push({
             x: def.pad.x,
@@ -2259,33 +2829,64 @@ export class BattleEngine {
             age: 0,
             life: 0.36,
           });
+          this.spawnExplosion(def.pad.x, def.pad.y, rangePx * 0.62, 'gravity', { shake: 2.8 });
           for (const cr of trapped) {
-            const pull = (st.pullStrength || 0.02) * (CREATURES[cr.type].isBoss ? 0.45 : 1);
-            cr.s = Math.max(0.01, cr.s - pull);
-            const pt = this.path.pointAt(cr.s);
-            const nx = -pt.ty;
-            const ny = pt.tx;
-            cr.x = pt.x + nx * cr.lane;
-            cr.y = pt.y + ny * cr.lane;
+            const cfg = CREATURES[cr.type];
+            const gravResist = cfg.gravityResist || 0;
+            if (gravResist >= 0.85) {
+              if (cr.resistTextCd <= 0) {
+                cr.resistTextCd = 2.8;
+                this.spawnFloatingText(cr.x, cr.y - 58, 'GRAV RESIST!', '#d8b4fe', 0.82);
+              }
+            } else if (cr.pullImmuneTimer <= 0) {
+              const pull =
+                (st.pullStrength || 0.018) *
+                (1 - gravResist) *
+                (cfg.isBoss ? 0.4 : 1);
+              if (pull > 0.002) {
+                cr.s = Math.max(0.01, cr.s - pull);
+                const pt = this.path.pointAt(cr.s);
+                const nx = -pt.ty;
+                const ny = pt.tx;
+                cr.x = pt.x + nx * cr.lane;
+                cr.y = pt.y + ny * cr.lane;
+                cr.pullImmuneTimer = 5.5;
+                this.spawnBurst(cr.x, cr.y - 16, '#c084fc', 7);
+              }
+            }
             if (st.armorShred && st.armorShred > 0) {
+              const wasIntact = cr.armorShredTimer <= 0 && ((cfg.armor || 0) > 0 || cr.shieldTimer > 0);
               cr.armorShredTimer = Math.max(cr.armorShredTimer, st.armorShred);
               cr.shieldTimer = 0;
+              if (wasIntact) {
+                this.spawnFloatingText(cr.x, cr.y - 68, 'ARMOR CRACKED!', '#38e0ff', 1.0);
+              }
             }
-            this.spawnBurst(cr.x, cr.y - 16, '#c084fc', 5);
           }
-          sound.sfx('frost', 180);
+          sound.sfx('gravity', 160);
         }
 
-        // Stasis Anchor specialty: periodic gravity freeze lock
+        // Stasis Anchor specialty: periodic gravity freeze lock (respects gravity/slow resistance & recovery)
         if (st.freezeEvery && st.freezeTime) {
           def.freezeCd -= dt * rateBoost;
           if (def.freezeCd <= 0 && trapped.length > 0) {
             def.freezeCd = st.freezeEvery;
             for (const cr of trapped) {
-              cr.freezeTimer = Math.max(
-                cr.freezeTimer,
-                st.freezeTime * (CREATURES[cr.type].isBoss ? 0.55 : 1)
-              );
+              const cfg = CREATURES[cr.type];
+              const resist = Math.max(cfg.gravityResist || 0, cfg.slowResist || 0);
+              if (resist >= 0.75) {
+                if (cr.resistTextCd <= 0) {
+                  cr.resistTextCd = 2.8;
+                  this.spawnFloatingText(cr.x, cr.y - 58, 'STASIS RESIST!', '#d8b4fe', 0.82);
+                }
+                continue;
+              }
+              if (cr.freezeImmuneTimer > 0) continue;
+              const dur = st.freezeTime * (1 - resist * 0.65) * (cfg.isBoss ? 0.45 : 1);
+              if (dur >= 0.25) {
+                cr.freezeTimer = Math.max(cr.freezeTimer, dur);
+                cr.freezeImmuneTimer = dur + 3.5;
+              }
             }
             this.rings.push({
               x: def.pad.x,
@@ -2343,18 +2944,23 @@ export class BattleEngine {
             def.recoil = 0.65;
             const target = def.holding[0];
             def.facingLeft = target.x < def.pad.x;
-            this.damageCreature(target, st.dmg || 16);
+            this.damageCreature(target, st.dmg || 16, { damageType: 'physical' });
+            this.spawnExplosion(target.x, target.y, st.cleave ? 78 : 50, 'earth', {
+              shake: st.cleave ? 5.2 : 3.0,
+              crater: Boolean(st.cleave),
+            });
             this.rings.push({
               x: target.x,
               y: target.y,
               r0: 10,
-              r1: 52,
-              color: '#38e0ff',
-              lineWidth: 3.5,
+              r1: st.cleave ? 96 : 58,
+              color: st.cleave ? '#fbbf24' : '#38e0ff',
+              lineWidth: st.cleave ? 5.5 : 4,
               age: 0,
-              life: 0.38,
+              life: 0.42,
+              fillAlpha: 0.14,
             });
-            sound.sfx('golemSlam');
+            sound.sfx('golemSlam', 85);
 
             if (st.cleave) {
               for (const cr of this.creatures) {
@@ -2364,7 +2970,7 @@ export class BattleEngine {
                   !CREATURES[cr.type].flying &&
                   Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= 105
                 ) {
-                  this.damageCreature(cr, (st.dmg || 16) * 0.65);
+                  this.damageCreature(cr, (st.dmg || 16) * 0.65, { damageType: 'physical' });
                 }
               }
             }
@@ -2384,7 +2990,10 @@ export class BattleEngine {
             if (mult < cr.slowMult) cr.slowMult = mult;
             cr.slowTimer = Math.max(cr.slowTimer, 0.45 * (1 - resist * 0.5));
             if (st.dps) {
-              this.damageCreature(cr, st.dps * rateBoost * dt);
+              this.damageCreature(cr, st.dps * rateBoost * dt, {
+                damageType: 'frost',
+                isDot: true,
+              });
             }
           }
         }
@@ -2410,20 +3019,35 @@ export class BattleEngine {
               def.freezeCd = st.freezeEvery;
               def.recoil = 0.5;
               for (const v of victims) {
-                v.freezeTimer = Math.max(v.freezeTimer, st.freezeTime || 1.6);
+                const vCfg = CREATURES[v.type];
+                const slowRes = vCfg.slowResist || 0;
+                if (slowRes >= 0.75) {
+                  if (v.resistTextCd <= 0) {
+                    v.resistTextCd = 2.8;
+                    this.spawnFloatingText(v.x, v.y - 58, 'FROST RESIST!', '#7dd3fc', 0.82);
+                  }
+                  continue;
+                }
+                if (v.freezeImmuneTimer > 0) continue;
+                const dur = (st.freezeTime || 1.45) * (1 - slowRes * 0.65) * (vCfg.isBoss ? 0.45 : 1);
+                if (dur >= 0.25) {
+                  v.freezeTimer = Math.max(v.freezeTimer, dur);
+                  v.freezeImmuneTimer = dur + 3.5;
+                }
               }
+              this.spawnExplosion(def.pad.x, def.pad.y, rangePx * 0.72, 'frost', { shake: 2.6 });
               this.rings.push({
                 x: def.pad.x,
                 y: def.pad.y,
                 r0: 12,
                 r1: rangePx,
                 color: '#38e0ff',
-                lineWidth: 5,
+                lineWidth: 6,
                 age: 0,
-                life: 0.55,
-                fillAlpha: 0.14,
+                life: 0.58,
+                fillAlpha: 0.18,
               });
-              sound.sfx('frost');
+              sound.sfx('frost', 120);
             }
           }
         }
@@ -2440,37 +3064,80 @@ export class BattleEngine {
       p.progress += dt / p.duration;
       if (p.progress >= 1) {
         if (p.kind === 'ember' && p.splashRadius) {
+          const isInferno = p.splashRadius >= 75;
+          this.spawnExplosion(
+            p.tx,
+            p.ty,
+            Math.max(58, p.splashRadius * 0.96),
+            isInferno ? 'inferno' : 'fire',
+            { shake: isInferno ? 7.2 : 4.6, crater: true }
+          );
           this.rings.push({
             x: p.tx,
             y: p.ty,
-            r0: 10,
-            r1: p.splashRadius,
+            r0: 12,
+            r1: p.splashRadius * 1.15,
             color: '#fb923c',
-            lineWidth: 6,
+            lineWidth: 7,
             age: 0,
-            life: 0.42,
+            life: 0.48,
             fillAlpha: 0.24,
           });
-          this.spawnBurst(p.tx, p.ty, '#fbbf24', 14);
-          this.spawnBurst(p.tx, p.ty, '#f97316', 10);
+          this.rings.push({
+            x: p.tx,
+            y: p.ty,
+            r0: 6,
+            r1: p.splashRadius * 0.72,
+            color: '#fef08a',
+            lineWidth: 4.5,
+            age: 0,
+            life: 0.3,
+          });
           for (const cr of this.creatures) {
             if (!cr.alive) continue;
             if (Math.hypot(cr.x - p.tx, cr.y - p.ty) <= p.splashRadius) {
-              this.damageCreature(cr, p.dmg);
+              this.damageCreature(cr, p.dmg, { damageType: 'fire' });
             }
           }
-          sound.sfx('cannon');
+          sound.sfx('explosion', 55);
         } else {
           if (p.target.alive) {
-            this.damageCreature(p.target, p.dmg);
+            this.damageCreature(p.target, p.dmg, { damageType: 'arrow' });
           }
-          this.spawnBurst(p.tx, p.ty, p.color, 5);
+          this.spawnBurst(p.tx, p.ty, p.color, 7);
+          this.rings.push({
+            x: p.tx,
+            y: p.ty,
+            r0: 4,
+            r1: 22,
+            color: p.color,
+            lineWidth: 2.5,
+            age: 0,
+            life: 0.18,
+          });
+          sound.sfx('arrowHit', 65);
         }
         this.projectiles.splice(i, 1);
       } else {
         const t = p.progress;
         p.x = p.sx + (p.tx - p.sx) * t;
         p.y = p.sy + (p.ty - p.sy) * t - Math.sin(t * Math.PI) * p.arcHeight;
+        // Live fire & smoke trail behind airborne Ember Cannon shells
+        if (p.kind === 'ember' && !this.focusMode && Math.random() < dt * 36) {
+          this.pushParticle({
+            x: p.x + (Math.random() - 0.5) * 6,
+            y: p.y + (Math.random() - 0.5) * 6,
+            vx: (Math.random() - 0.5) * 26,
+            vy: -14 - Math.random() * 20,
+            r: 4 + Math.random() * 4.5,
+            color: Math.random() < 0.55 ? '#fb923c' : 'rgba(38, 32, 30, 0.52)',
+            age: 0,
+            life: 0.28 + Math.random() * 0.2,
+            kind: Math.random() < 0.55 ? 'dot' : 'smoke',
+            gravity: -18,
+            drag: 1.5,
+          });
+        }
       }
     }
 
@@ -2547,26 +3214,66 @@ export class BattleEngine {
     for (let i = this.meteors.length - 1; i >= 0; i--) {
       const m = this.meteors[i];
       m.age += dt;
+      // Blazing comet trail particles as meteor streaks across the sky
+      if (!m.impacted && !this.focusMode && Math.random() < dt * 75) {
+        const mt = Math.min(1, m.age / m.life);
+        const mx = m.sx + (m.tx - m.sx) * mt;
+        const my = m.sy + (m.ty - m.sy) * mt;
+        this.pushParticle({
+          x: mx + (Math.random() - 0.5) * 18,
+          y: my + (Math.random() - 0.5) * 18,
+          vx: 40 + Math.random() * 55,
+          vy: -55 - Math.random() * 55,
+          r: 8 + Math.random() * 9,
+          color: Math.random() < 0.65 ? '#fb923c' : 'rgba(28, 20, 18, 0.55)',
+          age: 0,
+          life: 0.34 + Math.random() * 0.24,
+          kind: Math.random() < 0.65 ? 'dot' : 'smoke',
+          gravity: -15,
+          drag: 1.5,
+        });
+      }
       if (m.age >= m.life && !m.impacted) {
         m.impacted = true;
-        this.shakeTimer = 0.45;
-        this.shakeStrength = 12;
+        this.spawnExplosion(m.tx, m.ty, 182, 'inferno', { shake: 16, crater: true });
         this.rings.push({
           x: m.tx,
           y: m.ty,
-          r0: 14,
-          r1: 185,
+          r0: 16,
+          r1: 225,
           color: '#fb923c',
-          lineWidth: 9,
+          lineWidth: 11,
           age: 0,
-          life: 0.65,
-          fillAlpha: 0.28,
+          life: 0.72,
+          fillAlpha: 0.3,
         });
-        this.spawnBurst(m.tx, m.ty, '#fbbf24', 24);
-        this.spawnBurst(m.tx, m.ty, '#fb7185', 14);
+        this.rings.push({
+          x: m.tx,
+          y: m.ty,
+          r0: 10,
+          r1: 145,
+          color: '#fef08a',
+          lineWidth: 6,
+          age: 0,
+          life: 0.44,
+        });
+        this.rings.push({
+          x: m.tx,
+          y: m.ty,
+          r0: 26,
+          r1: 260,
+          color: '#ef4444',
+          lineWidth: 4.5,
+          age: 0,
+          life: 0.85,
+        });
+        sound.sfx('meteorImpact');
         for (const cr of this.creatures) {
-          if (cr.alive && Math.hypot(cr.x - m.tx, cr.y - m.ty) <= 190) {
-            this.damageCreature(cr, HERO_POWERS.meteor.dmg || 80, { armorPierce: true });
+          if (cr.alive && Math.hypot(cr.x - m.tx, cr.y - m.ty) <= 195) {
+            this.damageCreature(cr, HERO_POWERS.meteor.dmg || 55, {
+              armorPierce: true,
+              damageType: 'true',
+            });
           }
         }
         this.meteors.splice(i, 1);
@@ -2579,9 +3286,34 @@ export class BattleEngine {
       if (p.age >= p.life) {
         this.particles.splice(i, 1);
       } else {
+        const drag = p.drag ?? 0;
+        if (drag > 0) {
+          const damp = Math.max(0, 1 - drag * dt);
+          p.vx *= damp;
+          p.vy *= damp;
+        }
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.vy += 90 * dt;
+        p.vy += (p.gravity ?? 90) * dt;
+        if (p.rot !== undefined && p.vrot !== undefined) {
+          p.rot += p.vrot * dt;
+        }
+      }
+    }
+
+    for (let i = this.explosions.length - 1; i >= 0; i--) {
+      const ex = this.explosions[i];
+      ex.age += dt;
+      if (ex.age >= ex.life) {
+        this.explosions.splice(i, 1);
+      }
+    }
+
+    for (let i = this.craters.length - 1; i >= 0; i--) {
+      const c = this.craters[i];
+      c.age += dt;
+      if (c.age >= c.life) {
+        this.craters.splice(i, 1);
       }
     }
 
@@ -2687,16 +3419,18 @@ export class BattleEngine {
     // 5. Build pads & range preview rings
     this.drawPads(ctx);
 
-    // 6. Ground-level expanding spell rings
+    // 6. Ground-level craters & expanding spell rings
+    this.drawCraters(ctx);
     this.drawRings(ctx);
 
     // 7. Depth-sorted 2.5D entities (Spike Pits first on ground, then Towers, Golems, Warden, Creatures by Y)
     this.drawDepthSortedEntities(ctx);
 
-    // 8. Projectiles, Lightning Arcs & Meteors
+    // 8. Projectiles, Lightning Arcs, Meteors & Multi-Stage Explosions
     this.drawProjectiles(ctx);
     this.drawLightningArcs(ctx);
     this.drawMeteors(ctx);
+    this.drawExplosions(ctx);
 
     // 9. Particles & ambient sunlit meadow motes
     this.drawParticles(ctx);
@@ -3588,6 +4322,48 @@ export class BattleEngine {
       ctx.restore();
     }
 
+    // Compact color-coded resistance pips to the right of the HP bar (max 2 primary traits)
+    const resistBadges: Array<{ color: string; stroke: string; glyph: string }> = [];
+    if ((cfg.slowResist || 0) >= 0.45) {
+      resistBadges.push({ color: '#0284c7', stroke: '#bae6fd', glyph: 'I' });
+    }
+    if ((cfg.gravityResist || 0) >= 0.65) {
+      resistBadges.push({ color: '#7e22ce', stroke: '#e9d5ff', glyph: 'G' });
+    }
+    if ((cfg.fireResist || 0) >= 0.45) {
+      resistBadges.push({ color: '#c2410c', stroke: '#fed7aa', glyph: 'F' });
+    }
+    if ((cfg.electricResist || 0) >= 0.45) {
+      resistBadges.push({ color: '#a16207', stroke: '#fef08a', glyph: 'Z' });
+    }
+    if ((cfg.arrowResist || 0) >= 0.4) {
+      resistBadges.push({ color: '#475569', stroke: '#e2e8f0', glyph: 'A' });
+    }
+    if (resistBadges.length > 0) {
+      const shown = resistBadges.slice(0, 2);
+      ctx.save();
+      ctx.font = '800 8px Lexend, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      shown.forEach((b, idx) => {
+        const bx = barW / 2 + 9 + idx * 12;
+        const by = barY + barH / 2;
+        ctx.fillStyle = b.color;
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, 5.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = b.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(b.glyph, bx, by + 0.5);
+      });
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -3762,6 +4538,102 @@ export class BattleEngine {
     }
   }
 
+  private drawCraters(ctx: CanvasRenderingContext2D) {
+    if (!this.craters.length) return;
+    ctx.save();
+    for (const c of this.craters) {
+      const t = c.age / c.life;
+      const alpha = t < 0.65 ? 0.55 : Math.max(0, 0.55 * (1 - (t - 0.65) / 0.35));
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.scale(1, 0.64);
+      const grad = ctx.createRadialGradient(0, 0, c.radius * 0.1, 0, 0, c.radius);
+      grad.addColorStop(0, `rgba(12, 10, 9, ${alpha.toFixed(2)})`);
+      grad.addColorStop(0.55, `rgba(28, 22, 20, ${(alpha * 0.72).toFixed(2)})`);
+      grad.addColorStop(1, 'rgba(12, 10, 9, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cooling glowing ember core in first 1.2 seconds
+      if (t < 0.38) {
+        const emberAlpha = (1 - t / 0.38) * 0.55;
+        ctx.globalAlpha = emberAlpha;
+        ctx.fillStyle = c.glowColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private drawExplosions(ctx: CanvasRenderingContext2D) {
+    if (!this.explosions.length) return;
+    const themes: Record<ExplosionTheme, { core: string; mid: string; outer: string; edge: string }> = {
+      fire: { core: '#ffffff', mid: '#fef08a', outer: '#f97316', edge: 'rgba(220, 38, 38, 0)' },
+      inferno: { core: '#ffffff', mid: '#fde047', outer: '#ea580c', edge: 'rgba(185, 28, 28, 0)' },
+      plasma: { core: '#ffffff', mid: '#a5f3fc', outer: '#06b6d4', edge: 'rgba(14, 116, 144, 0)' },
+      electric: { core: '#ffffff', mid: '#e0f2fe', outer: '#38bdf8', edge: 'rgba(168, 85, 247, 0)' },
+      frost: { core: '#ffffff', mid: '#e0f2fe', outer: '#38bdf8', edge: 'rgba(14, 165, 233, 0)' },
+      earth: { core: '#fef3c7', mid: '#d6d3d1', outer: '#78716c', edge: 'rgba(41, 37, 36, 0)' },
+      gravity: { core: '#ffffff', mid: '#f5d0fe', outer: '#9333ea', edge: 'rgba(56, 224, 255, 0)' },
+      boss: { core: '#ffffff', mid: '#fef08a', outer: '#e879f9', edge: 'rgba(249, 115, 22, 0)' },
+    };
+
+    ctx.save();
+    for (const ex of this.explosions) {
+      const t = Math.min(1, ex.age / ex.life);
+      const pal = themes[ex.theme];
+
+      // Billowing multi-lobe radial fire/energy clouds
+      for (const lobe of ex.lobes) {
+        const lt = Math.max(0, Math.min(1, (t - lobe.delay) / Math.max(0.15, 1 - lobe.delay)));
+        if (lt <= 0 || lt >= 1) continue;
+        const easeOut = 1 - Math.pow(1 - lt, 3);
+        const rad = ex.radius * lobe.scale * (0.28 + 0.88 * easeOut);
+        const alpha = lt < 0.25 ? 0.96 : Math.max(0, (1 - (lt - 0.25) / 0.75) * 0.94);
+        const lx = ex.x + lobe.ox * easeOut;
+        const ly = ex.y + lobe.oy * easeOut - easeOut * (ex.theme === 'fire' || ex.theme === 'inferno' ? 14 : 4);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.globalCompositeOperation = ex.theme === 'earth' ? 'source-over' : 'lighter';
+        const grad = ctx.createRadialGradient(lx, ly, rad * 0.06, lx, ly, rad);
+        grad.addColorStop(0, pal.core);
+        grad.addColorStop(0.28, pal.mid);
+        grad.addColorStop(0.68, pal.outer);
+        grad.addColorStop(1, pal.edge);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(lx, ly, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Blinding hot flash bloom in the first 28% of detonation
+      if (t < 0.28) {
+        const ft = t / 0.28;
+        const flashR = ex.radius * (0.45 + 0.55 * ft);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (1 - ft) * 0.92;
+        const flashGrad = ctx.createRadialGradient(ex.x, ex.y, 2, ex.x, ex.y, flashR);
+        flashGrad.addColorStop(0, '#ffffff');
+        flashGrad.addColorStop(0.45, pal.mid);
+        flashGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = flashGrad;
+        ctx.beginPath();
+        ctx.arc(ex.x, ex.y, flashR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawRings(ctx: CanvasRenderingContext2D) {
     for (const r of this.rings) {
       const t = r.age / r.life;
@@ -3784,15 +4656,48 @@ export class BattleEngine {
   }
 
   private drawParticles(ctx: CanvasRenderingContext2D) {
-    // Combat sparks
+    // Combat sparks, fiery streaks, shards & rising smoke
     for (const p of this.particles) {
-      const alpha = Math.max(0, 1 - p.age / p.life);
+      const t = p.age / p.life;
+      const alpha = Math.max(0, 1 - t);
       ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r * (0.4 + 0.6 * alpha), 0, Math.PI * 2);
-      ctx.fill();
+      if (p.kind === 'smoke') {
+        ctx.globalAlpha = alpha * 0.72;
+        ctx.fillStyle = p.color;
+        const rad = p.r * (0.75 + t * 1.15);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.kind === 'streak') {
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = Math.max(1.4, p.r * (0.55 + 0.5 * alpha));
+        ctx.lineCap = 'round';
+        const tail = 0.055;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * tail, p.y - p.vy * tail);
+        ctx.stroke();
+      } else if (p.kind === 'shard') {
+        ctx.globalAlpha = alpha;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot || 0);
+        const s = p.r * (0.5 + 0.55 * alpha);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.35);
+        ctx.lineTo(s * 0.72, 0);
+        ctx.lineTo(0, s * 1.1);
+        ctx.lineTo(-s * 0.72, 0);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (0.4 + 0.6 * alpha), 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -3903,6 +4808,7 @@ export class BattleEngine {
         type: this.selectedDef.type,
         level: this.selectedDef.level,
         spec: this.selectedDef.spec,
+        targetMode: this.selectedDef.targetMode,
         spent: this.selectedDef.spent,
         screenX: sc.x,
         screenY: sc.y,

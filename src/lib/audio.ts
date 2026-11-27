@@ -25,6 +25,8 @@ class SoundManager {
   private seqToken = 0;
   private audioCtx: AudioContext | null = null;
   private fxMasterGain: GainNode | null = null;
+  private fxCompressor: DynamicsCompressorNode | null = null;
+  private noiseBuffer: AudioBuffer | null = null;
   private musicNodes: { gain: GainNode; oscs: OscillatorNode[] } | null = null;
   private musicMood: 'calm' | 'battle' | null = null;
   private duckLevel = 0; // 0 = normal, 1 = soft, 2 = muted for mic
@@ -87,13 +89,36 @@ class SoundManager {
         this.audioCtx = new AC();
         this.fxMasterGain = this.audioCtx.createGain();
         this.fxMasterGain.gain.value = this.duckLevel === 2 ? 0 : 1;
-        this.fxMasterGain.connect(this.audioCtx.destination);
+        // Soft limiter/compressor keeps simultaneous explosions punchy without speaker clipping
+        this.fxCompressor = this.audioCtx.createDynamicsCompressor();
+        this.fxCompressor.threshold.value = -10;
+        this.fxCompressor.knee.value = 14;
+        this.fxCompressor.ratio.value = 6;
+        this.fxCompressor.attack.value = 0.004;
+        this.fxCompressor.release.value = 0.16;
+        this.fxMasterGain.connect(this.fxCompressor);
+        this.fxCompressor.connect(this.audioCtx.destination);
       }
     }
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume().catch(() => {});
     }
     return this.audioCtx;
+  }
+
+  private getNoiseBuffer(ctx: AudioContext): AudioBuffer {
+    if (this.noiseBuffer && this.noiseBuffer.sampleRate === ctx.sampleRate) {
+      return this.noiseBuffer;
+    }
+    const len = Math.floor(ctx.sampleRate * 1.6);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    // Warm slightly shaped broadband white noise for explosive rumble and crisp snaps
+    for (let i = 0; i < len; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    this.noiseBuffer = buf;
+    return buf;
   }
 
   private applyFxMasterGain() {
@@ -879,7 +904,7 @@ class SoundManager {
   }
 
   // -------------------------------------------------------------------------
-  // Procedural Web Audio SFX (zero external file dependencies)
+  // Procedural Layered Web Audio Weapon & Explosion SFX
   // -------------------------------------------------------------------------
   sfx(
     name:
@@ -893,9 +918,16 @@ class SoundManager {
       | 'golemSlam'
       | 'frost'
       | 'spike'
+      | 'cannonFire'
       | 'cannon'
+      | 'explosion'
+      | 'meteorLaunch'
+      | 'meteorImpact'
       | 'zap'
       | 'rail'
+      | 'gravity'
+      | 'enemyDie'
+      | 'bossDie'
       | 'waveStart'
       | 'waveClear'
       | 'anchorHit'
@@ -918,6 +950,8 @@ class SoundManager {
     const ctx = this.getCtx();
     if (!ctx) return;
     const t = ctx.currentTime;
+    const dest = this.fxMasterGain || ctx.destination;
+    const jitter = (pct = 0.06) => 1 + (Math.random() * 2 - 1) * pct;
 
     const tone = (
       freqStart: number,
@@ -925,22 +959,61 @@ class SoundManager {
       dur: number,
       type: OscillatorType,
       vol: number,
-      delay = 0
+      delay = 0,
+      attack = 0.01
     ) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
-      osc.frequency.setValueAtTime(freqStart, t + delay);
+      osc.frequency.setValueAtTime(Math.max(20, freqStart), t + delay);
       if (freqEnd !== freqStart) {
         osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t + delay + dur);
       }
       gain.gain.setValueAtTime(0.0001, t + delay);
-      gain.gain.linearRampToValueAtTime(vol * g, t + delay + 0.012);
+      gain.gain.linearRampToValueAtTime(vol * g, t + delay + Math.min(attack, dur * 0.4));
       gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + dur);
       osc.connect(gain);
-      gain.connect(this.fxMasterGain || ctx.destination);
+      gain.connect(dest);
       osc.start(t + delay);
-      osc.stop(t + delay + dur + 0.02);
+      osc.stop(t + delay + dur + 0.03);
+    };
+
+    const noise = (opts: {
+      dur: number;
+      vol: number;
+      filterType?: BiquadFilterType;
+      freqStart: number;
+      freqEnd?: number;
+      q?: number;
+      delay?: number;
+      attack?: number;
+    }) => {
+      const delay = opts.delay || 0;
+      const attack = opts.attack ?? 0.008;
+      const src = ctx.createBufferSource();
+      src.buffer = this.getNoiseBuffer(ctx);
+      // Random offset inside noise buffer so repeated explosions never phase-clone
+      const maxOffset = Math.max(0.01, src.buffer.duration - opts.dur - 0.05);
+      const offset = Math.random() * maxOffset;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = opts.filterType || 'lowpass';
+      filter.Q.value = opts.q ?? 1.2;
+      filter.frequency.setValueAtTime(Math.max(30, opts.freqStart), t + delay);
+      if (opts.freqEnd && opts.freqEnd !== opts.freqStart) {
+        filter.frequency.exponentialRampToValueAtTime(Math.max(30, opts.freqEnd), t + delay + opts.dur);
+      }
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t + delay);
+      gain.gain.linearRampToValueAtTime(opts.vol * g, t + delay + Math.min(attack, opts.dur * 0.35));
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + opts.dur);
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(dest);
+      src.start(t + delay, offset, opts.dur + 0.03);
+      src.stop(t + delay + opts.dur + 0.04);
     };
 
     switch (name) {
@@ -958,70 +1031,175 @@ class SoundManager {
         tone(240, 175, 0.18, 'sine', 0.16);
         break;
       case 'mega':
+        // Huge arcane shockwave + triumphant chord burst
+        tone(135, 34, 0.55, 'sine', 0.42, 0, 0.008);
+        noise({ dur: 0.52, vol: 0.28, filterType: 'bandpass', freqStart: 1400, freqEnd: 260, q: 1.0 });
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-          tone(f, f * 1.03, 0.35, 'triangle', 0.2, i * 0.055);
+          tone(f, f * 1.04, 0.38, 'triangle', 0.22, i * 0.05);
         });
         break;
-      case 'arrow':
-        tone(720, 260, 0.075, 'triangle', 0.08);
+      case 'arrow': {
+        // Crisp bowstring snap + feathered air whoosh
+        const j = jitter(0.08);
+        tone(520 * j, 175 * j, 0.075, 'triangle', 0.13, 0, 0.004);
+        tone(1120 * j, 480 * j, 0.045, 'sine', 0.07, 0.004, 0.003);
+        noise({ dur: 0.08, vol: 0.11, filterType: 'bandpass', freqStart: 2800 * j, freqEnd: 1100 * j, q: 2.2, attack: 0.004 });
         break;
-      case 'arrowHit':
-        tone(320, 140, 0.06, 'square', 0.06);
+      }
+      case 'arrowHit': {
+        // Tactile thwack + crisp crystal spark tick
+        const j = jitter(0.1);
+        tone(280 * j, 115 * j, 0.065, 'triangle', 0.14, 0, 0.004);
+        noise({ dur: 0.045, vol: 0.12, filterType: 'bandpass', freqStart: 1900 * j, freqEnd: 850, q: 1.8, attack: 0.003 });
         break;
-      case 'golemSlam':
-        tone(135, 48, 0.22, 'sawtooth', 0.16);
+      }
+      case 'cannonFire': {
+        // Deep heavy mortar THOOMP launch from barrel
+        const j = jitter(0.07);
+        tone(165 * j, 42 * j, 0.24, 'sine', 0.34, 0, 0.006);
+        tone(240 * j, 68 * j, 0.16, 'triangle', 0.2, 0, 0.005);
+        noise({ dur: 0.22, vol: 0.28, filterType: 'lowpass', freqStart: 900 * j, freqEnd: 180, q: 1.4, attack: 0.005 });
         break;
-      case 'frost':
-        tone(1180, 1560, 0.16, 'sine', 0.09);
-        break;
-      case 'spike':
-        tone(410, 210, 0.08, 'sawtooth', 0.07);
-        break;
+      }
       case 'cannon':
-        tone(180, 52, 0.26, 'sawtooth', 0.18);
-        tone(98, 38, 0.32, 'triangle', 0.2, 0.04);
+      case 'explosion': {
+        // Full multi-layered fiery KABOOM detonation (sub-bass punch + roaring blast + fiery crackle)
+        const j = jitter(0.07);
+        tone(118 * j, 26, 0.44, 'sine', 0.46, 0, 0.005);
+        tone(82 * j, 30, 0.36, 'sawtooth', 0.18, 0.01, 0.008);
+        noise({ dur: 0.48, vol: 0.38, filterType: 'lowpass', freqStart: 1150 * j, freqEnd: 130, q: 1.1, attack: 0.006 });
+        noise({ dur: 0.28, vol: 0.24, filterType: 'bandpass', freqStart: 1950 * j, freqEnd: 420, q: 1.3, delay: 0.015, attack: 0.005 });
+        noise({ dur: 0.32, vol: 0.11, filterType: 'highpass', freqStart: 2600, freqEnd: 1200, q: 0.8, delay: 0.04, attack: 0.01 });
         break;
-      case 'zap':
-        tone(1280, 340, 0.09, 'sawtooth', 0.12);
-        tone(920, 190, 0.12, 'square', 0.08, 0.025);
+      }
+      case 'meteorLaunch': {
+        // Screaming blazing sky-fall whistle before impact
+        tone(740, 190, 0.42, 'sawtooth', 0.12, 0, 0.02);
+        noise({ dur: 0.42, vol: 0.22, filterType: 'bandpass', freqStart: 2100, freqEnd: 340, q: 2.2, attack: 0.03 });
         break;
-      case 'rail':
-        tone(1680, 220, 0.16, 'sawtooth', 0.15);
-        tone(240, 68, 0.22, 'triangle', 0.18, 0.015);
-        tone(1120, 620, 0.09, 'sine', 0.11, 0.02);
+      }
+      case 'meteorImpact': {
+        // Cataclysmic earth-shattering MEGA BOOM
+        tone(105, 22, 0.72, 'sine', 0.56, 0, 0.005);
+        tone(68, 24, 0.62, 'sawtooth', 0.24, 0.015, 0.008);
+        tone(190, 42, 0.35, 'triangle', 0.28, 0, 0.004);
+        noise({ dur: 0.78, vol: 0.48, filterType: 'lowpass', freqStart: 1600, freqEnd: 95, q: 1.0, attack: 0.005 });
+        noise({ dur: 0.46, vol: 0.32, filterType: 'bandpass', freqStart: 2400, freqEnd: 320, q: 1.2, delay: 0.02, attack: 0.006 });
+        noise({ dur: 0.54, vol: 0.16, filterType: 'highpass', freqStart: 2800, freqEnd: 900, q: 0.7, delay: 0.06, attack: 0.015 });
         break;
+      }
+      case 'zap': {
+        // High-voltage Tesla CRACK-SNAP + ozone spark buzz
+        const j = jitter(0.08);
+        tone(1680 * j, 360 * j, 0.095, 'sawtooth', 0.17, 0, 0.003);
+        tone(1140 * j, 220 * j, 0.125, 'square', 0.11, 0.018, 0.004);
+        tone(220 * j, 72, 0.09, 'triangle', 0.16, 0, 0.004);
+        noise({ dur: 0.11, vol: 0.22, filterType: 'highpass', freqStart: 2600 * j, freqEnd: 1100, q: 1.5, attack: 0.002 });
+        noise({ dur: 0.14, vol: 0.16, filterType: 'bandpass', freqStart: 1900 * j, freqEnd: 650, q: 2.4, delay: 0.015, attack: 0.004 });
+        break;
+      }
+      case 'rail': {
+        // Iconic electromagnetic RAILGUN hypervelocity CRACK + sub-bass sonic boom
+        const j = jitter(0.05);
+        tone(820 * j, 2750 * j, 0.042, 'sine', 0.14, 0, 0.004);
+        tone(290 * j, 40, 0.34, 'sine', 0.42, 0.02, 0.004);
+        tone(1820 * j, 210 * j, 0.22, 'sawtooth', 0.21, 0.02, 0.003);
+        tone(1280 * j, 540 * j, 0.18, 'triangle', 0.15, 0.035, 0.005);
+        noise({ dur: 0.14, vol: 0.32, filterType: 'highpass', freqStart: 2200 * j, freqEnd: 700, q: 1.2, delay: 0.018, attack: 0.002 });
+        noise({ dur: 0.3, vol: 0.26, filterType: 'lowpass', freqStart: 1400, freqEnd: 190, q: 1.0, delay: 0.022, attack: 0.004 });
+        break;
+      }
+      case 'golemSlam': {
+        // Heavy seismic boulder GROUND CRUSH + stone debris crunch
+        const j = jitter(0.07);
+        tone(124 * j, 30, 0.32, 'sine', 0.42, 0, 0.005);
+        tone(155 * j, 46, 0.24, 'sawtooth', 0.16, 0, 0.005);
+        noise({ dur: 0.28, vol: 0.32, filterType: 'lowpass', freqStart: 780 * j, freqEnd: 140, q: 1.3, attack: 0.004 });
+        noise({ dur: 0.15, vol: 0.18, filterType: 'bandpass', freqStart: 1200 * j, freqEnd: 420, q: 1.6, delay: 0.015, attack: 0.004 });
+        break;
+      }
+      case 'frost': {
+        // Crystalline ice shatter + shimmering glacial chime
+        const j = jitter(0.06);
+        tone(1480 * j, 2240 * j, 0.22, 'sine', 0.14, 0, 0.006);
+        tone(2217 * j, 2960 * j, 0.26, 'triangle', 0.1, 0.025, 0.006);
+        noise({ dur: 0.22, vol: 0.2, filterType: 'highpass', freqStart: 3200 * j, freqEnd: 1600, q: 1.6, attack: 0.005 });
+        noise({ dur: 0.26, vol: 0.12, filterType: 'bandpass', freqStart: 1200, freqEnd: 480, q: 1.1, attack: 0.01 });
+        break;
+      }
+      case 'spike': {
+        // Sharp metallic blade slice + steel clang
+        const j = jitter(0.09);
+        tone(820 * j, 340 * j, 0.085, 'sawtooth', 0.11, 0, 0.003);
+        tone(1340 * j, 620 * j, 0.07, 'triangle', 0.08, 0.01, 0.003);
+        noise({ dur: 0.075, vol: 0.15, filterType: 'highpass', freqStart: 3000 * j, freqEnd: 1400, q: 2.0, attack: 0.002 });
+        break;
+      }
+      case 'gravity': {
+        // Deep sci-fi graviton vortex implosion WUB + cosmic shimmer
+        const j = jitter(0.05);
+        tone(195 * j, 48 * j, 0.34, 'sine', 0.36, 0, 0.015);
+        tone(120 * j, 260 * j, 0.22, 'triangle', 0.18, 0.08, 0.02);
+        noise({ dur: 0.32, vol: 0.24, filterType: 'bandpass', freqStart: 1350, freqEnd: 210, q: 2.8, attack: 0.02 });
+        tone(660 * j, 440 * j, 0.24, 'sine', 0.11, 0.04, 0.015);
+        break;
+      }
+      case 'enemyDie': {
+        // Crisp shattering pop when an enemy dissolves
+        const j = jitter(0.12);
+        tone(340 * j, 120 * j, 0.12, 'triangle', 0.16, 0, 0.004);
+        tone(680 * j, 980 * j, 0.09, 'sine', 0.1, 0.02, 0.005);
+        noise({ dur: 0.11, vol: 0.14, filterType: 'bandpass', freqStart: 1650 * j, freqEnd: 480, q: 1.5, attack: 0.004 });
+        break;
+      }
+      case 'bossDie': {
+        // Massive boss chain-detonation with golden resonance
+        tone(110, 22, 0.85, 'sine', 0.56, 0, 0.005);
+        tone(165, 34, 0.55, 'sawtooth', 0.22, 0.04, 0.008);
+        noise({ dur: 0.88, vol: 0.46, filterType: 'lowpass', freqStart: 1500, freqEnd: 100, q: 1.0, attack: 0.006 });
+        noise({ dur: 0.42, vol: 0.3, filterType: 'bandpass', freqStart: 2200, freqEnd: 380, q: 1.3, delay: 0.12, attack: 0.005 });
+        [392, 523.25, 659.25, 783.99].forEach((f, i) => {
+          tone(f, f * 1.03, 0.45, 'triangle', 0.18, 0.08 + i * 0.07);
+        });
+        break;
+      }
       case 'build':
-        tone(220, 330, 0.12, 'triangle', 0.2);
-        tone(440, 587, 0.14, 'triangle', 0.18, 0.07);
+        tone(220, 330, 0.12, 'triangle', 0.22);
+        tone(440, 587, 0.15, 'triangle', 0.18, 0.06);
+        noise({ dur: 0.08, vol: 0.12, filterType: 'lowpass', freqStart: 700, freqEnd: 240, q: 1.2 });
         break;
       case 'upgrade':
-        [392, 523.25, 659.25].forEach((f, i) => tone(f, f, 0.15, 'triangle', 0.18, i * 0.06));
+        [392, 523.25, 659.25, 783.99].forEach((f, i) => tone(f, f * 1.02, 0.16, 'triangle', 0.19, i * 0.05));
         break;
       case 'sell':
         tone(440, 290, 0.14, 'triangle', 0.16);
         break;
       case 'waveStart':
-        tone(146.83, 146.83, 0.45, 'sawtooth', 0.14);
-        tone(220, 220, 0.55, 'triangle', 0.16, 0.12);
+        tone(146.83, 142, 0.52, 'sawtooth', 0.16);
+        tone(220, 218, 0.6, 'triangle', 0.18, 0.12);
+        tone(73.42, 68, 0.65, 'sine', 0.26, 0.04);
         break;
       case 'waveClear':
-        [440, 554.37, 659.25, 880].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.16, i * 0.08));
+        [440, 554.37, 659.25, 880].forEach((f, i) => tone(f, f, 0.24, 'triangle', 0.18, i * 0.08));
         break;
       case 'anchorHit':
-        tone(160, 62, 0.3, 'sawtooth', 0.25);
+        tone(145, 42, 0.38, 'sawtooth', 0.28, 0, 0.005);
+        tone(96, 30, 0.42, 'sine', 0.36, 0, 0.005);
+        noise({ dur: 0.32, vol: 0.28, filterType: 'lowpass', freqStart: 950, freqEnd: 160, q: 1.2, attack: 0.004 });
         break;
       case 'power':
-        tone(293.66, 587.33, 0.3, 'sawtooth', 0.16);
-        tone(587.33, 880, 0.35, 'triangle', 0.18, 0.08);
+        tone(293.66, 587.33, 0.32, 'sawtooth', 0.18);
+        tone(587.33, 880, 0.38, 'triangle', 0.2, 0.08);
+        noise({ dur: 0.28, vol: 0.14, filterType: 'bandpass', freqStart: 1600, freqEnd: 600, q: 1.5, delay: 0.05 });
         break;
       case 'win':
         [392, 493.88, 587.33, 783.99, 987.77].forEach((f, i) =>
-          tone(f, f, 0.35, 'triangle', 0.2, i * 0.09)
+          tone(f, f, 0.36, 'triangle', 0.22, i * 0.09)
         );
         break;
       case 'lose':
         [293.66, 261.63, 220, 174.61].forEach((f, i) =>
-          tone(f, f * 0.96, 0.3, 'sine', 0.16, i * 0.12)
+          tone(f, f * 0.96, 0.32, 'sine', 0.18, i * 0.12)
         );
         break;
     }

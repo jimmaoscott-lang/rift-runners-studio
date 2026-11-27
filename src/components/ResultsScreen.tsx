@@ -12,14 +12,16 @@ import {
   Star,
   Volume2,
 } from 'lucide-react';
-import { LevelConfig, LEVELS } from '../data/level1';
+import { LevelConfig, LevelId, LEVEL_ORDER, LEVELS } from '../data/level1';
 import { sound } from '../lib/audio';
 import { assetUrl } from '../lib/assetUrl';
 import {
   buildAccommodationSnapshot,
   computeThenAndNow,
   formatBattleTeacherNote,
+  formatPlacementTeacherNote,
   PatternLockStatus,
+  PlacementReport,
   StoredProgress,
 } from '../lib/metrics';
 import { speech } from '../lib/speech';
@@ -45,9 +47,11 @@ interface ResultsScreenProps {
   forgeStats: ForgeStats;
   progress: StoredProgress;
   locks: PatternLockStatus[];
+  placementReport?: PlacementReport | null;
   showHalfSpeedTip?: boolean;
   onDismissHalfSpeedTip?: () => void;
   onOpenSettings?: () => void;
+  onGoToRecommended?: (levelId: LevelId) => void;
   onNextLevel?: () => void;
   onPlayAgain: () => void;
   onReplayCutscene: () => void;
@@ -60,9 +64,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   forgeStats,
   progress,
   locks,
+  placementReport = null,
   showHalfSpeedTip = false,
   onDismissHalfSpeedTip,
   onOpenSettings,
+  onGoToRecommended,
   onNextLevel,
   onPlayAgain,
   onReplayCutscene,
@@ -72,6 +78,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   const firstTryPct =
     forgeStats.forged > 0 ? Math.round((forgeStats.firstTry / forgeStats.forged) * 100) : 0;
   const growth = computeThenAndNow(progress, level.vowels);
+  const isPlacementResult = Boolean(level.isPlacement && placementReport);
+  const recommendedLevel =
+    isPlacementResult && placementReport
+      ? LEVELS[placementReport.recommendedLevelId] || LEVELS['w1-l1']
+      : null;
+  const recommendedLabel = recommendedLevel
+    ? `${recommendedLevel.worldName}, Level ${recommendedLevel.num}: ${recommendedLevel.name}`
+    : '';
   const nextLevel =
     level.nextLevelId && !LEVELS[level.nextLevelId]?.comingSoon
       ? LEVELS[level.nextLevelId]
@@ -114,21 +128,31 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   }
 
   const handleCopyTeacherNote = async () => {
-    const text = formatBattleTeacherNote({
-      worldName: level.worldName,
-      levelNum: level.num,
-      levelName: level.name,
-      win: result.win,
-      stars: result.stars,
-      waves: result.waves,
-      forged: forgeStats.forged,
-      firstTry: forgeStats.firstTry,
-      runes: forgeStats.runes,
-      runeFirst: forgeStats.runeFirst,
-      practice: forgeStats.practice,
-      locks,
-      snapshot,
-    });
+    const text =
+      isPlacementResult && placementReport
+        ? formatPlacementTeacherNote({
+            report: placementReport,
+            recommendedLabel,
+            forged: forgeStats.forged,
+            firstTry: forgeStats.firstTry,
+            practice: forgeStats.practice,
+            snapshot,
+          })
+        : formatBattleTeacherNote({
+            worldName: level.worldName,
+            levelNum: level.num,
+            levelName: level.name,
+            win: result.win,
+            stars: result.stars,
+            waves: result.waves,
+            forged: forgeStats.forged,
+            firstTry: forgeStats.firstTry,
+            runes: forgeStats.runes,
+            runeFirst: forgeStats.runeFirst,
+            practice: forgeStats.practice,
+            locks,
+            snapshot,
+          });
     sound.sfx('tap');
     try {
       await navigator.clipboard.writeText(text);
@@ -164,13 +188,25 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
         <div className="flex flex-wrap items-start justify-between gap-4 pb-6 border-b border-slate-800">
           <div>
             <div className="text-xs font-medium text-cyan-300">
-              {level.worldName} · Level {level.num}: {level.name}
+              {isPlacementResult
+                ? `${level.worldName} · ${level.name}`
+                : `${level.worldName} · Level ${level.num}: ${level.name}`}
             </div>
             <h1 className="mt-1.5 font-display text-3xl md:text-4xl font-bold text-white">
-              {result.win ? `${level.name} Sealed!` : 'The Anchor Fell'}
+              {isPlacementResult
+                ? result.win
+                  ? 'Basic Training Complete!'
+                  : 'Placement Recorded'
+                : result.win
+                ? `${level.name} Sealed!`
+                : 'The Anchor Fell'}
             </h1>
             <p className="mt-2 font-reading text-sm md:text-base text-slate-300">
-              {result.win
+              {isPlacementResult && placementReport
+                ? placementReport.allMastered
+                  ? 'You cleared every placement tier! All shipped campaign levels are now open on your map.'
+                  : `Your matched starting level is ${recommendedLabel}. Every skill tier you cleared is open on your map.`
+                : result.win
                 ? `You held the line at ${level.name}. Your reading powered every defender.`
                 : 'Every rune you read made the line stronger. Ready to jump back in?'}
             </p>
@@ -234,52 +270,106 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
             </div>
           )}
 
-        {/* Then and Now Growth Box */}
-        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-bold text-cyan-300">Then and Now Growth</h2>
-            <button
-              type="button"
-              onClick={() => sound.speakNarration('results-growth', growth.headline)}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white cursor-pointer"
-            >
-              <Volume2 className="h-3.5 w-3.5 text-cyan-300" />
-              Hear summary
-            </button>
-          </div>
-          <p className="mt-1.5 font-reading text-base font-semibold text-white">
-            {growth.headline}
-          </p>
+        {/* Placement Skill Ladder (Basic Training) OR Then and Now Growth Box (Campaign) */}
+        {isPlacementResult && placementReport ? (
+          <div className="mt-6 rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-bold text-emerald-300">Placement Skill Ladder</h2>
+              <button
+                type="button"
+                onClick={() =>
+                  sound.speakNarration(
+                    'placement-summary',
+                    `Your starting level is ${recommendedLabel}. ${placementReport.unlockedLevelIds.length} campaign levels are now open.`
+                  )
+                }
+                className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white cursor-pointer"
+              >
+                <Volume2 className="h-3.5 w-3.5 text-cyan-300" />
+                Hear summary
+              </button>
+            </div>
+            <p className="mt-1.5 font-reading text-base font-semibold text-white">
+              Recommended Starting Level: <span className="text-emerald-300">{recommendedLabel}</span>
+            </p>
+            <div className="mt-1 font-tabular text-xs text-slate-300">
+              Opened campaign levels: {placementReport.unlockedLevelIds.length} of {LEVEL_ORDER.length}
+            </div>
 
-          <div className="mt-4 space-y-2.5">
-            {growth.rows.map((row) => {
-              const lk = locks.find((l) => l.vowel === row.vowel);
-              return (
-                <div
-                  key={row.vowel}
-                  className="flex flex-wrap items-center justify-between gap-2 text-sm border-t border-slate-800/80 pt-2.5"
-                >
-                  <span className="font-semibold text-slate-100">{row.label}</span>
-                  <div className="flex items-center gap-4 font-tabular text-xs text-slate-300">
-                    {row.thenPct !== null ? (
-                      <>
-                        <span>Then: {row.thenPct}%</span>
-                        <span className="text-cyan-300 font-bold">Now: {row.nowPct}%</span>
-                      </>
-                    ) : (
-                      <span>Now: {row.nowPct}% (New this level)</span>
-                    )}
-                    {lk && (
-                      <span className={lk.done ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
-                        Lock: {lk.recentCorrect}/{lk.need}
+            <div className="mt-4 space-y-2.5">
+              {placementReport.stages
+                .filter((st) => st.status !== 'not_tested')
+                .map((st) => (
+                  <div
+                    key={st.stageId}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm border-t border-emerald-500/20 pt-2.5"
+                  >
+                    <span className="font-semibold text-slate-100">{st.label}</span>
+                    <div className="flex items-center gap-4 font-tabular text-xs">
+                      <span className="text-slate-200 font-bold">
+                        {st.correct}/{st.total} clean
                       </span>
-                    )}
+                      <span
+                        className={
+                          st.passed
+                            ? 'text-emerald-300 font-bold'
+                            : 'text-amber-300 font-bold'
+                        }
+                      >
+                        {st.passed ? 'Mastered · Opened next' : 'Starting skill'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-bold text-cyan-300">Then and Now Growth</h2>
+              <button
+                type="button"
+                onClick={() => sound.speakNarration('results-growth', growth.headline)}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white cursor-pointer"
+              >
+                <Volume2 className="h-3.5 w-3.5 text-cyan-300" />
+                Hear summary
+              </button>
+            </div>
+            <p className="mt-1.5 font-reading text-base font-semibold text-white">
+              {growth.headline}
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              {growth.rows.map((row) => {
+                const lk = locks.find((l) => l.vowel === row.vowel);
+                return (
+                  <div
+                    key={row.vowel}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm border-t border-slate-800/80 pt-2.5"
+                  >
+                    <span className="font-semibold text-slate-100">{row.label}</span>
+                    <div className="flex items-center gap-4 font-tabular text-xs text-slate-300">
+                      {row.thenPct !== null ? (
+                        <>
+                          <span>Then: {row.thenPct}%</span>
+                          <span className="text-cyan-300 font-bold">Now: {row.nowPct}%</span>
+                        </>
+                      ) : (
+                        <span>Now: {row.nowPct}% (New this level)</span>
+                      )}
+                      {lk && (
+                        <span className={lk.done ? 'text-emerald-300 font-bold' : 'text-slate-400'}>
+                          Lock: {lk.recentCorrect}/{lk.need}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Teacher & IEP/ELL Accommodation Snapshot */}
         <div className="mt-5 rounded-xl border border-emerald-500/35 bg-emerald-950/20 p-4">
@@ -367,13 +457,15 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
           </div>
         )}
 
-        {/* Unlock Preview on Win */}
-        {result.win && (
+        {/* Unlock Preview on Win or Placement */}
+        {(result.win || isPlacementResult) && (
           <div className="mt-5 rounded-xl border border-amber-400/40 bg-amber-500/10 p-4 flex items-center justify-between gap-4">
             <div>
-              <div className="text-xs font-semibold text-amber-300">Unlocked Next</div>
+              <div className="text-xs font-semibold text-amber-300">
+                {isPlacementResult ? 'Your Matched Starting Mission' : 'Unlocked Next'}
+              </div>
               <div className="mt-0.5 font-reading text-sm font-bold text-white">
-                {level.rewardSummary}
+                {isPlacementResult ? recommendedLabel : level.rewardSummary}
               </div>
             </div>
             <Shield className="h-6 w-6 text-amber-300 shrink-0" />
@@ -422,32 +514,50 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
         {/* Action Buttons */}
         <div className="mt-7 flex flex-wrap items-center justify-between gap-3 pt-5 border-t border-slate-800">
           <div className="flex flex-wrap items-center gap-3">
-            {result.win && nextLevel && onNextLevel && (
+            {isPlacementResult && recommendedLevel && onGoToRecommended ? (
               <button
                 type="button"
-                onClick={onNextLevel}
-                className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-6 py-3 text-sm font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap shadow-lg"
+                onClick={() => onGoToRecommended(recommendedLevel.id)}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-6 py-3 text-sm font-extrabold text-slate-950 hover:bg-emerald-300 transition-colors cursor-pointer whitespace-nowrap shadow-lg"
               >
-                <span>
-                  {nextLevel.worldId !== level.worldId
-                    ? `Continue to ${nextLevel.worldName}, Level ${nextLevel.num}: ${nextLevel.name}`
-                    : `Continue to Level ${nextLevel.num}: ${nextLevel.name}`}
-                </span>
+                <span>Start {recommendedLabel}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
+            ) : (
+              result.win &&
+              nextLevel &&
+              onNextLevel && (
+                <button
+                  type="button"
+                  onClick={onNextLevel}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-6 py-3 text-sm font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap shadow-lg"
+                >
+                  <span>
+                    {nextLevel.worldId !== level.worldId
+                      ? `Continue to ${nextLevel.worldName}, Level ${nextLevel.num}: ${nextLevel.name}`
+                      : `Continue to Level ${nextLevel.num}: ${nextLevel.name}`}
+                  </span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )
             )}
 
             <button
               type="button"
               onClick={onPlayAgain}
               className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                result.win && nextLevel && onNextLevel
+                (isPlacementResult && recommendedLevel && onGoToRecommended) ||
+                (result.win && nextLevel && onNextLevel)
                   ? 'border border-slate-600 bg-slate-900 text-slate-100 hover:border-cyan-400'
                   : 'bg-cyan-400 text-slate-950 hover:bg-cyan-300'
               }`}
             >
               <RotateCcw className="h-4 w-4" />
-              {result.win ? `Play Level ${level.num} Again` : 'Try Again'}
+              {isPlacementResult
+                ? 'Retake Basic Training'
+                : result.win
+                ? `Play Level ${level.num} Again`
+                : 'Try Again'}
             </button>
 
             <button

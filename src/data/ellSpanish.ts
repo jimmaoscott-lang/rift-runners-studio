@@ -467,7 +467,7 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
   },
   {
     titleEs: 'Lanza la Oleada 1',
-    bodyEs: 'Haz clic en Send now en la barra superior (o forja 10 palabras) para iniciar la Oleada 1.',
+    bodyEs: 'Haz clic en Send now en la barra superior (o forja 8 palabras) para iniciar la Oleada 1.',
   },
   {
     titleEs: 'Mejora o reubica defensores',
@@ -703,6 +703,22 @@ export const SPANISH_CUTSCENE_CAPTIONS: Record<string, string[]> = {
   'w3-l01-def-v1-1': [
     'Los Espectros de Vendaval cruzaron la curva exterior con su impulso de viento.',
     'Consejo: agrupa un Tótem de Escarcha y una Trampa de Gravedad en la curva central.',
+  ],
+  'bt-open-v1-1': [
+    'Bienvenido al Entrenamiento Básico de Corredores. Veamos qué habilidades ya dominas.',
+    'Muestra lo que sabes para abrir tu nivel inicial ideal en el mapa.',
+  ],
+  'bt-open-v1-2': [
+    'Coloca defensores libremente en el pasto o sobre el camino, y lee palabras en la Forja.',
+    'Cada nivel de habilidad que superes otorga +75 cristales y abre la siguiente etapa.',
+  ],
+  'bt-vic-v1-1': [
+    '¡Entrenamiento Básico completado! Tu perfil de lectura quedó guardado.',
+    'Revisa tu Reporte de Ubicación para entrar directo a tu nivel inicial recomendado.',
+  ],
+  'bt-def-v1-1': [
+    'Buena práctica en el campo de entrenamiento. Cada palabra leída cuenta para tu ubicación.',
+    'Revisa tu Reporte de Ubicación para ver qué nivel se abrió para ti.',
   ],
 };
 

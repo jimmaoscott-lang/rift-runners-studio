@@ -41,6 +41,7 @@ export interface GameSpriteBank {
 export const MAP_IMAGE_URL = '/src/assets/images/map_thornwood_edge_1795459979542.jpg';
 
 export const MAP_URLS: Record<LevelId, string> = {
+  placement: '/src/assets/images/map_basic_training_1795737203102.jpg',
   'w1-l1': '/src/assets/images/map_thornwood_edge_1795459979542.jpg',
   'w1-l2': '/src/assets/images/map_bramble_crossing_1795467449380.jpg',
   'w1-l3': '/src/assets/images/map_hollow_bridge_1795470435009.jpg',

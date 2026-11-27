@@ -13,7 +13,7 @@ Students play a dark-fantasy tower-defense adventure where decoding words powers
 
 Play: [https://jimmaoscott-lang.github.io/rift-runners-studio/](https://jimmaoscott-lang.github.io/rift-runners-studio/)
 
-Hold the Rift is a 2.5D illustrated tower defense powered by the Rune Forge. World 1 (The Thornwood, Levels 1 to 5), World 2 (The Sunken Foundry, Levels 1 to 5), and World 3, Level 1 (Dawnbreak Terrace in The Silver Spires, introducing Silent-E long vowels and Free Placement) are fully playable, with live Azure Speak Mode, four difficulty tiers, eight defenders with a 6-slot Loadout selector, Spanish ELL accommodations, and Leda voice narration.
+Hold the Rift is a 2.5D illustrated tower defense powered by the Rune Forge. Runner Basic Training (an adaptive 8-tier placement battle that automatically opens matched campaign levels), World 1 (The Thornwood, Levels 1 to 5), World 2 (The Sunken Foundry, Levels 1 to 5), and World 3, Level 1 (Dawnbreak Terrace in The Silver Spires, introducing Silent-E long vowels) are fully playable with game-wide Free Placement, live Azure Speak Mode, four difficulty tiers, eight defenders with a 6-slot Loadout selector, Spanish ELL accommodations, and Leda voice narration.
 
 ## Voice Verification Requirements
 
