@@ -11,6 +11,7 @@ export interface DifficultyConfig {
   desc: string;
   hpMult: number;
   speedMult: number;
+  countMult: number;
 }
 
 export const DIFFICULTY_ORDER: DifficultyId[] = ['easy', 'normal', 'hard', 'expert'];
@@ -20,33 +21,37 @@ export const DIFFICULTIES: Record<DifficultyId, DifficultyConfig> = {
     id: 'easy',
     label: 'Easy',
     shortLabel: 'Easy',
-    desc: 'About 30% lighter waves so students can focus on decoding.',
-    hpMult: 0.76,
-    speedMult: 0.92,
+    desc: 'Weakest creatures, so students can focus on reading.',
+    hpMult: 0.38,
+    speedMult: 0.828,
+    countMult: 1.0,
   },
   normal: {
     id: 'normal',
     label: 'Normal',
     shortLabel: 'Normal',
-    desc: 'About 20% lighter than Expert. Balanced for steady runs.',
-    hpMult: 0.84,
-    speedMult: 0.95,
+    desc: 'Balanced for steady runs.',
+    hpMult: 0.504,
+    speedMult: 0.855,
+    countMult: 1.0,
   },
   hard: {
     id: 'hard',
     label: 'Hard',
     shortLabel: 'Hard',
-    desc: 'About 10% lighter than Expert. Tough waves that reward smart upgrades.',
+    desc: 'Tough waves that reward smart upgrades.',
     hpMult: 0.92,
     speedMult: 0.98,
+    countMult: 1.0,
   },
   expert: {
     id: 'expert',
     label: 'Expert',
     shortLabel: 'Expert',
-    desc: 'Full original wave strength for veteran Rift Runners.',
+    desc: 'The most, fastest and strongest creatures for veteran Rift Runners.',
     hpMult: 1.0,
-    speedMult: 1.0,
+    speedMult: 1.1,
+    countMult: 1.1,
   },
 };
 

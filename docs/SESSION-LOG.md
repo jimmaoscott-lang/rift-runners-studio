@@ -2,6 +2,24 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-07): Standard Difficulty Numbers Built into Presets
+
+### Completed
+- **Standard Difficulty Presets (`src/data/level1.ts`)**:
+  - Added `countMult: number` to `DifficultyConfig` and updated `DIFFICULTIES` to Mr. Scott's chosen standard numbers across all levels:
+    - `easy`: `hpMult: 0.38`, `speedMult: 0.828`, `countMult: 1.0`, `desc: "Weakest creatures, so students can focus on reading."`
+    - `normal`: `hpMult: 0.504`, `speedMult: 0.855`, `countMult: 1.0`, `desc: "Balanced for steady runs."`
+    - `hard`: `hpMult: 0.92`, `speedMult: 0.98`, `countMult: 1.0`, `desc: "Tough waves that reward smart upgrades."`
+    - `expert`: `hpMult: 1.0`, `speedMult: 1.1`, `countMult: 1.1`, `desc: "The most, fastest and strongest creatures for veteran Rift Runners."`
+- **Combined Count Scaling (`src/game/CanvasBattleEngine.ts`)**:
+  - Renamed local wave bonus/endless multiplier in `startNextWave()` to `waveCountMult` and applied preset `countMult` together with the Builder Mode count dial in a single rounding step (`Math.max(1, Math.round((baseCount * diffCfg.countMult * dial.countPct) / 100))`) for non-boss creatures across all levels and waves (including bonus and endless waves), keeping boss counts unchanged.
+  - Kept all Builder Mode dials intact with defaults at `100, 100, 100, 0` and Reset to default returning to `100, 100, 100, 0`.
+- **Housekeeping (`BUILD.md`)**:
+  - Recorded the Nov 27 standard difficulty numbers decision in `Mr. Scott's decisions`. Changed zero level data, creature stats, defenders, crystals, words between waves, speech checking, or saved data.
+
+### Next Up
+1. Playtest all four difficulties with default dials (`100`) to confirm Easy/Normal are lighter, Hard is unchanged, Expert is faster with larger groups, and boss counts stay fixed, then sync to GitHub.
+
 ## 2026-11-27 (S-06): Level Names and Silent E Rule Use Recorded Leda Voice
 
 ### Completed

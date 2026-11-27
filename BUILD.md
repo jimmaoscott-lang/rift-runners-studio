@@ -18,6 +18,7 @@ Settled. Do not change them unless Mr. Scott says so.
 - Phone layout, cross-device progress and the Unreal Engine move are on hold. (Nov 27)
 - Leda is the voice for new word readings and narration. (Studio decision, kept)
 - Difficulty dials are a builder-only tool behind Builder Mode. Teachers and students never see them. Good dial values get written into the game as the real numbers, then dials go back to default. Builder Mode and the dials are removed before release. (Nov 27)
+- Nov 27: standard difficulty for all levels is Easy health 0.38 and speed 0.828; Normal health 0.504 and speed 0.855; Hard health 0.92 and speed 0.98; Expert health 1.0, speed 1.1 and creature count 1.1. This replaces the earlier note to keep the Level 1 Hard and Expert numbers.
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 

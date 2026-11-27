@@ -1617,7 +1617,7 @@ export class BattleEngine {
 
     let waveDef: WaveDef;
     let hpScale = 1;
-    let countMult = 1;
+    let waveCountMult = 1;
 
     if (this.bonusActive) {
       this.bonusWave += 1;
@@ -1628,7 +1628,7 @@ export class BattleEngine {
       );
       waveDef = this.level.waves[baseIdx];
       hpScale = (waveDef.hp || 1) * (1.2 + this.bonusWave * 0.22);
-      countMult = 1 + this.bonusWave * 0.16;
+      waveCountMult = 1 + this.bonusWave * 0.16;
     } else {
       const waveIdx = Math.min(this.wave - 1, this.level.waves.length - 1);
       waveDef = this.level.waves[waveIdx];
@@ -1637,23 +1637,25 @@ export class BattleEngine {
       // Next wave becomes the Final Wave once all locks are filled (with minWaves floor)
       this.finalWave = this.locksReady && this.wave >= this.level.minWaves;
       hpScale = (waveDef.hp || 1) * extraScale * (this.finalWave ? this.level.finalBoost : 1);
-      countMult = extraWaves > 0 ? 1 + extraWaves * this.level.endless.countStep : 1;
+      waveCountMult = extraWaves > 0 ? 1 + extraWaves * this.level.endless.countStep : 1;
     }
 
     this.phase = 'wave';
     this.waveClock = 0;
     this.spawnQueue = [];
 
+    const diffCfg = DIFFICULTIES[this.difficulty] || DIFFICULTIES.normal;
     const dial = this.difficultyDials[this.difficulty] || DEFAULT_DIFFICULTY_DIAL_ROW;
-    const dialCountMult = dial.countPct / 100;
 
     let t = 0.6;
     for (const grp of waveDef.groups) {
       const startAt = grp.delay !== undefined ? Math.max(0.6, grp.delay) : t;
       let cursor = startAt;
       const isBoss = Boolean(CREATURES[grp.type]?.isBoss);
-      const baseCount = countMult > 1 ? Math.round(grp.count * countMult) : grp.count;
-      const count = isBoss ? baseCount : Math.max(1, Math.round(baseCount * dialCountMult));
+      const baseCount = waveCountMult > 1 ? Math.round(grp.count * waveCountMult) : grp.count;
+      const count = isBoss
+        ? baseCount
+        : Math.max(1, Math.round((baseCount * diffCfg.countMult * dial.countPct) / 100));
       for (let i = 0; i < count; i++) {
         this.spawnQueue.push({
           type: grp.type,
