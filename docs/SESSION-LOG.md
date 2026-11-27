@@ -2,6 +2,22 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27: Director Workflow Setup & Mr. Scott's Decisions Sync (`BUILD.md`)
+
+### Completed
+- **Director Repo Sync (`jimmaoscott-lang/rift-runners`)**:
+  - Read `AI-STUDIO.md` and verified read access to `docs/STUDIO-PROMPTS.md` (confirmed prompt `S-01: Teacher lock for test and setup tools`).
+  - Added the `Mr. Scott's decisions` section near the top of `BUILD.md` with all 11 settled decisions copied word for word from `AI-STUDIO.md`.
+  - Added the prompt-workflow instruction line to Section 1 of `BUILD.md`: prompts come from `docs/STUDIO-PROMPTS.md` in `jimmaoscott-lang/rift-runners`, run only when Mr. Scott names a prompt, and check `AI-STUDIO.md` for new decisions before each task.
+- **Resolved Conflicts with Older Rules in `BUILD.md`**:
+  - **Repository visibility (Section 6)**: Old rule labeled `jimmaoscott-lang/rift-runners-studio` as "Primary Private Backup Repo". Updated to reflect that both repos are public and must never contain student data.
+  - **Cutscene generation and narration (Sections 2A & 5)**: Old rules directed generating painterly cutscenes and Leda cutscene narration for new levels and World 2 refreshes. Updated both sections to enforce the Nov 27 cutscene pause (no new cutscene images, narration, or story scripts until the final static cutscene pass).
+  - **GitHub sync cadence (Sections 1 & 6)**: Old wording reminded to push "before starting the next big set of changes" / "after changes pass his checks". Updated to match the decision to sync to GitHub after every build.
+- **Zero game code modified** in this setup task.
+
+### Next Up
+1. Wait for Mr. Scott's instruction to run a named prompt (such as `Run S-01`).
+
 ## 2026-11-26 (Part 9): Strict Lava Pit & Terrain Exclusion Masking for Free Placement
 
 ### Completed

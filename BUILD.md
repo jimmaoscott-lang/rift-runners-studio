@@ -2,7 +2,25 @@
 
 Read this file together with `docs/DESIGN.md` and `docs/SESSION-LOG.md` before building any new level, cutscene, defender, enemy, or phonics skill. Whenever a rule, cutoff, art standard, or level milestone changes, update these files in the same turn so decisions carry cleanly from level to level.
 
+## Mr. Scott's decisions
+
+Settled. Do not change them unless Mr. Scott says so.
+
+- Claude directs and tests; AI Studio builds. Claude never edits the Studio repo. (Nov 27)
+- Level 1 difficulty on Hard and Expert is right. Keep those numbers. (Nov 27)
+- Students may skip the Level 1 walkthrough. (Nov 27)
+- A few crystals per creature kill and a small wave-clear bonus are fine. Reading stays the main income. (Nov 27)
+- A miss lowering a lock's count is fine. (Nov 27)
+- Sync to GitHub after every build. (Nov 27)
+- Cutscene pause: no new cutscene images, narration or story scripts until the rest of the build is finished. All story scripts and cutscenes will be redone as static files as the last step. (Nov 27)
+- Student screens show no test or setup tools; those go behind Teacher Mode. (Nov 27)
+- No student data in either repo, ever. Both repos are public. (Nov 27)
+- Phone layout, cross-device progress and the Unreal Engine move are on hold. (Nov 27)
+- Leda is the voice for new word readings and narration. (Studio decision, kept)
+
 ## 1. Mandatory Pre-Build and Post-Build Workflow
+
+Build prompts come from docs/STUDIO-PROMPTS.md in jimmaoscott-lang/rift-runners. Run a prompt only when Mr. Scott names it, and check that repo's AI-STUDIO.md for new decisions before each task.
 
 1. **Before building**: Read `BUILD.md`, `docs/DESIGN.md`, and the latest entries in `docs/SESSION-LOG.md`.
 2. **During building**: Follow every art, gameplay, speech, audio, and writing lock in this file.
@@ -11,24 +29,26 @@ Read this file together with `docs/DESIGN.md` and `docs/SESSION-LOG.md` before b
    - Extract and verify zero-schwa pure human phoneme clips (Section 5).
    - Run `npm run lint` (`tsc --noEmit`) and `npm run build` (`vite build`).
 4. **After building**: Record shipped work, visual or scoring adjustments, and next steps in `docs/SESSION-LOG.md`, and update `docs/DESIGN.md` and `README.md` status.
-5. **After Mr. Scott's checks pass**: Remind Mr. Scott to sync/push the verified milestone to GitHub before starting the next big set of changes.
+5. **After every build**: Remind Mr. Scott to sync/push to GitHub after every build so each task syncs cleanly.
 
 ## 2. Art Direction Lock
 
 Rift Runners uses two intentional visual styles. Keep cutscenes and battlefield assets strictly separated.
 
-### A. Story Cutscenes (Painterly Dark Fantasy)
+### A. Story Cutscenes (Paused Until Final Static Pass)
 
-Every opening, victory, and defeat cutscene must match the canonical World 1 painterly style anchored by `/src/assets/images/cutscene_opening_warden_1795457392314.jpg`.
+**Cutscene Pause (Nov 27)**: Do not create or regenerate any cutscene images, narration, or story scripts until the rest of the build is finished. All story scripts and cutscenes will be redone as static files as the last step.
+
+Reference art lock for that final cutscene pass (anchored by `/src/assets/images/cutscene_opening_warden_1795457392314.jpg`):
 
 - **Style**: Semi-realistic dark-fantasy painterly digital illustration with smooth atmospheric brushwork, cinematic lighting, and rich depth.
 - **Hard Ban**: Zero thick black comic-book ink outlines, zero cel-shading, zero cartoon proportions.
-- **Mandatory Image Reference**: Every cutscene generation call MUST pass `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` in `ImagePaths` so character faces, clothing, and brushwork remain locked.
+- **Mandatory Image Reference**: When the final static cutscene pass begins, every cutscene generation call MUST pass `/src/assets/images/cutscene_opening_warden_1795457392314.jpg` in `ImagePaths` so character faces, clothing, and brushwork remain locked.
 - **Canonical Cast and Props**:
   - **The Rift Warden**: Red-haired woman with hair pulled back, faint facial scars, steel shoulder pauldrons over a dark teal-green hooded ranger coat with crossed brown leather straps, carrying a twisted wooden staff topped with a glowing cyan crystal.
   - **The Runner (Player)**: Hooded teenager seen from behind or three-quarter back, wearing a dark backpack and a glowing cyan runic wristband on the left wrist.
   - **The Rift Anchor**: Tall carved dark stone obelisk monolith with a glowing cyan runic orb set into its center.
-- **Known Drift Note**: World 2, Level 1 (`Ashgate Outpost`) cutscenes were initially generated with thick black comic outlines before this rule was written down. Future World 2 cutscenes and any `w2-l1` refresh must follow the painterly cast lock above.
+- **Known Drift Note**: World 2, Level 1 (`Ashgate Outpost`) cutscenes were initially generated with thick black comic outlines before this rule was written down; any refresh waits for the final static cutscene pass.
 
 ### B. Battlefield Maps (2.5D Hand-Inked Illustrated)
 
@@ -98,7 +118,7 @@ Before marking any new phonics target complete, test spoken words against live A
 
 ## 5. Audio, Voice Acting, and Direct Instruction Rules
 
-- **Preferred Voice for Narration and Word Readings (`Leda`)**: Use `Leda` as the default voice for ALL new word readings (World 2 onward and any future word bank additions), cutscenes, walkthrough narration, and zero-schwa pure phonemes. Mr. Scott explicitly prefers Leda over the older World 1 Level 1 word voice. Store pre-cached Gemini TTS clips as 64 kbps mono `.mp3` files in `public/assets/audio/tts-cache/` (with `.wav` fallback supported at runtime) and pack all word clips into `public/assets/audio/words/sprite.mp3`.
+- **Preferred Voice for Narration and Word Readings (`Leda`)**: Use `Leda` as the default voice for ALL new word readings (World 2 onward and any future word bank additions), walkthrough narration, and zero-schwa pure phonemes (new cutscene narration is paused until the final static cutscene pass). Mr. Scott explicitly prefers Leda over the older World 1 Level 1 word voice. Store pre-cached Gemini TTS clips as 64 kbps mono `.mp3` files in `public/assets/audio/tts-cache/` (with `.wav` fallback supported at runtime) and pack all word clips into `public/assets/audio/words/sprite.mp3`.
 - **TTS Quota Hygiene**: Batch words into a single Gemini TTS request with pauses and split locally with Python to avoid `429 RESOURCE_EXHAUSTED` cooldowns, then convert to 64 kbps mono `.mp3` and store permanently in `public/assets/audio/`.
 - **Zero-Schwa Pure Phoneme Clips**: Sound Rule cards must play clean isolated human phonemes with zero trailing "uh" schwa. Slice pure phonemes directly from Leda's spoken word audio, verify at 95+ on live Azure Speech, and register `snd:<pattern>` in `public/assets/audio/words/manifest.json` (which supports both packed `sprite.mp3` slices and standalone `.mp3` paths).
 - **Sound Rule Narration**: Keep rule scripts focused on the sound and anchor word with zero trailing letter-spelling cues.
@@ -106,11 +126,11 @@ Before marking any new phonics target complete, test spoken words against live A
 
 ## 6. Repository Hygiene and GitHub Sync Rules
 
-- **Primary Private Backup Repo**: `jimmaoscott-lang/rift-runners-studio` (`main`).
+- **Primary Public Repo**: `jimmaoscott-lang/rift-runners-studio` (`main`). Both `jimmaoscott-lang/rift-runners-studio` and `jimmaoscott-lang/rift-runners` are public; never commit any student data to either repo.
 - **GitHub Sync File-Count and Size Lock**: Keep total tracked repository files well under `150` files and under `15 MB`. AI Studio's GitHub sync uploads changed files individually over the GitHub API and fails when a commit carries hundreds of tiny files (653 files failed; packing audio into sprites at 106 files and 8.6 MB pushed cleanly).
 - **Audio Sprite Packing Rule**: Pack word clips, pure phonemes, and UI cues into the two Web Audio sprites (`public/assets/audio/words/sprite.mp3` and `public/assets/audio/ui/sprite.mp3`) using `[startSec, durationSec]` entries in their `manifest.json` files instead of adding dozens of loose individual MP3 files.
 - **Image and Voice Compression Rule**: Optimize new images before pushing (maps max `1400px` wide, cutscenes max `1280px` wide, sprites max `512px` square) and convert cached `.wav` narrations in `public/assets/audio/tts-cache/` to 64 kbps mono `.mp3`.
 - **Screenshot Cleanup**: Keep `public/assets/aistudio/` in `.gitignore` and delete temporary chat screenshots before pushing.
 - **Secrets Rule**: Never commit API keys or secrets; reference variables only through `.env.example`.
-- **Push Reminder Rule**: Remind Mr. Scott to push to GitHub after changes pass his checks so every verified milestone has a clean recovery point.
+- **Push Reminder Rule**: Remind Mr. Scott to sync/push to GitHub after every build so each task has a clean recovery point.
 
