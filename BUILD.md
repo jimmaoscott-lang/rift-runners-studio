@@ -20,6 +20,7 @@ Settled. Do not change them unless Mr. Scott says so.
 - Difficulty dials are a builder-only tool behind Builder Mode. Teachers and students never see them. Good dial values get written into the game as the real numbers, then dials go back to default. Builder Mode and the dials are removed before release. (Nov 27)
 - Nov 27: standard difficulty for all levels is Easy health 0.38 and speed 0.828; Normal health 0.504 and speed 0.855; Hard health 0.92 and speed 0.98; Expert health 1.0, speed 1.1 and creature count 1.1. This replaces the earlier note to keep the Level 1 Hard and Expert numbers.
 - Nov 27: the 150 file and 15 MB numbers apply to each sync, not to the whole repo. See the GitHub Sync Rules in section 6.
+- Nov 27: Expert grace part 1: on Expert, a word read right on the second try earns half crystals (real word 6, rune 13). Misses never cost crystals. One miss never ends a level; missing many words can, and that is intended.
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 

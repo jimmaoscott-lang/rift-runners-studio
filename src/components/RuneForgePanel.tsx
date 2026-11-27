@@ -414,7 +414,11 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         : FORGE_CONFIG.real;
     if (tries > 0 || usedHelp) {
       const refBase = cur.kind === 'rune' ? FORGE_CONFIG.rune : FORGE_CONFIG.real;
-      return Math.round(refBase * FORGE_CONFIG.helpShare);
+      const share =
+        settings.difficulty === 'expert' && tries === 1 && !usedHelp
+          ? FORGE_CONFIG.expertSecondShare
+          : FORGE_CONFIG.helpShare;
+      return Math.round(refBase * share);
     }
     return base;
   };
@@ -495,8 +499,13 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
         setFeedback("Forged. You'll see this word again soon.");
       } else if (tries > 0) {
         sound.sfx('select');
+        const expertHalf = settings.difficulty === 'expert' && tries === 1 && !usedHelp;
         setFeedback(
-          usedVoiceFit
+          expertHalf
+            ? usedVoiceFit
+              ? 'Second try, and it landed (matched your voice profile). Half crystals.'
+              : 'Second try, and it landed. Half crystals.'
+            : usedVoiceFit
             ? 'Second try, and it landed (matched your voice profile).'
             : 'Second try, and it landed.'
         );
@@ -519,7 +528,18 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cur, onMegaForge, onPay, onWordForged, pickNextWord, revealed, streak, tries, usedHelp]
+    [
+      cur,
+      onMegaForge,
+      onPay,
+      onWordForged,
+      pickNextWord,
+      revealed,
+      settings.difficulty,
+      streak,
+      tries,
+      usedHelp,
+    ]
   );
 
   const effectiveWaveEvery =

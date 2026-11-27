@@ -271,6 +271,7 @@ export const FORGE_CONFIG = {
   rune: 25,
   speak: 18,
   helpShare: 0.3,
+  expertSecondShare: 0.5,
   shown: 3,
   mega: 115,
   megaPips: 8,

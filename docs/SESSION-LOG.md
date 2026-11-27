@@ -2,6 +2,22 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-09): Expert Grace Part 1 (Half Crystals on Second Try)
+
+### Completed
+- **Forge Config (`src/data/level1.ts`)**:
+  - Added `expertSecondShare: 0.5` to `FORGE_CONFIG` with every other `FORGE_CONFIG` value unchanged.
+- **Expert Second-Try Payout & Feedback (`src/components/RuneForgePanel.tsx`)**:
+  - Updated `currentPayout` so when `settings.difficulty === 'expert'`, `tries === 1`, `usedHelp` is `false`, and the word is not revealed, it pays `Math.round(refBase * FORGE_CONFIG.expertSecondShare)` (real word 6, rune 13, spoken second try 6).
+  - Kept all other payouts identical across every difficulty (first-try reads, heard-it-first at 30%, second try after speaker at 30%, shown word at 3, and Mega Forge).
+  - Kept second-try reads as non-clean reads (resets Mega Forge streak, no Rift Lock credit, adds word to practice list).
+  - Updated `completeForge` feedback line when the Expert half payout triggers to `"Second try, and it landed. Half crystals."` (and `"Second try, and it landed (matched your voice profile). Half crystals."` with voice fit), keeping other difficulties unchanged, and added `settings.difficulty` to `completeForge` dependencies.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Nov 27 Expert grace part 1 decision to `"Mr. Scott's decisions"`. Left `computeSimRound`, lock rules, wave timing, difficulty presets, Builder Mode dials, speech checking, voice fits, Spanish supports, miss instruction cards, and save data untouched.
+
+### Next Up
+1. Playtest Expert second-try payouts (+6 real word, +13 rune, +4 after speaker) and Normal second-try payout (+4), then sync to GitHub.
+
 ## 2026-11-27 (S-08): Corrected GitHub Sync Rule in BUILD.md
 
 ### Completed
