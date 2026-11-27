@@ -17,6 +17,7 @@ Settled. Do not change them unless Mr. Scott says so.
 - No student data in either repo, ever. Both repos are public. (Nov 27)
 - Phone layout, cross-device progress and the Unreal Engine move are on hold. (Nov 27)
 - Leda is the voice for new word readings and narration. (Studio decision, kept)
+- Difficulty dials are a builder-only tool behind Builder Mode. Teachers and students never see them. Good dial values get written into the game as the real numbers, then dials go back to default. Builder Mode and the dials are removed before release. (Nov 27)
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 

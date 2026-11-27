@@ -10,6 +10,67 @@ import {
 
 const STORAGE_KEY = 'rift_runners_gemini_w1l1_v1';
 
+// Builder-only access code (never saved as a setting, never shown in the UI)
+export const BUILDER_CODE = 'runner-build';
+
+export interface DifficultyDialRow {
+  healthPct: number; // 25..300, default 100
+  speedPct: number; // 50..200, default 100
+  countPct: number; // 25..300, default 100
+  extraWords: number; // -5..10, default 0
+}
+
+export type DifficultyDials = Record<DifficultyId, DifficultyDialRow>;
+
+export const DEFAULT_DIFFICULTY_DIAL_ROW: DifficultyDialRow = {
+  healthPct: 100,
+  speedPct: 100,
+  countPct: 100,
+  extraWords: 0,
+};
+
+export function createDefaultDifficultyDials(): DifficultyDials {
+  return {
+    easy: { ...DEFAULT_DIFFICULTY_DIAL_ROW },
+    normal: { ...DEFAULT_DIFFICULTY_DIAL_ROW },
+    hard: { ...DEFAULT_DIFFICULTY_DIAL_ROW },
+    expert: { ...DEFAULT_DIFFICULTY_DIAL_ROW },
+  };
+}
+
+export function clampDialValue(field: keyof DifficultyDialRow, raw: number): number {
+  const n = Number.isFinite(raw) ? Math.round(raw) : DEFAULT_DIFFICULTY_DIAL_ROW[field];
+  if (field === 'healthPct') return Math.max(25, Math.min(300, n));
+  if (field === 'speedPct') return Math.max(50, Math.min(200, n));
+  if (field === 'countPct') return Math.max(25, Math.min(300, n));
+  return Math.max(-5, Math.min(10, n));
+}
+
+export function getWordsBetweenWaves(
+  baseWaveEvery: number,
+  difficulty: DifficultyId,
+  dials?: DifficultyDials
+): number {
+  const extra = dials?.[difficulty]?.extraWords ?? 0;
+  return Math.max(3, Math.min(15, baseWaveEvery + extra));
+}
+
+export function formatDifficultyDialsTable(dials: DifficultyDials): string {
+  const rows: Array<[string, DifficultyDialRow]> = [
+    ['Easy  ', dials.easy],
+    ['Normal', dials.normal],
+    ['Hard  ', dials.hard],
+    ['Expert', dials.expert],
+  ];
+  return [
+    'Difficulty | Health % | Speed % | Count % | Extra Words',
+    ...rows.map(
+      ([label, r]) =>
+        `${label}     | ${String(r.healthPct).padStart(7)}% | ${String(r.speedPct).padStart(6)}% | ${String(r.countPct).padStart(6)}% | ${r.extraWords >= 0 ? `+${r.extraWords}` : r.extraWords}`
+    ),
+  ].join('\n');
+}
+
 export interface GameSettings {
   font: 'lexend' | 'dyslexic';
   textSize: 'normal' | 'large' | 'xlarge';

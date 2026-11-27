@@ -2,6 +2,27 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27 (S-02): Builder Mode and Ephemeral Difficulty Dials
+
+### Completed
+- **Builder Mode (`src/lib/metrics.ts`, `src/App.tsx`, `src/components/SettingsModal.tsx`, `src/components/TitleScreen.tsx`, `src/components/BattleHUD.tsx`)**:
+  - Added constant `BUILDER_CODE = 'runner-build'` in `src/lib/metrics.ts` (never saved as a setting, never shown or editable in the UI).
+  - Updated the Teacher Tools unlock form in `SettingsModal.tsx` so `BUILDER_CODE` unlocks both Teacher Mode and Builder Mode, the teacher code unlocks Teacher Mode only, and any wrong code shows `"That code did not work."` and nothing else.
+  - Stored `builderMode` and `difficultyDials` solely in ephemeral React state in `src/App.tsx` (reset to off and defaults on every page load, zero new `localStorage` keys).
+  - Updated the amber badge in `TitleScreen.tsx`, `BattleHUD.tsx`, and `SettingsModal.tsx` to read `"Builder Mode on"` while Builder Mode is active, with `"Turn off"` turning off both modes.
+- **Builder-Only Difficulty Dials Panel (`src/components/SettingsModal.tsx`, `src/lib/metrics.ts`)**:
+  - Added the `"Difficulty dials"` panel inside Settings (rendered only when Builder Mode is on) with one row each for `Easy`, `Normal`, `Hard`, and `Expert` and four number fields: `Creature health %` (25 to 300, default 100), `Creature speed %` (50 to 200, default 100), `Number of creatures %` (25 to 300, default 100), and `Extra words between waves` (-5 to 10, default 0).
+  - Added `"Reset to default"` (resets all four rows to `100, 100, 100, 0`) and `"Copy dial values"` (copies a formatted text table of all four rows to the clipboard).
+- **Single-Point Runtime Application (`src/game/CanvasBattleEngine.ts`, `src/components/RuneForgePanel.tsx`, `src/App.tsx`)**:
+  - Applied `healthPct` and `speedPct` multipliers inside `spawnCreature()` on top of `DIFFICULTIES` without modifying `src/data/level1.ts`.
+  - Applied `countPct` inside `startNextWave()` wave group queuing (rounded to nearest whole number, minimum 1), leaving boss entries (`CREATURES[grp.type]?.isBoss`) untouched.
+  - Added shared helper `getWordsBetweenWaves(baseWaveEvery, difficulty, dials)` (clamped to `[3, 15]`) and routed all `waveEvery` reads (`CanvasBattleEngine.ts`, `App.tsx`, `RuneForgePanel.tsx`) through it without altering Rift Lock targets or adapting difficulty mid-battle.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Builder Mode difficulty dials decision to `Mr. Scott's decisions`. Zero new files added.
+
+### Next Up
+1. Playtest S-02 (fresh load, teacher code vs `runner-build`, default dials, Normal 50% creature count, Normal +2 extra words, reload reset), then sync to GitHub.
+
 ## 2026-11-27 (Part 2): Level 1 Walkthrough Finishes Before Wave 1
 
 ### Completed

@@ -71,6 +71,7 @@ interface BattleHUDProps {
   lockBonusFlash?: { patterns: PatternKey[]; amount: number } | null;
   spanishCaptions?: boolean;
   teacherMode?: boolean;
+  builderMode?: boolean;
   onTurnOffTeacherMode?: () => void;
   onWalkthroughNext: () => void;
   onWalkthroughSkip: () => void;
@@ -165,6 +166,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
   lockBonusFlash = null,
   spanishCaptions = false,
   teacherMode = false,
+  builderMode = false,
   onTurnOffTeacherMode,
   onWalkthroughNext,
   onWalkthroughSkip,
@@ -371,7 +373,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           {teacherMode && (
             <div className="flex h-8 items-center gap-1.5 rounded-xl border-2 border-amber-400/85 bg-amber-950/90 px-2 text-[11px] font-bold text-amber-200 shadow-md whitespace-nowrap shrink-0">
-              <span>Teacher Mode on</span>
+              <span>{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
               {onTurnOffTeacherMode && (
                 <button
                   type="button"

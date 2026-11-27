@@ -30,7 +30,12 @@ import {
 import { sound } from '../lib/audio';
 import {
   buildAccommodationSnapshot,
+  BUILDER_CODE,
+  clampDialValue,
   countActiveEllSupports,
+  DifficultyDialRow,
+  DifficultyDials,
+  formatDifficultyDialsTable,
   formatOverallTeacherNote,
   GameSettings,
   PatternLockStatus,
@@ -46,8 +51,13 @@ interface SettingsModalProps {
   settings: GameSettings;
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
   teacherMode: boolean;
+  builderMode: boolean;
+  difficultyDials: DifficultyDials;
   onEnterTeacherMode: () => void;
+  onEnterBuilderMode: () => void;
   onExitTeacherMode: () => void;
+  onChangeDifficultyDials: (next: DifficultyDials) => void;
+  onResetDifficultyDials: () => void;
   onChange: (next: GameSettings) => void;
   onClearActiveLocks: () => void;
   onClearAllLocks: () => void;
@@ -63,8 +73,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   azureStatus,
   teacherMode,
+  builderMode,
+  difficultyDials,
   onEnterTeacherMode,
+  onEnterBuilderMode,
   onExitTeacherMode,
+  onChangeDifficultyDials,
+  onResetDifficultyDials,
   onChange,
   onClearActiveLocks,
   onClearAllLocks,
@@ -74,6 +89,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const ellActiveCount = countActiveEllSupports(settings);
   const [copiedProgress, setCopiedProgress] = useState(false);
+  const [copiedDials, setCopiedDials] = useState(false);
+  const [dialDrafts, setDialDrafts] = useState<Record<string, string>>({});
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micTestWord, setMicTestWord] = useState<string>(() => level.runes[0]?.w || 'sun');
@@ -1016,6 +1033,150 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             ))}
           </section>
+          {/* Builder-only Difficulty Dials */}
+          {builderMode && (
+            <section className="space-y-3 pt-4 border-t border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Difficulty dials
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    Multiplies on top of each difficulty preset for live testing. Resets on page reload.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const text = formatDifficultyDialsTable(difficultyDials);
+                      sound.sfx('tap');
+                      try {
+                        await navigator.clipboard.writeText(text);
+                      } catch {
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                      }
+                      setCopiedDials(true);
+                      window.setTimeout(() => setCopiedDials(false), 2200);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/60 bg-cyan-500/15 px-3 py-1.5 text-xs font-bold text-cyan-200 hover:bg-cyan-500/25 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    {copiedDials ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-300" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCopy className="h-3.5 w-3.5" />
+                        Copy dial values
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.sfx('tap');
+                      setDialDrafts({});
+                      onResetDifficultyDials();
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-200 hover:border-amber-400/70 hover:text-amber-200 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset to default
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-amber-400/35 bg-slate-900/75 p-3">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-300">
+                      <th className="py-1.5 pr-2">Difficulty</th>
+                      <th className="px-1.5 py-1.5">Creature health %</th>
+                      <th className="px-1.5 py-1.5">Creature speed %</th>
+                      <th className="px-1.5 py-1.5">Number of creatures %</th>
+                      <th className="pl-1.5 py-1.5">Extra words between waves</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {DIFFICULTY_ORDER.map((diffId) => {
+                      const diffInfo = DIFFICULTIES[diffId];
+                      const row = difficultyDials[diffId];
+                      const fields: Array<{
+                        key: keyof DifficultyDialRow;
+                        label: string;
+                        min: number;
+                        max: number;
+                      }> = [
+                        { key: 'healthPct', label: 'Creature health %', min: 25, max: 300 },
+                        { key: 'speedPct', label: 'Creature speed %', min: 50, max: 200 },
+                        { key: 'countPct', label: 'Number of creatures %', min: 25, max: 300 },
+                        { key: 'extraWords', label: 'Extra words between waves', min: -5, max: 10 },
+                      ];
+                      return (
+                        <tr key={diffId}>
+                          <td className="py-2 pr-2 font-bold text-white whitespace-nowrap">
+                            {diffInfo.label}
+                          </td>
+                          {fields.map((field) => {
+                            const draftKey = `${diffId}:${field.key}`;
+                            const displayVal =
+                              draftKey in dialDrafts ? dialDrafts[draftKey] : String(row[field.key]);
+                            return (
+                              <td key={field.key} className="px-1.5 py-2">
+                                <input
+                                  type="number"
+                                  min={field.min}
+                                  max={field.max}
+                                  step={1}
+                                  aria-label={`${diffInfo.label} ${field.label}`}
+                                  value={displayVal}
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    setDialDrafts((prev) => ({ ...prev, [draftKey]: raw }));
+                                    const trimmed = raw.trim();
+                                    if (trimmed === '' || trimmed === '-') return;
+                                    const parsed = Number(trimmed);
+                                    if (!Number.isFinite(parsed)) return;
+                                    const clamped = clampDialValue(field.key, parsed);
+                                    onChangeDifficultyDials({
+                                      ...difficultyDials,
+                                      [diffId]: {
+                                        ...difficultyDials[diffId],
+                                        [field.key]: clamped,
+                                      },
+                                    });
+                                  }}
+                                  onBlur={() => {
+                                    setDialDrafts((prev) => {
+                                      if (!(draftKey in prev)) return prev;
+                                      const next = { ...prev };
+                                      delete next[draftKey];
+                                      return next;
+                                    });
+                                  }}
+                                  className="w-20 rounded-lg border border-slate-700 bg-[#0b1122] px-2 py-1.5 font-tabular text-xs font-bold text-white focus:border-amber-400 focus:outline-none"
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           {/* Teacher Tools Unlock & Code Management */}
           {(teacherMode || showTeacherPrompt) && (
             <section className="space-y-3 pt-4 border-t border-slate-800">
@@ -1024,7 +1185,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
                     <KeyRound className="h-4 w-4 text-amber-300" />
-                    <span>Teacher Mode on</span>
+                    <span>{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
                   </div>
                   <button
                     type="button"
@@ -1035,6 +1196,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       setCodeInput('');
                       setCodeError('');
                       setChangeCodeMsg(null);
+                      setDialDrafts({});
                     }}
                     className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-amber-300 transition-colors cursor-pointer whitespace-nowrap"
                   >
@@ -1104,8 +1266,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  const entered = codeInput.trim();
                   const expected = settings.teacherCode || 'rift2026';
-                  if (codeInput.trim() === expected) {
+                  if (entered === BUILDER_CODE) {
+                    sound.sfx('select');
+                    setCodeInput('');
+                    setCodeError('');
+                    setShowTeacherPrompt(false);
+                    setNewCodeInput(expected);
+                    onEnterBuilderMode();
+                  } else if (entered === expected) {
                     sound.sfx('select');
                     setCodeInput('');
                     setCodeError('');
@@ -1181,7 +1351,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>Teacher Tools</span>
             </button>
           ) : (
-            <span className="text-xs font-semibold text-amber-300">Teacher Mode on</span>
+            <span className="text-xs font-semibold text-amber-300">
+              {builderMode ? 'Builder Mode on' : 'Teacher Mode on'}
+            </span>
           )}
           <button
             type="button"

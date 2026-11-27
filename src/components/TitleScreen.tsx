@@ -39,6 +39,7 @@ interface TitleScreenProps {
   locks: PatternLockStatus[];
   azureStatus: 'checking' | 'azure' | 'chrome' | 'off';
   teacherMode?: boolean;
+  builderMode?: boolean;
   onTurnOffTeacherMode?: () => void;
   onSelectLevel: (id: LevelId) => void;
   onChangeDifficulty: (diff: DifficultyId) => void;
@@ -57,6 +58,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   locks,
   azureStatus,
   teacherMode = false,
+  builderMode = false,
   onTurnOffTeacherMode,
   onSelectLevel,
   onChangeDifficulty,
@@ -136,7 +138,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         <div className="flex items-center gap-2 shrink-0">
           {teacherMode && (
             <div className="inline-flex items-center gap-2 rounded-lg border border-amber-400/80 bg-amber-950/85 px-2.5 py-1.5 text-xs font-bold text-amber-200 whitespace-nowrap shrink-0">
-              <span>Teacher Mode on</span>
+              <span>{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
               {onTurnOffTeacherMode && (
                 <button
                   type="button"

@@ -13,6 +13,12 @@ import {
   WaveDef,
 } from '../data/level1';
 import { sound } from '../lib/audio';
+import {
+  createDefaultDifficultyDials,
+  DEFAULT_DIFFICULTY_DIAL_ROW,
+  DifficultyDials,
+  getWordsBetweenWaves,
+} from '../lib/metrics';
 import { GameSpriteBank, loadGameSprites, SpriteKey } from './sprites';
 
 export type CameraPreset = 'tactical' | 'action' | 'rift' | 'camp';
@@ -411,6 +417,7 @@ export class BattleEngine {
   private bonusWave = 0;
   private bonusWavesCleared = 0;
   private wordsUntilWave: number;
+  private wordsForgedInWait = 0;
   private kills = 0;
   private shards = 0;
   private powersUsed = 0;
@@ -421,6 +428,7 @@ export class BattleEngine {
   private externalHold = false;
   private speed = 1;
   private difficulty: DifficultyId = 'normal';
+  private difficultyDials: DifficultyDials = createDefaultDifficultyDials();
   private focusMode = false;
   private cameraPreset: CameraPreset = 'tactical';
 
@@ -471,14 +479,25 @@ export class BattleEngine {
   // Keeps Level 1 towers focused on their local curve and Level 3 / Sharpshooter genuinely tactical.
   private readonly RANGE_UNIT_PX = 26;
 
-  constructor(container: HTMLElement, level: LevelConfig, callbacks: BattleEngineCallbacks) {
+  constructor(
+    container: HTMLElement,
+    level: LevelConfig,
+    callbacks: BattleEngineCallbacks,
+    initialDifficulty: DifficultyId = 'normal',
+    initialDials?: DifficultyDials
+  ) {
     this.container = container;
     this.level = level;
     this.callbacks = callbacks;
+    this.difficulty = initialDifficulty;
+    if (initialDials) {
+      this.difficultyDials = initialDials;
+    }
 
     this.crystals = level.startCrystals;
     this.anchor = level.anchor;
-    this.wordsUntilWave = level.waveEvery;
+    this.wordsForgedInWait = 0;
+    this.wordsUntilWave = this.getWordsPerWave();
     this.path = new SmoothPath(level.pathUv);
     this.riverPath = level.riverUv.length >= 2 ? new SmoothPath(level.riverUv) : null;
     this.riftPos = { x: level.riftUv[0] * MAP_W, y: level.riftUv[1] * MAP_H };
@@ -1007,9 +1026,27 @@ export class BattleEngine {
     this.focusMode = val;
   }
 
+  private getWordsPerWave(): number {
+    return getWordsBetweenWaves(this.level.waveEvery, this.difficulty, this.difficultyDials);
+  }
+
+  private syncWordsUntilWave() {
+    if (this.phase === 'build' || this.phase === 'between') {
+      const target = this.getWordsPerWave();
+      this.wordsUntilWave = Math.max(1, target - this.wordsForgedInWait);
+    }
+  }
+
   public setDifficulty(diff: DifficultyId) {
     if (this.difficulty === diff) return;
     this.difficulty = diff;
+    this.syncWordsUntilWave();
+    this.emitSnapshot();
+  }
+
+  public setDifficultyDials(dials: DifficultyDials) {
+    this.difficultyDials = dials;
+    this.syncWordsUntilWave();
     this.emitSnapshot();
   }
 
@@ -1037,7 +1074,8 @@ export class BattleEngine {
     this.bonusWavesCleared = 0;
     this.finalWave = false;
     this.phase = 'between';
-    this.wordsUntilWave = this.level.waveEvery;
+    this.wordsForgedInWait = 0;
+    this.wordsUntilWave = this.getWordsPerWave();
     sound.sfx('power');
     sound.setMusic('calm');
     this.callbacks.onToast(
@@ -1209,6 +1247,7 @@ export class BattleEngine {
     }
 
     if (this.phase === 'build' || this.phase === 'between') {
+      this.wordsForgedInWait += 1;
       this.wordsUntilWave = Math.max(0, this.wordsUntilWave - 1);
       if (this.wordsUntilWave === 0) {
         this.startNextWave();
@@ -1605,11 +1644,16 @@ export class BattleEngine {
     this.waveClock = 0;
     this.spawnQueue = [];
 
+    const dial = this.difficultyDials[this.difficulty] || DEFAULT_DIFFICULTY_DIAL_ROW;
+    const dialCountMult = dial.countPct / 100;
+
     let t = 0.6;
     for (const grp of waveDef.groups) {
       const startAt = grp.delay !== undefined ? Math.max(0.6, grp.delay) : t;
       let cursor = startAt;
-      const count = countMult > 1 ? Math.round(grp.count * countMult) : grp.count;
+      const isBoss = Boolean(CREATURES[grp.type]?.isBoss);
+      const baseCount = countMult > 1 ? Math.round(grp.count * countMult) : grp.count;
+      const count = isBoss ? baseCount : Math.max(1, Math.round(baseCount * dialCountMult));
       for (let i = 0; i < count; i++) {
         this.spawnQueue.push({
           type: grp.type,
@@ -1654,7 +1698,11 @@ export class BattleEngine {
   private spawnCreature(type: CreatureType, hpMult: number, startS = 0, startLane?: number) {
     const cfg = CREATURES[type];
     const diffCfg = DIFFICULTIES[this.difficulty] || DIFFICULTIES.normal;
-    const scaledHp = Math.max(1, Math.round(cfg.hp * hpMult * diffCfg.hpMult));
+    const dial = this.difficultyDials[this.difficulty] || DEFAULT_DIFFICULTY_DIAL_ROW;
+    const scaledHp = Math.max(
+      1,
+      Math.round(cfg.hp * hpMult * diffCfg.hpMult * (dial.healthPct / 100))
+    );
     const startPt = this.path.pointAt(startS);
     const lane = startLane !== undefined ? startLane : (Math.random() - 0.5) * 20;
     const nx = -startPt.ty;
@@ -1670,7 +1718,7 @@ export class BattleEngine {
       vy: startPt.ty,
       hp: scaledHp,
       maxHp: scaledHp,
-      speed: cfg.speed * diffCfg.speedMult,
+      speed: cfg.speed * diffCfg.speedMult * (dial.speedPct / 100),
       anchorDmg: cfg.anchor,
       shards: cfg.shards,
       hitDmg: cfg.hit,
@@ -3153,7 +3201,8 @@ export class BattleEngine {
           this.shards += waveBonus;
           this.spawnFloatingText(this.campPos.x, this.campPos.y - 72, `+${waveBonus} Wave Bonus`, '#38e0ff', 1.25);
           this.phase = 'between';
-          this.wordsUntilWave = this.level.waveEvery;
+          this.wordsForgedInWait = 0;
+          this.wordsUntilWave = this.getWordsPerWave();
           sound.setMusic('calm');
           this.callbacks.onToast(
             `Bonus Wave ${this.bonusWave} of ${this.level.bonusSurgeWaves} cleared (+${waveBonus} crystals)! Keep forging or launch the next wave.`,
@@ -3188,7 +3237,8 @@ export class BattleEngine {
         this.shards += waveBonus;
         this.spawnFloatingText(this.campPos.x, this.campPos.y - 72, `+${waveBonus} Wave Bonus`, '#38e0ff', 1.25);
         this.phase = 'between';
-        this.wordsUntilWave = this.level.waveEvery;
+        this.wordsForgedInWait = 0;
+        this.wordsUntilWave = this.getWordsPerWave();
         sound.setMusic('calm');
         const nextIsFinal = this.locksReady && this.wave + 1 >= this.level.minWaves;
         this.callbacks.onToast(

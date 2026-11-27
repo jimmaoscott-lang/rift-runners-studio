@@ -19,7 +19,7 @@ import {
 } from '../data/level1';
 import { getWordGloss } from '../data/ellSpanish';
 import { sound } from '../lib/audio';
-import { countActiveEllSupports, GameSettings } from '../lib/metrics';
+import { countActiveEllSupports, GameSettings, getWordsBetweenWaves } from '../lib/metrics';
 import { speech } from '../lib/speech';
 import { QuickVoiceCheckModal } from './QuickVoiceCheckModal';
 import { SoundRuleModal } from './SoundRuleModal';
@@ -86,6 +86,7 @@ interface RuneForgePanelProps {
     urgent?: boolean;
   } | null;
   teacherMode?: boolean;
+  wordsBetweenWaves?: number;
   onPay: (amount: number) => void;
   onWordForged: (pattern: PatternKey, firstTryClean: boolean, stats: ForgeStats) => void;
   onMegaForge: () => void;
@@ -210,6 +211,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
   tutorialHighlight = false,
   lastWordWarning = null,
   teacherMode = false,
+  wordsBetweenWaves,
   onPay,
   onWordForged,
   onMegaForge,
@@ -520,13 +522,16 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
     [cur, onMegaForge, onPay, onWordForged, pickNextWord, revealed, streak, tries, usedHelp]
   );
 
+  const effectiveWaveEvery =
+    wordsBetweenWaves ?? getWordsBetweenWaves(level.waveEvery, settings.difficulty || 'normal');
+
   const simPreviews = useMemo(
     () => ({
-      fluent: computeSimRound('fluent', level.waveEvery, level.runeRate, streak),
-      steady: computeSimRound('steady', level.waveEvery, level.runeRate, streak),
-      guided: computeSimRound('guided', level.waveEvery, level.runeRate, streak),
+      fluent: computeSimRound('fluent', effectiveWaveEvery, level.runeRate, streak),
+      steady: computeSimRound('steady', effectiveWaveEvery, level.runeRate, streak),
+      guided: computeSimRound('guided', effectiveWaveEvery, level.runeRate, streak),
     }),
-    [level.waveEvery, level.runeRate, streak]
+    [effectiveWaveEvery, level.runeRate, streak]
   );
 
   const handleSimulate = (profile: SimProfileId) => {
@@ -1228,7 +1233,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
             <div className="flex items-center justify-between text-[10px] font-bold text-purple-200/75 mb-1.5">
               <span className="inline-flex items-center gap-1">
                 <FlaskConical className="h-3 w-3 text-cyan-300" />
-                <span>Playtest · {level.waveEvery} words</span>
+                <span>Playtest · {effectiveWaveEvery} words</span>
               </span>
               <span className="text-[9px] font-semibold text-purple-300/60">
                 Won&apos;t launch wave
@@ -1239,7 +1244,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 type="button"
                 disabled={disabled || listening}
                 onClick={() => handleSimulate('fluent')}
-                title={`Simulate ${level.waveEvery} clean spoken words (all first try + Mega Forge): +${simPreviews.fluent.crystals} crystals`}
+                title={`Simulate ${effectiveWaveEvery} clean spoken words (all first try + Mega Forge): +${simPreviews.fluent.crystals} crystals`}
                 className="flex flex-col items-center rounded-xl border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-1.5 text-center transition-colors hover:border-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40 cursor-pointer"
               >
                 <span className="text-[11px] font-extrabold text-emerald-200 leading-tight">
@@ -1253,7 +1258,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 type="button"
                 disabled={disabled || listening}
                 onClick={() => handleSimulate('steady')}
-                title={`Simulate ${level.waveEvery} words (${simPreviews.steady.cleanCount} first try, ${simPreviews.steady.helpCount} with help, ${simPreviews.steady.shownCount} shown): +${simPreviews.steady.crystals} crystals`}
+                title={`Simulate ${effectiveWaveEvery} words (${simPreviews.steady.cleanCount} first try, ${simPreviews.steady.helpCount} with help, ${simPreviews.steady.shownCount} shown): +${simPreviews.steady.crystals} crystals`}
                 className="flex flex-col items-center rounded-xl border border-sky-400/50 bg-sky-500/15 px-1.5 py-1.5 text-center transition-colors hover:border-sky-300 hover:bg-sky-500/25 disabled:opacity-40 cursor-pointer"
               >
                 <span className="text-[11px] font-extrabold text-sky-200 leading-tight">
@@ -1267,7 +1272,7 @@ export const RuneForgePanel: React.FC<RuneForgePanelProps> = ({
                 type="button"
                 disabled={disabled || listening}
                 onClick={() => handleSimulate('guided')}
-                title={`Simulate ${level.waveEvery} words (${simPreviews.guided.cleanCount} first try, ${simPreviews.guided.helpCount} with help, ${simPreviews.guided.shownCount} shown): +${simPreviews.guided.crystals} crystals`}
+                title={`Simulate ${effectiveWaveEvery} words (${simPreviews.guided.cleanCount} first try, ${simPreviews.guided.helpCount} with help, ${simPreviews.guided.shownCount} shown): +${simPreviews.guided.crystals} crystals`}
                 className="flex flex-col items-center rounded-xl border border-amber-400/50 bg-amber-500/15 px-1.5 py-1.5 text-center transition-colors hover:border-amber-300 hover:bg-amber-500/25 disabled:opacity-40 cursor-pointer"
               >
                 <span className="text-[11px] font-extrabold text-amber-200 leading-tight">

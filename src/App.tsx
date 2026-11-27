@@ -31,8 +31,11 @@ import { sound } from './lib/audio';
 import {
   buildAccommodationSnapshot,
   clearPatternLocks,
+  createDefaultDifficultyDials,
+  DifficultyDials,
   GameSettings,
   getPatternLocks,
+  getWordsBetweenWaves,
   loadProgress,
   PlacementReport,
   recordPatternRead,
@@ -213,7 +216,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
 function makeInitialSnapshot(
   level: LevelConfig,
-  difficulty: DifficultyId = 'normal'
+  difficulty: DifficultyId = 'normal',
+  dials?: DifficultyDials
 ): BattleSnapshot {
   return {
     phase: 'build',
@@ -228,7 +232,7 @@ function makeInitialSnapshot(
     bonusActive: false,
     bonusWave: 0,
     bonusTotal: level.bonusSurgeWaves,
-    wordsUntilWave: level.waveEvery,
+    wordsUntilWave: getWordsBetweenWaves(level.waveEvery, difficulty, dials),
     creaturesAlive: 0,
     defendersCount: 0,
     upgradedCount: 0,
@@ -282,6 +286,10 @@ export default function App() {
   const [placementRun, setPlacementRun] = useState<PlacementRunState | null>(null);
   const [lastPlacementReport, setLastPlacementReport] = useState<PlacementReport | null>(null);
   const [teacherMode, setTeacherMode] = useState(false);
+  const [builderMode, setBuilderMode] = useState(false);
+  const [difficultyDials, setDifficultyDials] = useState<DifficultyDials>(() =>
+    createDefaultDifficultyDials()
+  );
 
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<BattleEngine | null>(null);
@@ -294,8 +302,19 @@ export default function App() {
   const prevWaveRef = useRef<number>(0);
   const progressRef = useRef<StoredProgress>(progress);
   progressRef.current = progress;
+  const difficultyDialsRef = useRef<DifficultyDials>(difficultyDials);
+  difficultyDialsRef.current = difficultyDials;
 
   const settings = progress.settings;
+
+  const handleTurnOffTeacherAndBuilderMode = useCallback(() => {
+    setTeacherMode(false);
+    setBuilderMode(false);
+  }, []);
+
+  useEffect(() => {
+    engineRef.current?.setDifficultyDials(difficultyDials);
+  }, [difficultyDials]);
 
   useEffect(() => {
     speech.setSpanishL1Mode(Boolean(settings.spanishL1Voice));
@@ -469,7 +488,7 @@ export default function App() {
 
     const lv = getLevelConfigById(state.activeLevelId);
     forgeStatsRef.current = { ...EMPTY_FORGE_STATS, practice: [] };
-    setSnap(makeInitialSnapshot(lv, settings.difficulty || 'normal'));
+    setSnap(makeInitialSnapshot(lv, settings.difficulty || 'normal', difficultyDialsRef.current));
     setForgedCount(0);
     setShowHalfSpeedTip(false);
     setTutorialIdx(lv.hasWalkthrough ? 0 : null);
@@ -577,9 +596,10 @@ export default function App() {
           forgeStats: { ...forgeStatsRef.current, practice: [...forgeStatsRef.current.practice] },
         });
       },
-    });
+    }, settings.difficulty || 'normal', difficultyDialsRef.current);
     engine.setFocusMode(settings.focusMode);
     engine.setDifficulty(settings.difficulty || 'normal');
+    engine.setDifficultyDials(difficultyDialsRef.current);
     if (settings.focusMode) {
       engine.setSpeed(0.5, true);
     }
@@ -1059,7 +1079,8 @@ export default function App() {
           locks={locks}
           azureStatus={azureStatus}
           teacherMode={teacherMode}
-          onTurnOffTeacherMode={() => setTeacherMode(false)}
+          builderMode={builderMode}
+          onTurnOffTeacherMode={handleTurnOffTeacherAndBuilderMode}
           onSelectLevel={(levelId) => dispatch({ type: 'SELECT_LEVEL', levelId })}
           onChangeDifficulty={handleChangeDifficulty}
           onStartBasicTraining={() =>
@@ -1116,7 +1137,8 @@ export default function App() {
                 lockBonusFlash={lockBonusFlash}
                 spanishCaptions={settings.spanishCaptions}
                 teacherMode={teacherMode}
-                onTurnOffTeacherMode={() => setTeacherMode(false)}
+                builderMode={builderMode}
+                onTurnOffTeacherMode={handleTurnOffTeacherAndBuilderMode}
                 onClearLocks={(pattern) => handleClearLocks(false, pattern)}
                 onWalkthroughNext={() => {
                   sound.sfx('tap');
@@ -1176,6 +1198,11 @@ export default function App() {
               tutorialHighlight={activeWalkthrough?.highlight === 'forge'}
               lastWordWarning={lastWordWarning}
               teacherMode={teacherMode}
+              wordsBetweenWaves={getWordsBetweenWaves(
+                activeLevel.waveEvery,
+                settings.difficulty || 'normal',
+                difficultyDials
+              )}
               onPay={handlePayCrystals}
               onWordForged={handleWordForged}
               onMegaForge={handleMegaForge}
@@ -1362,8 +1389,19 @@ export default function App() {
           settings={settings}
           azureStatus={azureStatus}
           teacherMode={teacherMode}
-          onEnterTeacherMode={() => setTeacherMode(true)}
-          onExitTeacherMode={() => setTeacherMode(false)}
+          builderMode={builderMode}
+          difficultyDials={difficultyDials}
+          onEnterTeacherMode={() => {
+            setTeacherMode(true);
+            setBuilderMode(false);
+          }}
+          onEnterBuilderMode={() => {
+            setTeacherMode(true);
+            setBuilderMode(true);
+          }}
+          onExitTeacherMode={handleTurnOffTeacherAndBuilderMode}
+          onChangeDifficultyDials={setDifficultyDials}
+          onResetDifficultyDials={() => setDifficultyDials(createDefaultDifficultyDials())}
           onChange={handleSettingsChange}
           onClearActiveLocks={() => handleClearLocks(false)}
           onClearAllLocks={() => handleClearLocks(true)}
