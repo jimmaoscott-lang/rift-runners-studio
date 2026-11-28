@@ -338,7 +338,7 @@ export const BASIC_TRAINING_LEVEL: LevelConfig = {
     countStep: 0.12,
   },
   finalBoost: 1.1,
-  hasWalkthrough: false,
+  hasWalkthrough: true,
   isPlacement: true,
   freePlacement: true,
   noBuildZones: [

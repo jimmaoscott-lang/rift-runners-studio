@@ -459,7 +459,7 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
   },
   {
     titleEs: 'Protege el sendero',
-    bodyEs: 'Te quedan 45 cristales. Haz clic en Foso de Púas abajo, muévelo sobre el camino iluminado hasta que se ponga verde y haz clic para colocarlo.',
+    bodyEs: 'Haz clic en Foso de Púas abajo (40 cristales), muévelo sobre el camino iluminado hasta que se ponga verde y haz clic para colocarlo.',
   },
   {
     titleEs: 'Forja palabras para ganar cristales',
@@ -470,8 +470,8 @@ export const SPANISH_WALKTHROUGH_STEPS: Array<{ titleEs: string; bodyEs: string 
     bodyEs: 'Haz clic en cualquier defensor del mapa para ver su alcance, mejorarlo a Nivel 3 o venderlo para construir en otro lugar.',
   },
   {
-    titleEs: 'Sellos de Grieta y Poderes',
-    bodyEs: 'Llena los Sellos de Grieta (a e i) abajo a la izquierda con lecturas limpias para ganar +100 cristales extra y abrir la Oleada Final. Usa Impulso, Meteoro y Congelar arriba.',
+    titleEs: 'Niveles de Habilidad y Poderes',
+    bodyEs: 'Mira los Niveles de Habilidad abajo a la izquierda mientras lees. Cada nivel que superas abre niveles más altos para encontrar tu punto de partida. Usa Impulso, Meteoro y Congelar arriba.',
   },
   {
     titleEs: 'Listo para la Oleada 1',

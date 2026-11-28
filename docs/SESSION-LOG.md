@@ -2,6 +2,42 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-27: Moved Guided Walkthrough Tutorial to Runner Basic Training
+
+### Completed
+- **Walkthrough Placement (`src/data/placement.ts`, `src/data/level1.ts`)**:
+  - Enabled `hasWalkthrough: true` on `BASIC_TRAINING_LEVEL` (`placement`) and set `hasWalkthrough: false` on `LEVEL1` (`w1-l1`) so students learn tower placement, Rune Forge reading, upgrades, Hero Powers, and Skill Tiers during Runner Basic Training while the game finds their starting skill level.
+- **Basic Training Steps, Highlighting & Spanish Captions (`src/App.tsx`, `src/components/BattleHUD.tsx`, `src/data/ellSpanish.ts`)**:
+  - Updated Step 3 (`Guard the Trail`) to reference Spike Pit's 40-crystal cost cleanly instead of Level 1's leftover crystal count.
+  - Updated Step 6 (`Skill Tiers & Hero Powers`) to explain the Skill Tiers ladder at the bottom-left and added the amber pulse highlight (`highlightLocks`) to the Basic Training Tiers bar in `BattleHUD.tsx`.
+  - Updated matching Spanish walkthrough captions in `SPANISH_WALKTHROUGH_STEPS` (steps 3 and 6).
+  - Kept the Skip button and the top-bar walkthrough toggle button active during Basic Training.
+- **Recorded Leda Voice Clips (`public/assets/audio/ui/sprite.mp3`, `public/assets/audio/ui/manifest.json`)**:
+  - Recorded the two updated step lines (`walk.bt.step3` and `walk.bt.step6`) in Leda's voice in one batched TTS call, verified both by listening, appended them via stream-copy concatenation onto `public/assets/audio/ui/sprite.mp3` with zero shift (`max PCM diff = 0` on all existing clips), and registered both under `"en"` in `manifest.json`. Zero loose audio files added.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Nov 27 decision moving the walkthrough into Runner Basic Training.
+
+### Next Up
+1. Launch Runner Basic Training to test the intro video flowing directly into the 7-step guided walkthrough while reading Skill Tier words, then sync to GitHub.
+
+## 2026-11-27: Finished Basic Training Intro Video (`rift-intro.mp4`)
+
+### Completed
+- **Static Intro Video Asset (`public/assets/video/rift-intro.mp4`)**:
+  - Copied Mr. Scott's finished intro video verbatim (`5,575,062` bytes, H.264 1280x720 + AAC audio, 22.04s, zero re-encoding) into `public/assets/video/rift-intro.mp4` and removed temporary attachment files from `public/assets/aistudio/`.
+- **Intro Video Player (`src/components/IntroVideoPlayer.tsx`, `src/App.tsx`)**:
+  - Added `IntroVideoPlayer` loading `/assets/video/rift-intro.mp4` through `assetUrl()` so it works locally and on GitHub Pages without using the teacher upload feature or temporary links.
+  - Plays with sound, full screen inside the game window with `object-contain` (zero cropping), and `playsInline`.
+  - Stops game music, narration, and SFX (`sound.stopSpeaking()`, `sound.setMusic(null)`, `sound.duck(2)`) while the video plays, then restores normal game audio (`sound.duck(0)`, `sound.setMusic('calm')`) afterward.
+  - Includes a clear top-right `Skip` button, a single-fire completion guard (`completedRef`) so Skip and video end both enter Basic Training strictly once, a large `Tap to Play` button if browser autoplay is blocked, and a `Continue` button if the video fails to load.
+  - Wired `src/App.tsx` so both `Start Basic Training` and `Retake Basic Training` (from both Title Screen and Results Screen) play `IntroVideoPlayer` in place of the Basic Training opening scene, then enter Basic Training.
+  - Left all other levels, their cutscenes, word lists, game balance, saved progress, images, narration, and scripts untouched.
+- **Housekeeping (`BUILD.md`)**:
+  - Recorded this approved exception to the cutscene pause under `"Mr. Scott's decisions"`, noting that the cutscene pause still applies to everything else.
+
+### Next Up
+1. Test `Start Basic Training` and `Retake Basic Training` to verify video playback with sound, Skip, and transition into Basic Training, then sync to GitHub.
+
 ## 2026-11-27 (S-11): Word List Fixes (Tap Choices, Runes, and Pattern Cleanup)
 
 ### Completed

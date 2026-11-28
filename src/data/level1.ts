@@ -1314,7 +1314,7 @@ export const LEVEL1: LevelConfig = {
     countStep: 0.12,
   },
   finalBoost: 1.2,
-  hasWalkthrough: true,
+  hasWalkthrough: false,
   freePlacement: true,
   noBuildZones: [
     // Large mossy boulders on open grass

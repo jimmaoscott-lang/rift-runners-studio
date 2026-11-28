@@ -51,6 +51,7 @@ export interface WalkthroughInfo {
   highlight: 'archer' | 'pad' | 'spike' | 'forge' | 'wave' | 'tower' | 'locks';
   canManualNext: boolean;
   isLast: boolean;
+  audioId?: string;
 }
 
 export interface WaveBannerInfo {
@@ -492,7 +493,7 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
                 type="button"
                 onClick={() =>
                   sound.speakUI(
-                    `walk.step${walkthrough.stepNum}`,
+                    walkthrough.audioId || `walk.step${walkthrough.stepNum}`,
                     `${walkthrough.title}. ${walkthrough.body}`
                   )
                 }
@@ -628,7 +629,13 @@ export const BattleHUD: React.FC<BattleHUDProps> = ({
 
       {/* Compact Bottom-Left Bar: Placement Skill Ladder in Basic Training, or Rift Locks in Campaign */}
       {level.isPlacement && placementRun ? (
-        <div className="pointer-events-auto absolute bottom-2 left-2 z-20 flex max-w-[calc(100%-16px)] items-center gap-1.5 overflow-x-auto rounded-xl border-2 border-emerald-400/70 bg-[#121a2d]/95 px-2.5 py-1.5 shadow-xl">
+        <div
+          className={`pointer-events-auto absolute bottom-2 left-2 z-20 flex max-w-[calc(100%-16px)] items-center gap-1.5 overflow-x-auto rounded-xl border-2 bg-[#121a2d]/95 px-2.5 py-1.5 shadow-xl transition-all ${
+            highlightLocks
+              ? 'border-amber-300 animate-tutorial-pulse'
+              : 'border-emerald-400/70'
+          }`}
+        >
           <div className="flex flex-col items-center justify-center gap-0.5 pr-1.5 border-r border-emerald-500/35 text-[9px] font-extrabold tracking-wider text-emerald-200 uppercase shrink-0">
             <Sparkles className="h-3 w-3 text-emerald-300" />
             <span>Tiers</span>

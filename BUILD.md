@@ -22,6 +22,8 @@ Settled. Do not change them unless Mr. Scott says so.
 - Nov 27: the 150 file and 15 MB numbers apply to each sync, not to the whole repo. See the GitHub Sync Rules in section 6.
 - Nov 27: Expert grace part 1: on Expert, a word read right on the second try earns half crystals (real word 6, rune 13). Misses never cost crystals. One miss never ends a level; missing many words can, and that is intended.
 - Nov 27: word list rules (Claude): tap choices are heard, so a choice never sounds like its word, never sounds like a crude or hurtful word, and never pairs short i with short e before m or n (pin and pen sound alike for many Gulf Coast students). Words on screen use only patterns taught so far. Claude checks every word list before a level ships. Use only words that already have a clip in public/assets/audio/words, or record new ones in Leda's voice.
+- Nov 27: one approved exception to the cutscene pause: the finished intro video at public/assets/video/rift-intro.mp4 plays in place of the Basic Training opening scene when a student presses Start Basic Training or Retake Basic Training. The cutscene pause still applies to all other cutscenes, images, narration and scripts.
+- Nov 27: the guided walkthrough tutorial now runs inside Runner Basic Training as students find their skill level, instead of World 1 Level 1. Students may still skip the walkthrough.
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 

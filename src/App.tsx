@@ -45,6 +45,7 @@ import {
 import { speech } from './lib/speech';
 import { BattleHUD, WalkthroughInfo, WaveBannerInfo } from './components/BattleHUD';
 import { CutscenePlayer } from './components/CutscenePlayer';
+import { IntroVideoPlayer } from './components/IntroVideoPlayer';
 import { EllSupportModal } from './components/EllSupportModal';
 import { BattleEndData, ResultsScreen } from './components/ResultsScreen';
 import {
@@ -109,9 +110,10 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
   },
   {
     title: 'Guard the Trail',
-    body: 'You have 45 crystals left. Click Spike Pit below, move onto the glowing trail until it turns green, and click to snap it in place.',
+    body: 'Click Spike Pit below (40 crystals), move onto the glowing trail until it turns green, and click to snap it in place.',
     highlight: 'spike',
     canManualNext: true,
+    audioId: 'walk.bt.step3',
   },
   {
     title: 'Forge Words for Crystals',
@@ -126,10 +128,11 @@ const WALKTHROUGH_STEPS: Omit<WalkthroughInfo, 'stepNum' | 'totalSteps' | 'isLas
     canManualNext: true,
   },
   {
-    title: 'Rift Locks & Hero Powers',
-    body: 'Fill both Rift Locks (a and i) at the bottom-left with clean reads to earn +100 bonus crystals and unlock the Final Wave. Use Rally, Meteor, and Freeze on the top bar when charged.',
+    title: 'Skill Tiers & Hero Powers',
+    body: 'Watch the Skill Tiers at the bottom-left as you read. Each tier you clear opens higher levels to find your starting skill. Use Rally, Meteor, and Freeze on the top bar when charged.',
     highlight: 'locks',
     canManualNext: true,
+    audioId: 'walk.bt.step6',
   },
   {
     title: 'Ready for Wave 1',
@@ -1095,20 +1098,23 @@ export default function App() {
         />
       )}
 
-      {state.scene === 'cutscene' && (
-        <CutscenePlayer
-          script={activeLevel.cutscenes[state.activeCutscene]}
-          wardenVoice={settings.wardenVoice}
-          customVideoUrl={customVideos[`${activeLevel.id}:${state.activeCutscene}`] || null}
-          reducedMotion={settings.reducedMotion}
-          spanishCaptions={settings.spanishCaptions}
-          teacherMode={teacherMode}
-          onComplete={() => dispatch({ type: 'CUTSCENE_DONE' })}
-          onOpenVoicePicker={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
-          onOpenEll={openEllModal}
-          onUploadCustomVideo={teacherMode ? handleUploadCustomVideo : undefined}
-        />
-      )}
+      {state.scene === 'cutscene' &&
+        (activeLevel.isPlacement && state.activeCutscene === 'opening' ? (
+          <IntroVideoPlayer onComplete={() => dispatch({ type: 'CUTSCENE_DONE' })} />
+        ) : (
+          <CutscenePlayer
+            script={activeLevel.cutscenes[state.activeCutscene]}
+            wardenVoice={settings.wardenVoice}
+            customVideoUrl={customVideos[`${activeLevel.id}:${state.activeCutscene}`] || null}
+            reducedMotion={settings.reducedMotion}
+            spanishCaptions={settings.spanishCaptions}
+            teacherMode={teacherMode}
+            onComplete={() => dispatch({ type: 'CUTSCENE_DONE' })}
+            onOpenVoicePicker={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
+            onOpenEll={openEllModal}
+            onUploadCustomVideo={teacherMode ? handleUploadCustomVideo : undefined}
+          />
+        ))}
 
       {state.scene === 'battle' && (
         <div className="flex h-full w-full flex-col overflow-hidden bg-[#120d26]">
@@ -1360,7 +1366,11 @@ export default function App() {
           }
           onPlayAgain={() => {
             setShowHalfSpeedTip(false);
-            dispatch({ type: 'START_DIRECT_BATTLE' });
+            if (activeLevel.isPlacement) {
+              dispatch({ type: 'START_LEVEL_WITH_OPENING', levelId: 'placement' });
+            } else {
+              dispatch({ type: 'START_DIRECT_BATTLE' });
+            }
           }}
           onReplayCutscene={() =>
             dispatch({
