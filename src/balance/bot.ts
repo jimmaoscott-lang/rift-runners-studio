@@ -613,11 +613,15 @@ function estimateTotalBudget(
   const runeHelpPay = Math.round(FORGE_CONFIG.rune * FORGE_CONFIG.helpShare);
   const avgClean = (1 - level.runeRate) * realCleanPay + level.runeRate * FORGE_CONFIG.rune;
   const avgMiss = (1 - level.runeRate) * realHelpPay + level.runeRate * runeHelpPay;
-  const perWord = accuracy * avgClean + (1 - accuracy) * avgMiss;
-  const megaBonus = Math.pow(accuracy, FORGE_CONFIG.megaPips) * (FORGE_CONFIG.mega / FORGE_CONFIG.megaPips);
-  const wordsTotal = planWaves * level.waveEvery;
-  const readTotal = wordsTotal * (perWord + megaBonus);
-  const lockTotal = accuracy >= 0.75 ? level.vowels.length * FORGE_CONFIG.lockBonus : 0;
+  let readTotal = 0;
+  for (let w = 0; w < planWaves; w++) {
+    const waveAcc = accuracy >= 1 ? 1 : Math.min(0.95, accuracy + w * 0.05);
+    const perWord = waveAcc * avgClean + (1 - waveAcc) * avgMiss;
+    const megaBonus =
+      Math.pow(waveAcc, FORGE_CONFIG.megaPips) * (FORGE_CONFIG.mega / FORGE_CONFIG.megaPips);
+    readTotal += level.waveEvery * (perWord + megaBonus);
+  }
+  const lockTotal = level.vowels.length * FORGE_CONFIG.lockBonus;
   let waveBonusTotal = 0;
   for (let w = 1; w <= planWaves; w++) waveBonusTotal += 15 + w * 5;
   const killEstimate = planWaves * 85;
@@ -639,43 +643,76 @@ function generateRandomGenes(
   const allTypes = level.defenders;
 
   const estBudget = estimateTotalBudget(level, accuracy, maxPlanWave, readMode, startCrystalsOverride);
-  // Vary strategy archetype across random plans: wide (more towers) vs tall (fewer towers, heavy specs)
+  // Vary strategy archetype across random plans: tall (fewer towers, heavy specs), balanced, or wide
   const archetypeRoll = rng();
-  const minCount = archetypeRoll < 0.35 ? 4 : archetypeRoll < 0.75 ? 6 : 8;
+  const minCount = archetypeRoll < 0.3 ? 5 : archetypeRoll < 0.75 ? 7 : 9;
   const maxCount = Math.min(
     towerSpots.length + trailSpots.length,
-    Math.max(minCount + 1, Math.min(14, Math.round(estBudget / 170)))
+    Math.max(minCount + 1, Math.min(14, Math.round(estBudget / 160)))
   );
   const desiredTowers = randInt(rng, minCount, Math.max(minCount, maxCount));
 
-  // Estimate Wave 1 affordable budget so first 1-3 towers actually build before Wave 1
-  const wave1ReadMin = level.waveEvery * Math.round(FORGE_CONFIG.real * FORGE_CONFIG.helpShare);
+  // Estimate realistic Wave-1 crystal budget (startCrystals + expected pre-wave-1 reading)
+  const realCleanPay = readMode === 'speak' ? FORGE_CONFIG.speak : FORGE_CONFIG.real;
+  const realHelpPay = Math.round(FORGE_CONFIG.real * FORGE_CONFIG.helpShare);
+  const runeHelpPay = Math.round(FORGE_CONFIG.rune * FORGE_CONFIG.helpShare);
+  const avgClean = (1 - level.runeRate) * realCleanPay + level.runeRate * FORGE_CONFIG.rune;
+  const avgMiss = (1 - level.runeRate) * realHelpPay + level.runeRate * runeHelpPay;
+  const expectedWave1Read =
+    level.waveEvery * (accuracy * avgClean + (1 - accuracy) * avgMiss) +
+    (accuracy >= 0.8 ? Math.pow(accuracy, FORGE_CONFIG.megaPips) * FORGE_CONFIG.mega : 0);
   const startCrystals = startCrystalsOverride ?? level.startCrystals;
-  const wave1Budget = startCrystals + wave1ReadMin + Math.round(level.waveEvery * accuracy * 14);
+  const wave1Budget = Math.round(startCrystals + expectedWave1Read * (0.85 + rng() * 0.25));
+
+  // Choose 1 or 2 high-coverage choke anchors for clustered killbox placement (75% of plans)
+  const useKillbox = rng() < 0.78;
+  const allSpotsSorted = [...towerSpots, ...trailSpots].sort((a, b) => b.coverage - a.coverage);
+  const topAnchorCutoff = Math.max(1, Math.ceil(allSpotsSorted.length * 0.45));
+  const anchor1 = allSpotsSorted[Math.floor(rng() * topAnchorCutoff)] || allSpotsSorted[0];
+  let anchor2: PlacementSpot | null = null;
+  if (useKillbox && rng() < 0.4 && allSpotsSorted.length > 4) {
+    const farCandidates = allSpotsSorted
+      .slice(0, Math.max(4, Math.ceil(allSpotsSorted.length * 0.7)))
+      .filter((s) => Math.hypot(s.x - anchor1.x, s.y - anchor1.y) > 180);
+    if (farCandidates.length > 0) {
+      anchor2 = pick(rng, farCandidates);
+    }
+  }
 
   const genes: InternalTowerGene[] = [];
 
-  // Prefer higher-coverage spots with controlled randomness so random search explores good ground
   const pickSpot = (kind: 'tower' | 'trail'): PlacementSpot | null => {
     const pool = (kind === 'trail' ? trailSpots : towerSpots).filter((s) =>
       canPlaceAtSpot(s, genes)
     );
     if (pool.length === 0) return null;
-    if (rng() < 0.65) {
-      // Top half by coverage
+
+    if (useKillbox && anchor1) {
+      const targetAnchor = anchor2 && rng() < 0.35 ? anchor2 : anchor1;
+      const byNear = [...pool].sort((a, b) => {
+        const da = Math.hypot(a.x - targetAnchor.x, a.y - targetAnchor.y) - a.coverage * 2.2;
+        const db = Math.hypot(b.x - targetAnchor.x, b.y - targetAnchor.y) - b.coverage * 2.2;
+        return da - db;
+      });
+      const cutoff = Math.max(1, Math.min(byNear.length, randInt(rng, 2, 5)));
+      return byNear[Math.floor(rng() * cutoff)];
+    }
+
+    if (rng() < 0.7) {
       const ranked = [...pool].sort((a, b) => b.coverage - a.coverage);
-      const cutoff = Math.max(1, Math.ceil(ranked.length * 0.55));
+      const cutoff = Math.max(1, Math.ceil(ranked.length * 0.5));
       return ranked[Math.floor(rng() * cutoff)];
     }
     return pick(rng, pool);
   };
 
+  const trailShare = availableTrails.length > 0 ? 0.28 + rng() * 0.18 : 0;
+  const planHorizon = Math.max(2, Math.min(maxPlanWave, level.waves.length));
   let wave1Spent = 0;
 
   for (let i = 0; i < desiredTowers; i++) {
-    // Pick tower vs trail type (usually 65-80% ranged towers, 20-35% trail traps/golems)
     let type: DefenderType;
-    const wantTrail = availableTrails.length > 0 && trailSpots.length > 0 && rng() < 0.28;
+    const wantTrail = availableTrails.length > 0 && trailSpots.length > 0 && rng() < trailShare;
     if (wantTrail) {
       type = pick(rng, availableTrails);
     } else if (availableTowers.length > 0 && towerSpots.length > 0) {
@@ -687,7 +724,6 @@ function generateRandomGenes(
     const kind = DEFENDERS[type].kind;
     let spot = pickSpot(kind);
     if (!spot) {
-      // Fallback to other kind if one category ran out of pads
       const altTypes = kind === 'trail' ? availableTowers : availableTrails;
       if (altTypes.length === 0) break;
       type = pick(rng, altTypes);
@@ -697,35 +733,35 @@ function generateRandomGenes(
 
     const cost = DEFENDERS[type].cost;
     let buyBeforeWave: number;
-    if (i === 0 || (wave1Spent + cost <= wave1Budget && i < 3 && rng() < 0.85)) {
+    if (i === 0 || (wave1Spent + cost <= wave1Budget && i < 6 && rng() < 0.9)) {
       buyBeforeWave = 1;
       wave1Spent += cost;
     } else {
-      buyBeforeWave = randInt(rng, 1, Math.max(2, Math.min(maxPlanWave, level.waves.length + 1)));
+      buyBeforeWave = randInt(rng, 2, planHorizon);
     }
 
-    // Decide upgrade path depth based on archetype
+    // Decide upgrade path depth based on archetype and wave horizon
     const upRoll = rng();
-    const tallBias = archetypeRoll < 0.35 ? 0.22 : archetypeRoll < 0.75 ? 0.08 : -0.1;
+    const tallBias = archetypeRoll < 0.3 ? 0.24 : archetypeRoll < 0.75 ? 0.1 : -0.06;
     let lv2Wave: number | null = null;
     let lv3Wave: number | null = null;
     let spec: 'a' | 'b' | null = null;
     let specWave: number | null = null;
 
-    if (upRoll < 0.82 + tallBias) {
-      lv2Wave = Math.min(maxPlanWave, buyBeforeWave + randInt(rng, 0, 2));
-      if (upRoll < 0.58 + tallBias) {
-        lv3Wave = Math.min(maxPlanWave, lv2Wave + randInt(rng, 1, 2));
-        if (upRoll < 0.38 + tallBias) {
+    if (upRoll < 0.86 + tallBias) {
+      lv2Wave = Math.min(planHorizon, buyBeforeWave + randInt(rng, 0, 1));
+      if (upRoll < 0.65 + tallBias) {
+        lv3Wave = Math.min(planHorizon, lv2Wave + randInt(rng, 1, 2));
+        if (upRoll < 0.48 + tallBias) {
           spec = rng() < 0.5 ? 'a' : 'b';
-          specWave = Math.min(maxPlanWave, lv3Wave + randInt(rng, 1, 2));
+          specWave = Math.min(planHorizon, lv3Wave + randInt(rng, 0, 2));
         }
       }
     }
 
     const defaultMode: TargetPriority = type === 'rail' ? 'strong' : 'first';
     const targetMode: TargetPriority =
-      rng() < 0.85 ? defaultMode : pick(rng, ['first', 'strong', 'last'] as const);
+      rng() < 0.88 ? defaultMode : pick(rng, ['first', 'strong', 'last'] as const);
 
     const gene: InternalTowerGene = {
       type,
@@ -778,20 +814,25 @@ function mutateGenes(
         }
         g.targetMode = g.type === 'rail' ? 'strong' : g.targetMode;
       } else {
-        // Cross-kind swap with a legal spot of the other kind
+        // Cross-kind swap with a legal spot of the other kind near current position
         const otherKind = DEFENDERS[g.type].kind === 'trail' ? 'tower' : 'trail';
         const otherTypes = otherKind === 'trail' ? availableTrails : availableTowers;
         const otherSpots = (otherKind === 'trail' ? trailSpots : towerSpots).filter((s) =>
           canPlaceAtSpot(s, child, idx)
         );
         if (otherTypes.length > 0 && otherSpots.length > 0) {
+          otherSpots.sort(
+            (a, b) =>
+              Math.hypot(a.x - g.spot.x, a.y - g.spot.y) -
+              Math.hypot(b.x - g.spot.x, b.y - g.spot.y)
+          );
           g.type = pick(rng, otherTypes);
-          g.spot = pick(rng, otherSpots);
+          g.spot = otherSpots[Math.floor(rng() * Math.min(4, otherSpots.length))];
           g.targetMode = g.type === 'rail' ? 'strong' : 'first';
         }
       }
     } else if (op < 0.56) {
-      // 2. Move a tower to another legal spot of the same kind
+      // 2. Move a tower to another legal spot (60% clustered near an existing tower or high-coverage bend)
       const idx = Math.floor(rng() * child.length);
       const g = child[idx];
       const kind = DEFENDERS[g.type].kind;
@@ -799,7 +840,16 @@ function mutateGenes(
         (s) => s.id !== g.spot.id && canPlaceAtSpot(s, child, idx)
       );
       if (legalSpots.length > 0) {
-        g.spot = pick(rng, legalSpots);
+        if (rng() < 0.6 && child.length > 1) {
+          const ref = child[(idx + 1 + Math.floor(rng() * (child.length - 1))) % child.length].spot;
+          legalSpots.sort(
+            (a, b) =>
+              Math.hypot(a.x - ref.x, a.y - ref.y) - Math.hypot(b.x - ref.x, b.y - ref.y)
+          );
+          g.spot = legalSpots[Math.floor(rng() * Math.min(4, legalSpots.length))];
+        } else {
+          g.spot = pick(rng, legalSpots);
+        }
       }
     } else if (op < 0.86) {
       // 3. Change upgrade order / timing or spec branch

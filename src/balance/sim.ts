@@ -790,15 +790,23 @@ class HeadlessBattleSim {
     return chosen;
   }
 
+  private getCurrentReadingAccuracy(): number {
+    // Learning reading curve: starts at chosen accuracy, gains +5% after each completed wave,
+    // capped at 95% (100% stays 100%).
+    if (this.accuracy >= 1) return 1;
+    return Math.min(0.95, this.accuracy + this.wave * 0.05);
+  }
+
   private runPreWaveReading(): { readingCrystals: number; lockCrystals: number } {
     const wordsCount = this.getWordsPerWave();
+    const curAccuracy = this.getCurrentReadingAccuracy();
     let readingCrystals = 0;
     let lockCrystals = 0;
 
     for (let i = 0; i < wordsCount; i++) {
       const entry = this.pickSimulatedWord();
       const isRune = entry.kind === 'rune';
-      const isClean = this.rng() < this.accuracy;
+      const isClean = this.rng() < curAccuracy;
 
       this.totalWordsRead += 1;
 

@@ -20,6 +20,8 @@ import {
   LabWorkerMessage,
   LevelLabResult,
   TargetStatus,
+  W1_L1_DEFAULT_TARGETS,
+  W1L1Targets,
 } from '../balance/labTypes';
 import { ReadingAccuracy, SimDials } from '../balance/sim';
 
@@ -80,13 +82,14 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
   const [resultsByLevel, setResultsByLevel] = useState<
     Partial<Record<LevelId, LevelLabResult>>
   >({});
+  const [targets, setTargets] = useState<W1L1Targets>(W1_L1_DEFAULT_TARGETS);
   const [progress, setProgress] = useState<{
     completedUnits: number;
     totalUnits: number;
     levelId?: LevelId;
     difficulty?: DifficultyId;
     readingAccuracy?: ReadingAccuracy;
-    phase: 'idle' | 'sim' | 'suggest' | 'done' | 'stopped';
+    phase: 'idle' | 'calibrate' | 'sim' | 'suggest' | 'done' | 'stopped';
   }>({ completedUnits: 0, totalUnits: 1, phase: 'idle' });
   const [elapsedMs, setElapsedMs] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -181,7 +184,9 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
       const msg = event.data;
       if (!msg || msg.runId !== runIdRef.current) return;
 
-      if (msg.type === 'progress') {
+      if (msg.type === 'targets') {
+        setTargets(msg.targets);
+      } else if (msg.type === 'progress') {
         setProgress({
           completedUnits: msg.completedUnits,
           totalUnits: msg.totalUnits,
@@ -295,7 +300,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
 
   const handleCopyResults = useCallback(async () => {
     if (!hasAnyCell) return;
-    const text = formatLabResultsPlainText(runLevelIds, resultsByLevel);
+    const text = formatLabResultsPlainText(runLevelIds, resultsByLevel, targets);
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -310,7 +315,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2200);
-  }, [hasAnyCell, resultsByLevel, runLevelIds]);
+  }, [hasAnyCell, resultsByLevel, runLevelIds, targets]);
 
   const pctRatio =
     progress.totalUnits > 0
@@ -328,6 +333,12 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
     }
     const lv = progress.levelId ? LEVELS[progress.levelId] : null;
     const lvLabel = lv ? `${lv.id.toUpperCase()} (${lv.name})` : '';
+    if (progress.phase === 'calibrate') {
+      const dLabel = progress.difficulty
+        ? ` · ${DIFFICULTIES[progress.difficulty].label}`
+        : '';
+      return `Calibrating W1-L1 baseline${dLabel}`;
+    }
     if (progress.phase === 'suggest') {
       const dLabel = progress.difficulty
         ? ` · ${DIFFICULTIES[progress.difficulty].label}`
@@ -339,7 +350,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
       : '';
     const aLabel =
       progress.readingAccuracy !== undefined
-        ? `${fmtPct(progress.readingAccuracy)} reading`
+        ? `Starts at ${fmtPct(progress.readingAccuracy)}`
         : '';
     return `Testing ${lvLabel} · ${dLabel} · ${aLabel}`;
   }, [progress, runLevelIds.length]);
@@ -449,10 +460,32 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
-          <span>Target diagonal: Easy 40% · Normal 60% · Hard 80% · Expert 100%</span>
-          <span className="text-emerald-300">Green: Win, 30% to 70% Anchor</span>
-          <span className="text-amber-300">Yellow: Close</span>
-          <span className="text-rose-300">Red: Lost or &gt;85% Anchor</span>
+          <span>Learning curve: +5% per wave (cap 95%; 100% stays 100%)</span>
+          <span className="text-emerald-300">Green: within 10 pts of W1-L1</span>
+          <span className="text-amber-300">Yellow: within 20 pts</span>
+          <span className="text-rose-300">Red: beyond 20 pts</span>
+        </div>
+      </div>
+
+      {/* W1-L1 Calibrated Targets Strip */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 border-b border-slate-800 bg-[#0d1322] px-6 py-2.5 shrink-0">
+        <span className="text-[11px] font-semibold tracking-wide text-cyan-300 uppercase">
+          W1-L1 targets
+        </span>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono tabular-nums text-xs text-slate-200">
+          {DIFFICULTY_ORDER.map((diff) => {
+            const t = targets[diff];
+            return (
+              <span key={diff} className="whitespace-nowrap">
+                <span className="text-slate-400">
+                  {DIFFICULTIES[diff].label} ({fmtPct(t.startAccuracy)}):
+                </span>{' '}
+                <strong className="font-semibold text-white">
+                  {fmtPct(t.winRate)} win · {fmtPct(t.anchorPct)} Anchor
+                </strong>
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -499,9 +532,10 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
             <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
               Pick a single level or All levels above and press Run. Each cell runs
               the headless robot player in a background Web Worker across 200 random
-              plans plus 3 refinement rounds on the top 20, then reports the average
-              of the good (75th percentile) and optimal plans. Any red target cell
-              receives tested startCrystals and balance suggestions.
+              plans plus 3 refinement rounds on the top 20 using the learning reading
+              curve (+5% accuracy per wave, capped at 95%), then compares each
+              difficulty target cell against W1-L1. Any red target cell receives
+              tested startCrystals and balance suggestions.
             </p>
           </div>
         ) : (
@@ -544,7 +578,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
                         <th className="py-2.5 pl-4 pr-3 w-32">Difficulty</th>
                         {LAB_ACCURACIES.map((acc) => (
                           <th key={acc} className="px-3 py-2.5 font-mono tabular-nums">
-                            Reading {fmtPct(acc)}
+                            Starts at {fmtPct(acc)}
                           </th>
                         ))}
                       </tr>
@@ -662,7 +696,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
                         >
                           <div className="flex flex-wrap items-baseline gap-2">
                             <span className="font-semibold text-slate-100">
-                              {DIFFICULTIES[s.difficulty].label} @{' '}
+                              {DIFFICULTIES[s.difficulty].label} @ Starts at{' '}
                               {fmtPct(s.readingAccuracy)}
                             </span>
                             <span className="text-[11px] text-rose-300">
