@@ -9,6 +9,9 @@ import {
   DIFFICULTIES,
   DifficultyId,
   FORGE_CONFIG,
+  HERO_POWER_ORDER,
+  HERO_POWERS,
+  HeroPowerId,
   LevelConfig,
   LevelId,
   LEVELS,
@@ -91,6 +94,8 @@ export interface SimInput {
   overrideStartCrystals?: number;
   /** Optional override for level.balance[difficulty] (used by Balance Lab what-if probes). */
   overrideBalanceScale?: number;
+  /** When true, automatically casts charged Hero Powers (Rally, Meteor, Freeze). Default: true. */
+  useHeroPowers?: boolean;
 }
 
 export interface WaveSnapshot {
@@ -137,6 +142,8 @@ export interface SimResult {
   bonusTotal: number;
   bonusCompleted: boolean;
   bonusAnchorFell: boolean;
+  powersUsed: number;
+  leakedByType: Partial<Record<CreatureType, { count: number; anchorDmg: number }>>;
   waves: WaveSnapshot[];
   placementWarnings: string[];
 }
@@ -225,6 +232,14 @@ interface SpawnTicket {
   type: CreatureType;
   at: number;
   hpMult: number;
+}
+
+interface MeteorRuntime {
+  tx: number;
+  ty: number;
+  age: number;
+  life: number;
+  impacted: boolean;
 }
 
 type PlanAction =
@@ -390,6 +405,7 @@ class HeadlessBattleSim {
   private readonly validatePlacement: boolean;
   private readonly dial: { healthPct: number; speedPct: number; countPct: number; extraWords: number };
   private readonly overrideBalanceScale?: number;
+  private readonly useHeroPowers: boolean;
   private readonly rng: () => number;
 
   private readonly path: SmoothPath;
@@ -403,6 +419,7 @@ class HeadlessBattleSim {
   private defendersByPlan = new Map<number, DefenderRuntime>();
   private creatures: CreatureRuntime[] = [];
   private projectiles: ProjectileRuntime[] = [];
+  private meteors: MeteorRuntime[] = [];
   private spawnQueue: SpawnTicket[] = [];
   private idCounter = 1;
 
@@ -425,9 +442,16 @@ class HeadlessBattleSim {
   private win = false;
   private outcome: 'win' | 'loss' | 'max_waves' | 'wave_timeout' = 'loss';
 
-  // Per-wave telemetry counters
+  // Hero powers state (CanvasBattleEngine.ts lines 435-437, 451)
+  private powers: Record<HeroPowerId, number> = { rally: 0, meteor: 0, freeze: 0 };
+  private rallyTimer = 0;
+  private freezeTimer = 0;
+  private powersUsed = 0;
+
+  // Per-wave & leak telemetry counters
   private waveKills = 0;
   private waveKillCrystals = 0;
+  private leakedByType: Partial<Record<CreatureType, { count: number; anchorDmg: number }>> = {};
 
   // Forge reading & lock state
   private streak = 0;
@@ -468,6 +492,7 @@ class HeadlessBattleSim {
       extraWords: input.dials?.extraWords ?? 0,
     };
     this.overrideBalanceScale = input.overrideBalanceScale;
+    this.useHeroPowers = input.useHeroPowers ?? true;
     this.rng = createRng(input.seed ?? 1);
 
     this.crystals = input.overrideStartCrystals ?? level.startCrystals;
@@ -859,6 +884,14 @@ class HeadlessBattleSim {
       }
 
       this.locksReady = this.level.vowels.every((v) => this.sealedLocks.has(v));
+
+      // Hero powers charge +1 on every word read (CanvasBattleEngine.ts lines 1223-1228)
+      for (const id of HERO_POWER_ORDER) {
+        const max = HERO_POWERS[id].charge;
+        if (this.powers[id] < max) {
+          this.powers[id] = Math.min(max, this.powers[id] + 1);
+        }
+      }
     }
 
     return { readingCrystals, lockCrystals };
@@ -1282,9 +1315,165 @@ class HeadlessBattleSim {
     }
   }
 
+  // --- Hero Powers (CanvasBattleEngine.ts lines 1351-1428, 2157-2158, 2455, 3267-3334) ---
+
+  private castHeroPower(id: HeroPowerId): void {
+    const cfg = HERO_POWERS[id];
+    if (this.powers[id] < cfg.charge) return;
+
+    this.powers[id] = 0;
+    this.powersUsed += 1;
+
+    if (id === 'rally') {
+      this.rallyTimer = cfg.time || 10;
+    } else if (id === 'meteor') {
+      const alive = this.creatures.filter((c) => c.alive);
+      let targetPos: Vec2 = this.path.pointAt(0.42);
+      if (alive.length > 0) {
+        let best = alive[0];
+        let bestCount = -1;
+        for (const c of alive) {
+          let cnt = 0;
+          for (const o of alive) {
+            if (Math.hypot(o.x - c.x, o.y - c.y) < 150) cnt += 1;
+          }
+          if (cnt > bestCount) {
+            bestCount = cnt;
+            best = c;
+          }
+        }
+        targetPos = { x: best.x, y: best.y };
+      }
+      this.meteors.push({
+        tx: targetPos.x,
+        ty: targetPos.y,
+        age: 0,
+        life: 0.44,
+        impacted: false,
+      });
+    } else if (id === 'freeze') {
+      this.freezeTimer = cfg.time || 5;
+      for (const cr of this.creatures) {
+        if (!cr.alive) continue;
+        cr.freezeTimer = Math.max(cr.freezeTimer, this.freezeTimer);
+      }
+    }
+  }
+
+  private maybeCastHeroPowers(): void {
+    if (!this.useHeroPowers || this.creatures.length === 0) return;
+
+    const rallyReady =
+      this.powers.rally >= HERO_POWERS.rally.charge && this.rallyTimer <= 0;
+    const meteorReady = this.powers.meteor >= HERO_POWERS.meteor.charge;
+    const freezeReady =
+      this.powers.freeze >= HERO_POWERS.freeze.charge && this.freezeTimer <= 0;
+
+    if (!rallyReady && !meteorReady && !freezeReady) return;
+
+    // Count creatures currently inside defender range and detect bosses or imminent leaks
+    let inRangeCount = 0;
+    let inRangeHp = 0;
+    let bossInRange = false;
+    let maxInRangeS = 0;
+    let bossAlivePastEntry = false;
+    let maxAliveS = 0;
+
+    for (const cr of this.creatures) {
+      if (!cr.alive) continue;
+      if (cr.s > maxAliveS) maxAliveS = cr.s;
+      const isBoss = Boolean(CREATURES[cr.type].isBoss);
+      if (isBoss && cr.s >= 0.14) bossAlivePastEntry = true;
+
+      let covered = false;
+      for (const def of this.defenders) {
+        if (def.type === 'golem' && def.downTimer > 0) continue;
+        const st = this.getDefenderStats(def);
+        const radiusPx =
+          def.type === 'spike' || def.type === 'gravity'
+            ? (st.radius || 2.2) * RANGE_UNIT_PX
+            : def.type === 'golem'
+            ? 85
+            : (st.range || 6.4) * RANGE_UNIT_PX;
+        if (Math.hypot(cr.x - def.pad.x, cr.y - def.pad.y) <= radiusPx) {
+          covered = true;
+          break;
+        }
+      }
+      if (covered) {
+        inRangeCount += 1;
+        inRangeHp += cr.hp;
+        if (cr.s > maxInRangeS) maxInRangeS = cr.s;
+        if (isBoss) bossInRange = true;
+      }
+    }
+
+    if (meteorReady) {
+      let bestCluster = 0;
+      let bestClusterHasBoss = false;
+      let bestClusterMaxS = 0;
+      for (const c of this.creatures) {
+        if (!c.alive) continue;
+        let cnt = 0;
+        let hasBoss = false;
+        let clusterS = c.s;
+        for (const o of this.creatures) {
+          if (!o.alive) continue;
+          if (Math.hypot(o.x - c.x, o.y - c.y) < 150) {
+            cnt += 1;
+            if (CREATURES[o.type].isBoss) hasBoss = true;
+            if (o.s > clusterS) clusterS = o.s;
+          }
+        }
+        if (cnt > bestCluster) {
+          bestCluster = cnt;
+          bestClusterHasBoss = hasBoss;
+          bestClusterMaxS = clusterS;
+        }
+      }
+
+      if (
+        bossAlivePastEntry ||
+        bestClusterHasBoss ||
+        bestCluster >= 4 ||
+        (bestCluster >= 3 && bestClusterMaxS >= 0.32) ||
+        (bestCluster >= 2 && bestClusterMaxS >= 0.65) ||
+        maxAliveS >= 0.82
+      ) {
+        this.castHeroPower('meteor');
+      }
+    }
+
+    if (rallyReady) {
+      if (
+        bossInRange ||
+        inRangeCount >= 4 ||
+        (inRangeCount >= 3 && maxInRangeS >= 0.4) ||
+        (inRangeCount >= 2 && (inRangeHp >= 200 || maxInRangeS >= 0.65))
+      ) {
+        this.castHeroPower('rally');
+      }
+    }
+
+    if (freezeReady) {
+      if (
+        bossInRange ||
+        (inRangeCount >= 4 && maxInRangeS >= 0.28) ||
+        (inRangeCount >= 2 && maxInRangeS >= 0.6) ||
+        (inRangeCount >= 1 && maxInRangeS >= 0.72)
+      ) {
+        this.castHeroPower('freeze');
+      }
+    }
+  }
+
   // --- Simulation Step (CanvasBattleEngine.ts lines 2156-3256) ---
 
   private stepWaveTick(dt: number): 'running' | 'wave_cleared' | 'anchor_fell' {
+    // Hero power timers (CanvasBattleEngine.ts lines 2157-2158)
+    if (this.rallyTimer > 0) this.rallyTimer = Math.max(0, this.rallyTimer - dt);
+    if (this.freezeTimer > 0) this.freezeTimer = Math.max(0, this.freezeTimer - dt);
+
     // Spawn creatures during active wave (lines 2162-2168)
     this.waveClock += dt;
     while (this.spawnQueue.length > 0 && this.spawnQueue[0].at <= this.waveClock) {
@@ -1408,6 +1597,10 @@ class HeadlessBattleSim {
 
       if (cr.s >= 1) {
         cr.alive = false;
+        const prevLeak = this.leakedByType[cr.type] || { count: 0, anchorDmg: 0 };
+        prevLeak.count += 1;
+        prevLeak.anchorDmg += cr.anchorDmg;
+        this.leakedByType[cr.type] = prevLeak;
         this.anchor = Math.max(0, this.anchor - cr.anchorDmg);
         if (this.anchor <= 0) {
           return 'anchor_fell';
@@ -1426,8 +1619,11 @@ class HeadlessBattleSim {
 
     this.creatures = this.creatures.filter((c) => c.alive);
 
-    // Update defenders (lines 2455-3106; rateBoost = 1 since hero powers are not cast)
-    const rateBoost = 1;
+    // Cast charged Hero Powers when a big group or boss is in range
+    this.maybeCastHeroPowers();
+
+    // Update defenders (lines 2455-3106)
+    const rateBoost = this.rallyTimer > 0 ? 2 : 1;
     for (const def of this.defenders) {
       const st = this.getDefenderStats(def);
 
@@ -1850,6 +2046,24 @@ class HeadlessBattleSim {
       }
     }
 
+    // Meteor strikes (CanvasBattleEngine.ts lines 3267-3334)
+    for (let i = this.meteors.length - 1; i >= 0; i--) {
+      const m = this.meteors[i];
+      m.age += dt;
+      if (m.age >= m.life && !m.impacted) {
+        m.impacted = true;
+        for (const cr of this.creatures) {
+          if (cr.alive && Math.hypot(cr.x - m.tx, cr.y - m.ty) <= 195) {
+            this.damageCreature(cr, HERO_POWERS.meteor.dmg || 55, {
+              armorPierce: true,
+              damageType: 'true',
+            });
+          }
+        }
+        this.meteors.splice(i, 1);
+      }
+    }
+
     // Check wave completion (line 3196)
     if (this.spawnQueue.length === 0 && this.creatures.length === 0) {
       return 'wave_cleared';
@@ -1906,8 +2120,12 @@ class HeadlessBattleSim {
         wavesCleared += 1;
 
         // Between-wave recovery while reading next waveEvery words:
-        // in-flight projectiles finish, attack cooldowns ready, beams unlock, golems rebuild/regen.
+        // in-flight projectiles finish, attack cooldowns ready, beams unlock, golems rebuild/regen,
+        // and any temporary hero power timers expire before the next wave begins.
         this.projectiles = [];
+        this.meteors = [];
+        this.rallyTimer = 0;
+        this.freezeTimer = 0;
         for (const def of this.defenders) {
           def.cd = 0;
           def.beamTargetId = null;
@@ -2021,6 +2239,8 @@ class HeadlessBattleSim {
       bonusTotal,
       bonusCompleted,
       bonusAnchorFell: this.bonusAnchorFell,
+      powersUsed: this.powersUsed,
+      leakedByType: this.leakedByType,
       waves: this.waveSnapshots,
       placementWarnings: this.placementWarnings,
     };

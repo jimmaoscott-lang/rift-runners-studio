@@ -2,6 +2,7 @@
 // formatting for the Builder-only Balance Lab.
 
 import {
+  CreatureType,
   DIFFICULTIES,
   DIFFICULTY_ORDER,
   DifficultyId,
@@ -11,6 +12,10 @@ import {
 import { ReadingAccuracy, SimDials } from './sim';
 
 export const LAB_ACCURACIES: readonly ReadingAccuracy[] = [0.4, 0.6, 0.8, 1.0];
+
+export const LAB_WORD_ROLL_SEEDS = 5;
+export const SUGGEST_MIN_BALANCE = 0.4;
+export const SUGGEST_MAX_BALANCE = 1.2;
 
 export const TARGET_ACCURACY_BY_DIFF: Record<DifficultyId, ReadingAccuracy> = {
   easy: 0.4,
@@ -29,15 +34,16 @@ export interface DifficultyTarget {
 export type W1L1Targets = Record<DifficultyId, DifficultyTarget>;
 
 /**
- * Measured W1-L1 paired baseline targets under default difficulty dials and
- * the learning reading curve (+5% after each wave, capped at 95%; 100% stays 100%).
+ * Measured W1-L1 paired baseline targets under default difficulty dials,
+ * skilled robot (Hero Powers + counter-aware buying), learning reading curve
+ * (+5% after each wave, cap 95%; 100% stays 100%), and 5 word-roll seeds per cell.
  * Recomputed live if custom Builder difficulty dials are applied.
  */
 export const W1_L1_DEFAULT_TARGETS: W1L1Targets = {
   easy: { difficulty: 'easy', startAccuracy: 0.4, winRate: 1, anchorPct: 1 },
   normal: { difficulty: 'normal', startAccuracy: 0.6, winRate: 1, anchorPct: 1 },
-  hard: { difficulty: 'hard', startAccuracy: 0.8, winRate: 1, anchorPct: 0.625 },
-  expert: { difficulty: 'expert', startAccuracy: 1.0, winRate: 1, anchorPct: 0.8 },
+  hard: { difficulty: 'hard', startAccuracy: 0.8, winRate: 1, anchorPct: 0.95 },
+  expert: { difficulty: 'expert', startAccuracy: 1.0, winRate: 1, anchorPct: 1 },
 };
 
 export type TargetStatus = 'green' | 'yellow' | 'red';
@@ -117,16 +123,21 @@ export interface LabCellResult {
   targetStatus?: TargetStatus;
   targetReason?: TargetReason;
   targetLabel?: string;
-  /** Average win rate of good (75th pct) and optimal (best) plans: 0, 0.5, or 1. */
+  /** Average win rate of good (75th pct) and optimal (best) plans across word-roll seeds. */
   winRate: number;
-  /** Average Anchor health fraction (0..1) of good and optimal plans. */
+  /** Average Anchor health fraction (0..1) of good and optimal plans across word-roll seeds. */
   anchorPct: number;
   anchorLeft: number;
   anchorMax: number;
+  wordRollSeeds: number;
   optimalWon: boolean;
+  optimalWinRate: number;
   optimalAnchorPct: number;
   goodWon: boolean;
+  goodWinRate: number;
   goodAnchorPct: number;
+  mostLeakedCreature?: string;
+  mostLeakedType?: CreatureType;
   wave1AnchorLost: number;
   endCrystalsOptimal: number;
   evaluatedCount: number;
@@ -147,6 +158,9 @@ export interface RedCellSuggestion {
   predictedAnchorPct: number;
   predictedStatus: TargetStatus;
   predictedLabel: string;
+  needsWaveRedesign: boolean;
+  mostLeakedCreature?: string;
+  mostLeakedType?: CreatureType;
   note: string;
 }
 
@@ -241,9 +255,11 @@ export function formatLabResultsPlainText(
 ): string {
   const lines: string[] = [
     'Rift Runners Balance Lab Results',
+    `Bot: Skilled student (Rally/Meteor/Freeze hero powers + counter-aware buying, ${LAB_WORD_ROLL_SEEDS} word-roll seeds per cell)`,
     'Reading model: Starts at column accuracy, +5% after each wave (cap 95%; 100% stays 100%)',
     `W1-L1 targets: ${formatTargetsSummaryLine(targets)}`,
     'Markers: [G] Within 10 pts of W1-L1, [Y] Within 20 pts, [R] Beyond 20 pts',
+    `Suggestion bounds: startCrystals 1x to 2x, balance ${SUGGEST_MIN_BALANCE.toFixed(2)} to ${SUGGEST_MAX_BALANCE.toFixed(2)}`,
     '',
   ];
 
@@ -301,9 +317,18 @@ export function formatLabResultsPlainText(
       }
       for (const s of res.suggestions) {
         const dName = DIFFICULTIES[s.difficulty].label;
-        lines.push(
-          `  ${dName} @ Starts at ${fmtPct(s.readingAccuracy)} (${s.currentStatusLabel}): startCrystals ${s.currentStartCrystals} -> ${s.suggestedStartCrystals}, balance ${s.currentBalanceScale.toFixed(2)} -> ${s.suggestedBalanceScale.toFixed(2)} (est ${fmtPct(s.predictedWinRate)}W / ${fmtPct(s.predictedAnchorPct)}A ${s.predictedLabel})`
-        );
+        if (s.needsWaveRedesign) {
+          const leakNote = s.mostLeakedCreature
+            ? ` (most leaked: ${s.mostLeakedCreature})`
+            : '';
+          lines.push(
+            `  ${dName} @ Starts at ${fmtPct(s.readingAccuracy)} (${s.currentStatusLabel}): Needs wave redesign${leakNote}`
+          );
+        } else {
+          lines.push(
+            `  ${dName} @ Starts at ${fmtPct(s.readingAccuracy)} (${s.currentStatusLabel}): startCrystals ${s.currentStartCrystals} -> ${s.suggestedStartCrystals}, balance ${s.currentBalanceScale.toFixed(2)} -> ${s.suggestedBalanceScale.toFixed(2)} (est ${fmtPct(s.predictedWinRate)}W / ${fmtPct(s.predictedAnchorPct)}A ${s.predictedLabel})`
+          );
+        }
       }
     }
 

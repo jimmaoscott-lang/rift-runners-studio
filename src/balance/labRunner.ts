@@ -1,6 +1,6 @@
 // Shared headless Balance Lab runner used by both the Web Worker and CLI scripts.
-// Guarantees identical deterministic seeds, W1-L1 target calibration, and red-cell
-// suggestion probes across browser and command-line runs.
+// Guarantees identical deterministic seeds, W1-L1 target calibration, 5 word-roll seeds
+// per cell, and bounded red-cell suggestion probes (startCrystals 1x..2x, balance 0.40..1.20).
 
 import {
   DIFFICULTY_ORDER,
@@ -16,10 +16,13 @@ import {
   DifficultyTarget,
   isTargetCell,
   LAB_ACCURACIES,
+  LAB_WORD_ROLL_SEEDS,
   LabCellResult,
   LabWorkerMessage,
   LevelLabResult,
   RedCellSuggestion,
+  SUGGEST_MAX_BALANCE,
+  SUGGEST_MIN_BALANCE,
   TARGET_ACCURACY_BY_DIFF,
   W1_L1_DEFAULT_TARGETS,
   W1L1Targets,
@@ -31,7 +34,9 @@ export const MAIN_TOP_K = 20;
 export const MAIN_REFINE_ROUNDS = 3;
 export const MAIN_MUTATIONS_PER_PLAN = 3;
 export const PLANS_PER_CELL =
-  MAIN_RANDOM_PLANS + MAIN_REFINE_ROUNDS * MAIN_TOP_K * MAIN_MUTATIONS_PER_PLAN;
+  MAIN_RANDOM_PLANS +
+  MAIN_REFINE_ROUNDS * MAIN_TOP_K * MAIN_MUTATIONS_PER_PLAN +
+  7 * Math.max(0, LAB_WORD_ROLL_SEEDS - 1);
 
 const PROBE_RANDOM_PLANS = 45;
 const PROBE_TOP_K = 10;
@@ -56,6 +61,10 @@ function round20(n: number): number {
   return Math.round(n / 20) * 20;
 }
 
+function clampBalance(n: number): number {
+  return round2(Math.max(SUGGEST_MIN_BALANCE, Math.min(SUGGEST_MAX_BALANCE, n)));
+}
+
 function scoreDistanceFromTarget(
   winRate: number,
   anchorPct: number,
@@ -73,69 +82,25 @@ function scoreDistanceFromTarget(
   return 300 + winDiffPts * 2 + anchorDiffPts;
 }
 
-function chooseLevelStartCrystals(
-  level: LevelConfig,
-  targetCells: LabCellResult[]
-): { startCrystals: number; changedReason: string } {
-  const curStart = level.startCrystals;
-  const redHard = targetCells.filter(
-    (c) =>
-      c.targetStatus === 'red' &&
-      (c.targetReason === 'lost' || c.targetReason === 'too_hard')
-  );
-  const redEasy = targetCells.filter(
-    (c) => c.targetStatus === 'red' && c.targetReason === 'too_easy'
-  );
-
-  // If one or more target cells are losing/too hard with heavy Wave 1 Anchor loss
-  // and no target cell is too easy, raising startCrystals stabilizes the opener.
-  const heavyWave1Leak = redHard.some(
-    (c) => c.wave1AnchorLost >= Math.max(2, level.anchor * 0.2)
-  );
-  if (redHard.length > 0 && redEasy.length === 0 && (heavyWave1Leak || redHard.length >= 2)) {
-    const bumpFactor = heavyWave1Leak ? 1.45 : 1.25;
-    const bumped = Math.min(
-      curStart + 260,
-      Math.max(curStart + 60, round20(curStart * bumpFactor))
-    );
-    return {
-      startCrystals: bumped,
-      changedReason: heavyWave1Leak
-        ? 'Raise starting crystals to hold Wave 1, plus adjust creature health.'
-        : 'Raise starting crystals and lower creature health.',
-    };
+function buildStartCrystalCandidates(curStart: number): number[] {
+  const maxStart = curStart * 2;
+  const raw = [
+    curStart,
+    Math.min(maxStart, Math.max(curStart, round20(curStart * 1.35))),
+    Math.min(maxStart, Math.max(curStart, round20(curStart * 1.7))),
+    maxStart,
+  ];
+  const unique: number[] = [];
+  for (const v of raw) {
+    const clamped = Math.max(curStart, Math.min(maxStart, Math.round(v)));
+    if (!unique.includes(clamped)) unique.push(clamped);
   }
-
-  // If every single target cell is too easy with zero Wave 1 leaks and high leftover
-  // crystals, trimming startCrystals brings the whole level closer to W1-L1.
-  if (
-    redEasy.length === targetCells.length &&
-    curStart > 160 &&
-    redEasy.every((c) => c.wave1AnchorLost === 0 && c.endCrystalsOptimal >= curStart * 0.5)
-  ) {
-    const trimmed = Math.max(140, round20(curStart * 0.85));
-    if (trimmed < curStart) {
-      return {
-        startCrystals: trimmed,
-        changedReason: 'Trim starting crystals slightly and raise creature health.',
-      };
-    }
-  }
-
-  return {
-    startCrystals: curStart,
-    changedReason:
-      redEasy.length > 0 && redHard.length === 0
-        ? 'Keep starting crystals and raise creature health scale.'
-        : 'Keep starting crystals and adjust creature health scale.',
-  };
+  return unique.sort((a, b) => a - b);
 }
 
 function probeSuggestionForRedCell(
   level: LevelConfig,
   cell: LabCellResult,
-  candidateStartCrystals: number,
-  reasonNote: string,
   baseSeed: number,
   targets: W1L1Targets,
   dials?: SimDials
@@ -144,10 +109,17 @@ function probeSuggestionForRedCell(
   const acc = cell.readingAccuracy;
   const target = targets[diff];
   const curStart = level.startCrystals;
+  const maxStart = curStart * 2;
   const curBalance = level.balance?.[diff] ?? 1.0;
 
-  const evalScale = (scale: number, stepIdx: number) => {
-    const clamped = round2(Math.max(0.15, Math.min(6.0, scale)));
+  const isEasierThanTarget = (winRate: number, anchorPct: number): boolean =>
+    winRate > target.winRate + 0.0001 ||
+    (Math.abs(winRate - target.winRate) <= 0.0001 && anchorPct > target.anchorPct);
+
+  let stepIdx = 1;
+  const evalPoint = (startCrystals: number, scale: number) => {
+    const clampedStart = Math.max(curStart, Math.min(maxStart, Math.round(startCrystals)));
+    const clampedScale = clampBalance(scale);
     const report = runBalanceBot({
       levelId: level.id,
       difficulty: diff,
@@ -156,108 +128,172 @@ function probeSuggestionForRedCell(
       topK: PROBE_TOP_K,
       refineRounds: PROBE_REFINE_ROUNDS,
       mutationsPerPlan: PROBE_MUTATIONS_PER_PLAN,
-      seed: baseSeed + stepIdx * 97,
+      wordRollSeeds: LAB_WORD_ROLL_SEEDS,
+      useHeroPowers: true,
+      seed: baseSeed + stepIdx++ * 97,
       dials,
-      overrideStartCrystals: candidateStartCrystals,
-      overrideBalanceScale: clamped,
+      overrideStartCrystals: clampedStart,
+      overrideBalanceScale: clampedScale,
       allowFastProbe: true,
     });
     const winRate = report.balanceTarget.winRate;
     const anchorPct = report.balanceTarget.anchorPct;
     const cls = classifyTargetCell(diff, winRate, anchorPct, targets);
     const dist = scoreDistanceFromTarget(winRate, anchorPct, target);
-    return { scale: clamped, winRate, anchorPct, cls, dist };
+    return {
+      startCrystals: clampedStart,
+      scale: clampedScale,
+      winRate,
+      anchorPct,
+      cls,
+      dist,
+      mostLeaked: report.mostLeakedCreature,
+    };
   };
 
-  let best = {
-    scale: curBalance,
-    winRate: cell.winRate,
-    anchorPct: cell.anchorPct,
-    cls: classifyTargetCell(diff, cell.winRate, cell.anchorPct, targets),
-    dist: scoreDistanceFromTarget(cell.winRate, cell.anchorPct, target),
+  type ProbePoint = ReturnType<typeof evalPoint>;
+
+  const state: { bestGreen: ProbePoint | null; bestOverall: ProbePoint | null } = {
+    bestGreen: null,
+    bestOverall: null,
   };
 
-  const consider = (cand: typeof best) => {
-    if (cand.dist < best.dist) {
-      best = cand;
+  const consider = (cand: ProbePoint) => {
+    if (!state.bestOverall || cand.dist < state.bestOverall.dist) {
+      state.bestOverall = cand;
+    }
+    if (cand.cls.status === 'green') {
+      if (
+        !state.bestGreen ||
+        cand.startCrystals < state.bestGreen.startCrystals ||
+        (cand.startCrystals === state.bestGreen.startCrystals && cand.dist < state.bestGreen.dist)
+      ) {
+        state.bestGreen = cand;
+      }
     }
   };
 
-  const isEasierThanTarget = (winRate: number, anchorPct: number): boolean =>
-    winRate > target.winRate + 0.0001 ||
-    (Math.abs(winRate - target.winRate) <= 0.0001 && anchorPct > target.anchorPct);
+  const bisectBalance = (
+    startCrystals: number,
+    loInit: number,
+    hiInit: number,
+    maxIters = 4
+  ) => {
+    let lo = clampBalance(loInit);
+    let hi = clampBalance(hiInit);
+    for (let iter = 0; iter < maxIters; iter++) {
+      const mid = clampBalance((lo + hi) / 2);
+      if (mid <= lo + 0.005 || mid >= hi - 0.005) break;
+      const res = evalPoint(startCrystals, mid);
+      consider(res);
 
-  let lo: number;
-  let hi: number;
-  let stepIdx = 1;
+      const winDiffPts = Math.abs(res.winRate - target.winRate) * 100;
+      const anchorDiffPts = Math.abs(res.anchorPct - target.anchorPct) * 100;
+      if (res.cls.status === 'green' && winDiffPts <= 5 && anchorDiffPts <= 5) {
+        break;
+      }
+
+      if (isEasierThanTarget(res.winRate, res.anchorPct)) {
+        // Easier than W1-L1 -> raise creature health scale
+        lo = mid;
+      } else {
+        // Harder than W1-L1 -> lower creature health scale
+        hi = mid;
+      }
+    }
+  };
 
   if (cell.targetReason === 'too_easy') {
-    lo = curBalance;
-    hi = Math.min(4.0, Math.max(curBalance * 2.4, 2.0));
-    const hiRes = evalScale(hi, stepIdx++);
+    // Search upward within [max(0.40, curBalance), 1.20] keeping startCrystals at curStart
+    const hiRes = evalPoint(curStart, SUGGEST_MAX_BALANCE);
     consider(hiRes);
-    if (isEasierThanTarget(hiRes.winRate, hiRes.anchorPct) && hi < 5.5) {
-      lo = hi;
-      hi = Math.min(6.0, round2(hi * 1.8));
-      const hi2 = evalScale(hi, stepIdx++);
-      consider(hi2);
+    if (
+      hiRes.cls.status === 'green' ||
+      !isEasierThanTarget(hiRes.winRate, hiRes.anchorPct)
+    ) {
+      bisectBalance(curStart, Math.max(SUGGEST_MIN_BALANCE, curBalance), SUGGEST_MAX_BALANCE, 4);
     }
   } else {
-    // Lost or too hard relative to W1-L1: lower creature health scale.
-    // First check if the startCrystals bump alone fixed it at curBalance.
-    if (candidateStartCrystals !== curStart) {
-      const sameScaleRes = evalScale(curBalance, stepIdx++);
-      consider(sameScaleRes);
-      if (sameScaleRes.cls.status === 'green') {
-        return {
-          difficulty: diff,
-          readingAccuracy: acc,
-          currentStatusLabel: cell.targetLabel || 'Lost',
-          currentWinRate: cell.winRate,
-          currentAnchorPct: cell.anchorPct,
-          currentStartCrystals: curStart,
-          currentBalanceScale: curBalance,
-          suggestedStartCrystals: candidateStartCrystals,
-          suggestedBalanceScale: sameScaleRes.scale,
-          predictedWinRate: sameScaleRes.winRate,
-          predictedAnchorPct: sameScaleRes.anchorPct,
-          predictedStatus: sameScaleRes.cls.status,
-          predictedLabel: sameScaleRes.cls.label,
-          note: 'Raising starting crystals brings this cell within 10 pts of W1-L1.',
-        };
+    // Lost or too hard: check maximum allowed help first (2x startCrystals, 0.40 balance).
+    // If even (2x startCrystals, 0.40) cannot reach green or easier, this cell needs wave redesign.
+    const maxHelpRes = evalPoint(maxStart, SUGGEST_MIN_BALANCE);
+    consider(maxHelpRes);
+
+    const maxHelpCanReach =
+      maxHelpRes.cls.status === 'green' ||
+      isEasierThanTarget(maxHelpRes.winRate, maxHelpRes.anchorPct);
+
+    if (maxHelpCanReach) {
+      // Find the smallest startCrystals in [curStart..2x] that can reach green within [0.40..1.20]
+      const startSteps = buildStartCrystalCandidates(curStart);
+      let chosenStart = maxStart;
+
+      for (const candStart of startSteps) {
+        if (candStart === maxStart) {
+          chosenStart = maxStart;
+          break;
+        }
+        const atFloor = evalPoint(candStart, SUGGEST_MIN_BALANCE);
+        consider(atFloor);
+        if (
+          atFloor.cls.status === 'green' ||
+          isEasierThanTarget(atFloor.winRate, atFloor.anchorPct)
+        ) {
+          chosenStart = candStart;
+          break;
+        }
       }
-      if (isEasierThanTarget(sameScaleRes.winRate, sameScaleRes.anchorPct)) {
-        lo = curBalance;
-        hi = Math.min(3.5, round2(curBalance * 1.8));
-      } else {
-        lo = Math.max(0.15, round2(curBalance * 0.25));
-        hi = curBalance;
+
+      const upperScale = clampBalance(
+        chosenStart > curStart ? Math.max(curBalance, SUGGEST_MAX_BALANCE) : Math.min(curBalance, SUGGEST_MAX_BALANCE)
+      );
+      if (upperScale > SUGGEST_MIN_BALANCE + 0.01) {
+        const atUpper = evalPoint(chosenStart, upperScale);
+        consider(atUpper);
+        if (
+          !(atUpper.cls.status === 'green' && Math.abs(atUpper.anchorPct - target.anchorPct) * 100 <= 5)
+        ) {
+          bisectBalance(chosenStart, SUGGEST_MIN_BALANCE, upperScale, 4);
+        }
       }
-    } else {
-      lo = Math.max(0.15, round2(curBalance * 0.25));
-      hi = curBalance;
     }
   }
 
-  for (let iter = 0; iter < 5; iter++) {
-    const mid = round2((lo + hi) / 2);
-    if (mid <= lo + 0.005 || mid >= hi - 0.005) break;
-    const res = evalScale(mid, stepIdx++);
-    consider(res);
+  const bestGreen = state.bestGreen;
+  const bestOverall = state.bestOverall;
 
-    const winDiffPts = Math.abs(res.winRate - target.winRate) * 100;
-    const anchorDiffPts = Math.abs(res.anchorPct - target.anchorPct) * 100;
-    if (winDiffPts <= 5 && anchorDiffPts <= 5) {
-      break;
-    }
+  const mostLeakedName =
+    cell.mostLeakedCreature ||
+    bestOverall?.mostLeaked?.name ||
+    undefined;
+  const mostLeakedType =
+    cell.mostLeakedType ||
+    bestOverall?.mostLeaked?.type ||
+    undefined;
 
-    if (isEasierThanTarget(res.winRate, res.anchorPct)) {
-      // Easier than W1-L1 -> raise creature health scale
-      lo = mid;
-    } else {
-      // Harder than W1-L1 -> lower creature health scale
-      hi = mid;
-    }
+  if (!bestGreen) {
+    const fallback = bestOverall;
+    return {
+      difficulty: diff,
+      readingAccuracy: acc,
+      currentStatusLabel: cell.targetLabel || 'Lost',
+      currentWinRate: cell.winRate,
+      currentAnchorPct: cell.anchorPct,
+      currentStartCrystals: curStart,
+      currentBalanceScale: curBalance,
+      suggestedStartCrystals: curStart,
+      suggestedBalanceScale: clampBalance(curBalance),
+      predictedWinRate: fallback?.winRate ?? cell.winRate,
+      predictedAnchorPct: fallback?.anchorPct ?? cell.anchorPct,
+      predictedStatus: fallback?.cls.status ?? (cell.targetStatus || 'red'),
+      predictedLabel: fallback?.cls.label ?? (cell.targetLabel || 'Lost'),
+      needsWaveRedesign: true,
+      mostLeakedCreature: mostLeakedName,
+      mostLeakedType,
+      note: mostLeakedName
+        ? `Needs wave redesign (most leaked: ${mostLeakedName}).`
+        : 'Needs wave redesign.',
+    };
   }
 
   return {
@@ -268,13 +304,19 @@ function probeSuggestionForRedCell(
     currentAnchorPct: cell.anchorPct,
     currentStartCrystals: curStart,
     currentBalanceScale: curBalance,
-    suggestedStartCrystals: candidateStartCrystals,
-    suggestedBalanceScale: best.scale,
-    predictedWinRate: best.winRate,
-    predictedAnchorPct: best.anchorPct,
-    predictedStatus: best.cls.status,
-    predictedLabel: best.cls.label,
-    note: reasonNote,
+    suggestedStartCrystals: bestGreen.startCrystals,
+    suggestedBalanceScale: bestGreen.scale,
+    predictedWinRate: bestGreen.winRate,
+    predictedAnchorPct: bestGreen.anchorPct,
+    predictedStatus: bestGreen.cls.status,
+    predictedLabel: bestGreen.cls.label,
+    needsWaveRedesign: false,
+    mostLeakedCreature: mostLeakedName,
+    mostLeakedType,
+    note:
+      bestGreen.startCrystals > curStart
+        ? 'Raise starting crystals and adjust balance scale into the W1-L1 green band.'
+        : 'Adjust balance scale into the W1-L1 green band.',
   };
 }
 
@@ -310,12 +352,15 @@ function buildLabCell(
     anchorPct: report.balanceTarget.anchorPct,
     anchorLeft: report.balanceTarget.anchorLeft,
     anchorMax: level.anchor,
-    optimalWon: optRes.win,
-    optimalAnchorPct:
-      optRes.maxAnchor > 0 ? optRes.finalAnchor / optRes.maxAnchor : 0,
-    goodWon: goodRes.win,
-    goodAnchorPct:
-      goodRes.maxAnchor > 0 ? goodRes.finalAnchor / goodRes.maxAnchor : 0,
+    wordRollSeeds: report.wordRollSeeds,
+    optimalWon: report.optimalWinRate >= 0.5,
+    optimalWinRate: report.optimalWinRate,
+    optimalAnchorPct: report.optimalAnchorPct,
+    goodWon: report.goodWinRate >= 0.5,
+    goodWinRate: report.goodWinRate,
+    goodAnchorPct: report.goodAnchorPct,
+    mostLeakedCreature: report.mostLeakedCreature?.name,
+    mostLeakedType: report.mostLeakedCreature?.type,
     wave1AnchorLost: optRes.waves[0]?.anchorLost ?? 0,
     endCrystalsOptimal: optRes.finalCrystals,
     evaluatedCount: report.evaluatedCount,
@@ -351,8 +396,6 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
   const includesW1L1 = levelIds.includes('w1-l1');
 
   const cellsPerLevel = DIFFICULTY_ORDER.length * LAB_ACCURACIES.length;
-  // When live calibration runs and w1-l1 is also in levelIds, reuse the 4 paired
-  // w1-l1 calibration reports so total work stays exact.
   const extraCalibCells = needsLiveCalibration
     ? includesW1L1
       ? 0
@@ -394,6 +437,8 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
         topK: MAIN_TOP_K,
         refineRounds: MAIN_REFINE_ROUNDS,
         mutationsPerPlan: MAIN_MUTATIONS_PER_PLAN,
+        wordRollSeeds: LAB_WORD_ROLL_SEEDS,
+        useHeroPowers: true,
         seed: cellSeed,
         dials: dialsByDifficulty?.[difficulty],
         onProgress: (completedPlans, totalPlans) => {
@@ -484,6 +529,8 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
             topK: MAIN_TOP_K,
             refineRounds: MAIN_REFINE_ROUNDS,
             mutationsPerPlan: MAIN_MUTATIONS_PER_PLAN,
+            wordRollSeeds: LAB_WORD_ROLL_SEEDS,
+            useHeroPowers: true,
             seed: cellSeed,
             dials: diffDials,
             onProgress: (completedPlans, totalPlans) => {
@@ -530,7 +577,7 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
       }
     }
 
-    // Check red target cells and compute verified startCrystals + balance suggestions
+    // Probe bounded suggestions (startCrystals 1x..2x, balance 0.40..1.20) for red target cells
     const redCells = targetCells.filter((c) => c.targetStatus === 'red');
     const suggestions: RedCellSuggestion[] = [];
     let recommendedStartCrystals: number | undefined;
@@ -547,14 +594,11 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
         phase: 'suggest',
       });
 
-      const { startCrystals: candidateStart, changedReason } =
-        chooseLevelStartCrystals(level, targetCells);
-
       const nextBalance: Record<DifficultyId, number> = {
-        easy: level.balance?.easy ?? 1.0,
-        normal: level.balance?.normal ?? 1.0,
-        hard: level.balance?.hard ?? 1.0,
-        expert: level.balance?.expert ?? 1.0,
+        easy: clampBalance(level.balance?.easy ?? 1.0),
+        normal: clampBalance(level.balance?.normal ?? 1.0),
+        hard: clampBalance(level.balance?.hard ?? 1.0),
+        expert: clampBalance(level.balance?.expert ?? 1.0),
       };
 
       for (let ri = 0; ri < redCells.length; ri++) {
@@ -573,18 +617,24 @@ export function runBalanceLab(options: RunBalanceLabOptions): RunBalanceLabOutpu
         const suggestion = probeSuggestionForRedCell(
           level,
           redCell,
-          candidateStart,
-          changedReason,
           seed + levelOrderIdx * 2003 + ri * 311,
           activeTargets,
           dialsByDifficulty?.[redCell.difficulty]
         );
         suggestions.push(suggestion);
-        nextBalance[redCell.difficulty] = suggestion.suggestedBalanceScale;
+        if (!suggestion.needsWaveRedesign) {
+          nextBalance[redCell.difficulty] = suggestion.suggestedBalanceScale;
+        }
       }
 
-      recommendedStartCrystals = candidateStart;
-      recommendedBalance = nextBalance;
+      const solvable = suggestions.filter((s) => !s.needsWaveRedesign);
+      if (solvable.length > 0) {
+        recommendedStartCrystals = Math.max(
+          level.startCrystals,
+          ...solvable.map((s) => s.suggestedStartCrystals)
+        );
+        recommendedBalance = nextBalance;
+      }
     }
 
     levelResult.suggestions = suggestions;

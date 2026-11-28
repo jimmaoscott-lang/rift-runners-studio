@@ -364,7 +364,7 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
             Balance Lab
           </h1>
           <span className="text-xs text-slate-400 whitespace-nowrap">
-            Builder Mode only · Good (75th pct) to Optimal target average
+            Builder Mode only · Skilled student bot (Hero Powers + counter-aware) · 5 word-roll seeds
           </span>
         </div>
 
@@ -531,11 +531,12 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
             </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
               Pick a single level or All levels above and press Run. Each cell runs
-              the headless robot player in a background Web Worker across 200 random
-              plans plus 3 refinement rounds on the top 20 using the learning reading
-              curve (+5% accuracy per wave, capped at 95%), then compares each
-              difficulty target cell against W1-L1. Any red target cell receives
-              tested startCrystals and balance suggestions.
+              the skilled headless robot (Rally, Meteor, Freeze hero powers plus
+              counter-aware buying) across 200 plans, 3 refinement rounds on the top
+              20, and 5 word-roll seeds, then compares each target cell against W1-L1.
+              Red target cells are searched across 1x to 2x startCrystals and 0.40 to
+              1.20 balance, or flagged as Needs wave redesign with the top leaking
+              creature.
             </p>
           </div>
         ) : (
@@ -649,8 +650,9 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
                                     )}
                                   </div>
                                   <div className="mt-1 font-mono tabular-nums text-[11px] text-slate-400">
-                                    Opt {cell.optimalWon ? fmtPct(cell.optimalAnchorPct) : 'Loss'}{' '}
-                                    · Good {cell.goodWon ? fmtPct(cell.goodAnchorPct) : 'Loss'}
+                                    Opt {fmtPct(cell.optimalWinRate)}W/{fmtPct(cell.optimalAnchorPct)}A
+                                    {' · '}
+                                    Good {fmtPct(cell.goodWinRate)}W/{fmtPct(cell.goodAnchorPct)}A
                                   </div>
                                 </td>
                               );
@@ -705,22 +707,33 @@ export const BalanceLabScreen: React.FC<BalanceLabScreenProps> = ({
                             </span>
                           </div>
                           <div className="flex flex-wrap items-baseline gap-3 font-mono tabular-nums text-[11px]">
-                            <span className="text-slate-300">
-                              startCrystals {s.currentStartCrystals} -&gt;{' '}
-                              <strong className="text-white">
-                                {s.suggestedStartCrystals}
-                              </strong>
-                            </span>
-                            <span className="text-slate-300">
-                              balance {s.currentBalanceScale.toFixed(2)} -&gt;{' '}
-                              <strong className="text-white">
-                                {s.suggestedBalanceScale.toFixed(2)}
-                              </strong>
-                            </span>
-                            <span className={targetLabelClasses(s.predictedStatus)}>
-                              Est {fmtPct(s.predictedWinRate)} win ·{' '}
-                              {fmtPct(s.predictedAnchorPct)} Anchor ({s.predictedLabel})
-                            </span>
+                            {s.needsWaveRedesign ? (
+                              <span className="font-semibold text-rose-300">
+                                Needs wave redesign
+                                {s.mostLeakedCreature
+                                  ? ` · Most leaked: ${s.mostLeakedCreature}`
+                                  : ''}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-slate-300">
+                                  startCrystals {s.currentStartCrystals} -&gt;{' '}
+                                  <strong className="text-white">
+                                    {s.suggestedStartCrystals}
+                                  </strong>
+                                </span>
+                                <span className="text-slate-300">
+                                  balance {s.currentBalanceScale.toFixed(2)} -&gt;{' '}
+                                  <strong className="text-white">
+                                    {s.suggestedBalanceScale.toFixed(2)}
+                                  </strong>
+                                </span>
+                                <span className={targetLabelClasses(s.predictedStatus)}>
+                                  Est {fmtPct(s.predictedWinRate)} win ·{' '}
+                                  {fmtPct(s.predictedAnchorPct)} Anchor ({s.predictedLabel})
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))}

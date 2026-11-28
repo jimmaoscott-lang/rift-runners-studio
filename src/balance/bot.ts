@@ -3,6 +3,8 @@
 // and reports optimal (best), good (75th percentile), and their balance target average.
 
 import {
+  CREATURES,
+  CreatureType,
   DEFENDERS,
   DefenderType,
   DifficultyId,
@@ -47,6 +49,13 @@ export interface EvaluatedPlan {
   origin: 'random' | 'refined';
 }
 
+export interface MostLeakedInfo {
+  type: CreatureType;
+  name: string;
+  count: number;
+  anchorDmg: number;
+}
+
 export interface BalanceTargetSummary {
   winRate: number;
   anchorLeft: number;
@@ -71,7 +80,11 @@ export interface BotSearchInput {
   targetSpots?: number;
   /** Deterministic PRNG seed for plan generation & simulation (default 1). */
   seed?: number;
-  /** Fixed sim timestep in seconds (default 0.05). */
+  /** Number of distinct word-roll seeds used to evaluate optimal & good plans (default 5). */
+  wordRollSeeds?: number;
+  /** Whether the robot uses charged Hero Powers (Rally, Meteor, Freeze). Default: true. */
+  useHeroPowers?: boolean;
+  /** Fixed sim timestep in seconds (default: 0.05). */
   dt?: number;
   /** Clean real-word payout mode (default 'speak'). */
   readMode?: 'speak' | 'tap';
@@ -102,10 +115,16 @@ export interface BotSearchReport {
   evaluatedCount: number;
   randomCount: number;
   refinedCount: number;
+  wordRollSeeds: number;
   winRateAll: number;
   winRateRandom: number;
   optimal: EvaluatedPlan;
   good: EvaluatedPlan;
+  optimalWinRate: number;
+  optimalAnchorPct: number;
+  goodWinRate: number;
+  goodAnchorPct: number;
+  mostLeakedCreature?: MostLeakedInfo;
   balanceTarget: BalanceTargetSummary;
   top20: EvaluatedPlan[];
   durationMs: number;
@@ -601,10 +620,200 @@ function cloneGenes(genes: InternalTowerGene[]): InternalTowerGene[] {
   return genes.map((g) => ({ ...g }));
 }
 
-function estimateTotalBudget(
+// --- Counter-Aware Wave Analysis & Skilled Student Buying ---
+
+interface WaveCreatureEntry {
+  type: CreatureType;
+  count: number;
+}
+
+interface WaveThreatProfile {
+  wave: number;
+  entries: WaveCreatureEntry[];
+  totalCount: number;
+  hasFlying: boolean;
+  flyingTypes: CreatureType[];
+  hasArmored: boolean;
+  armoredTypes: CreatureType[];
+  hasSwarm: boolean;
+  swarmTypes: CreatureType[];
+  hasBoss: boolean;
+  resistedTypes: CreatureType[];
+  highSlowResist: boolean;
+  highGravityResist: boolean;
+}
+
+function analyzeWaveThreats(level: LevelConfig, waveNum: number): WaveThreatProfile {
+  const waveDef = level.waves[Math.min(waveNum - 1, level.waves.length - 1)];
+  const countMap = new Map<CreatureType, number>();
+  let totalCount = 0;
+  let maxGroupCount = 0;
+
+  for (const grp of waveDef.groups) {
+    countMap.set(grp.type, (countMap.get(grp.type) || 0) + grp.count);
+    totalCount += grp.count;
+    if (grp.count > maxGroupCount) maxGroupCount = grp.count;
+  }
+
+  const entries: WaveCreatureEntry[] = Array.from(countMap.entries()).map(([type, count]) => ({
+    type,
+    count,
+  }));
+
+  const flyingTypes: CreatureType[] = [];
+  const armoredTypes: CreatureType[] = [];
+  const swarmTypes: CreatureType[] = [];
+  const resistedTypes: CreatureType[] = [];
+  let hasBoss = false;
+  let slowResWeight = 0;
+  let gravResWeight = 0;
+  let totalWeight = 0;
+
+  for (const { type, count } of entries) {
+    const cfg = CREATURES[type];
+    const weight = count * cfg.hp;
+    totalWeight += weight;
+    slowResWeight += weight * (cfg.slowResist || 0);
+    gravResWeight += weight * (cfg.gravityResist || 0);
+
+    if (cfg.flying) flyingTypes.push(type);
+    if ((cfg.armor || 0) >= 0.2) armoredTypes.push(type);
+    if (cfg.isBoss) hasBoss = true;
+    if (
+      count >= 5 ||
+      type === 'wisp' ||
+      type === 'bat' ||
+      type === 'cinderimp' ||
+      type === 'splitter'
+    ) {
+      swarmTypes.push(type);
+    }
+    if (
+      (cfg.fireResist || 0) >= 0.25 ||
+      (cfg.electricResist || 0) >= 0.25 ||
+      (cfg.arrowResist || 0) >= 0.25 ||
+      (cfg.slowResist || 0) >= 0.4 ||
+      (cfg.gravityResist || 0) >= 0.4
+    ) {
+      resistedTypes.push(type);
+    }
+  }
+
+  const hasSwarm = totalCount >= 7 || maxGroupCount >= 5 || swarmTypes.length > 0;
+  return {
+    wave: waveNum,
+    entries,
+    totalCount,
+    hasFlying: flyingTypes.length > 0,
+    flyingTypes,
+    hasArmored: armoredTypes.length > 0,
+    armoredTypes,
+    hasSwarm,
+    swarmTypes: swarmTypes.length > 0 ? swarmTypes : entries.map((e) => e.type),
+    hasBoss,
+    resistedTypes,
+    highSlowResist: totalWeight > 0 && slowResWeight / totalWeight >= 0.45,
+    highGravityResist: totalWeight > 0 && gravResWeight / totalWeight >= 0.55,
+  };
+}
+
+function canTowerDamageAir(type: DefenderType): boolean {
+  return type === 'archer' || type === 'ember' || type === 'tesla' || type === 'rail';
+}
+
+function getTowerResistAgainst(type: DefenderType, creature: CreatureType): number {
+  const cfg = CREATURES[creature];
+  if (cfg.flying && (type === 'spike' || type === 'golem')) return 1;
+  if (type === 'ember') return cfg.fireResist || 0;
+  if (type === 'tesla') return cfg.electricResist || 0;
+  if (type === 'archer') return cfg.arrowResist || 0;
+  if (type === 'frost') return cfg.slowResist || 0;
+  if (type === 'gravity') return Math.max(cfg.gravityResist || 0, (cfg.slowResist || 0) * 0.5);
+  return 0; // rail, spike, golem have no elemental type resist
+}
+
+function getTowerEffectiveness(
+  type: DefenderType,
+  creatures: CreatureType[],
+  preferMulti = false
+): number {
+  if (creatures.length === 0) return 1;
+  let sum = 0;
+  let weightSum = 0;
+  for (const crType of creatures) {
+    const cfg = CREATURES[crType];
+    const w = Math.max(20, cfg.hp);
+    const resist = getTowerResistAgainst(type, crType);
+    if (resist >= 1) {
+      weightSum += w;
+      continue;
+    }
+    const armor = cfg.armor || 0;
+    const armorFactor = type === 'rail' ? 1 : 1 - armor;
+    let eff = Math.max(0.22, armorFactor * (1 - resist));
+    if (type === 'frost') eff *= 0.45; // support tower, not primary DPS
+    if (type === 'gravity') eff *= 0.65;
+    if (preferMulti) {
+      if (type === 'tesla' || type === 'ember' || type === 'spike') eff *= 1.35;
+      else if (type === 'archer') eff *= 1.1; // Volley specB
+    }
+    if (armor >= 0.3 && type === 'rail') eff *= 1.45;
+    if (cfg.flying && canTowerDamageAir(type)) eff *= 1.15;
+    sum += eff * w;
+    weightSum += w;
+  }
+  return weightSum > 0 ? sum / weightSum : 0;
+}
+
+function isMultiTargetGene(g: InternalTowerGene): boolean {
+  return (
+    g.type === 'tesla' ||
+    g.type === 'ember' ||
+    g.type === 'spike' ||
+    (g.type === 'archer' && g.spec === 'b')
+  );
+}
+
+function isArmorAnswerGene(g: InternalTowerGene): boolean {
+  return g.type === 'rail' || (g.type === 'gravity' && g.spec === 'a');
+}
+
+function chooseSmartSpec(
+  rng: () => number,
+  type: DefenderType,
+  levelThreats: WaveThreatProfile[]
+): 'a' | 'b' {
+  const anyHeavyArmor = levelThreats.some((t) =>
+    t.armoredTypes.some((c) => (CREATURES[c].armor || 0) >= 0.3)
+  );
+  const anyBoss = levelThreats.some((t) => t.hasBoss);
+  const swarmy = levelThreats.filter((t) => t.hasSwarm).length >= Math.ceil(levelThreats.length * 0.5);
+
+  if (type === 'archer') {
+    return swarmy && rng() < 0.72 ? 'b' : rng() < 0.5 ? 'a' : 'b';
+  }
+  if (type === 'rail') {
+    if (anyHeavyArmor || anyBoss) return rng() < 0.72 ? 'b' : 'a';
+    return rng() < 0.55 ? 'a' : 'b';
+  }
+  if (type === 'tesla') {
+    if (anyBoss && rng() < 0.45) return 'b';
+    return swarmy && rng() < 0.75 ? 'a' : rng() < 0.5 ? 'a' : 'b';
+  }
+  if (type === 'gravity') {
+    if (anyHeavyArmor) return rng() < 0.78 ? 'a' : 'b';
+    return rng() < 0.5 ? 'a' : 'b';
+  }
+  if (type === 'ember') {
+    return swarmy && rng() < 0.6 ? 'a' : rng() < 0.5 ? 'b' : 'a';
+  }
+  return rng() < 0.5 ? 'a' : 'b';
+}
+
+function estimateCumulativeBudgetAtWave(
   level: LevelConfig,
   accuracy: number,
-  planWaves: number,
+  waveNum: number,
   readMode: 'speak' | 'tap',
   startCrystalsOverride?: number
 ): number {
@@ -613,19 +822,48 @@ function estimateTotalBudget(
   const runeHelpPay = Math.round(FORGE_CONFIG.rune * FORGE_CONFIG.helpShare);
   const avgClean = (1 - level.runeRate) * realCleanPay + level.runeRate * FORGE_CONFIG.rune;
   const avgMiss = (1 - level.runeRate) * realHelpPay + level.runeRate * runeHelpPay;
-  let readTotal = 0;
-  for (let w = 0; w < planWaves; w++) {
+
+  let total = startCrystalsOverride ?? level.startCrystals;
+  for (let w = 0; w < waveNum; w++) {
     const waveAcc = accuracy >= 1 ? 1 : Math.min(0.95, accuracy + w * 0.05);
     const perWord = waveAcc * avgClean + (1 - waveAcc) * avgMiss;
     const megaBonus =
       Math.pow(waveAcc, FORGE_CONFIG.megaPips) * (FORGE_CONFIG.mega / FORGE_CONFIG.megaPips);
-    readTotal += level.waveEvery * (perWord + megaBonus);
+    total += level.waveEvery * (perWord + megaBonus);
+    if (w > 0) {
+      // Previous wave bonus + kill crystals estimate
+      total += 15 + w * 5 + 75;
+    }
   }
-  const lockTotal = level.vowels.length * FORGE_CONFIG.lockBonus;
-  let waveBonusTotal = 0;
-  for (let w = 1; w <= planWaves; w++) waveBonusTotal += 15 + w * 5;
-  const killEstimate = planWaves * 85;
-  return (startCrystalsOverride ?? level.startCrystals) + readTotal + lockTotal + waveBonusTotal + killEstimate;
+  if (waveNum >= 4) {
+    total += Math.min(level.vowels.length, waveNum - 3) * FORGE_CONFIG.lockBonus * 0.5;
+  }
+  return Math.round(total);
+}
+
+function pickWeightedCounterType(
+  rng: () => number,
+  candidates: DefenderType[],
+  creatures: CreatureType[],
+  preferMulti = false
+): DefenderType | null {
+  if (candidates.length === 0) return null;
+  const scored = candidates
+    .map((t) => ({
+      type: t,
+      score: getTowerEffectiveness(t, creatures, preferMulti),
+    }))
+    .filter((x) => x.score > 0.05)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return pick(rng, candidates);
+  const topScore = scored[0].score;
+  const nearTop = scored.filter((x) => x.score >= topScore * 0.72);
+  // Strong preference for best counter with slight exploration among good counters
+  if (nearTop.length === 1 || rng() < 0.62) {
+    return nearTop[0].type;
+  }
+  return pick(rng, nearTop).type;
 }
 
 function generateRandomGenes(
@@ -640,37 +878,21 @@ function generateRandomGenes(
 ): InternalTowerGene[] {
   const availableTowers = level.defenders.filter((t) => DEFENDERS[t].kind === 'tower');
   const availableTrails = level.defenders.filter((t) => DEFENDERS[t].kind === 'trail');
-  const allTypes = level.defenders;
+  const allAvailable = level.defenders;
+  const planHorizon = Math.max(2, Math.min(maxPlanWave, level.waves.length));
 
-  const estBudget = estimateTotalBudget(level, accuracy, maxPlanWave, readMode, startCrystalsOverride);
-  // Vary strategy archetype across random plans: tall (fewer towers, heavy specs), balanced, or wide
-  const archetypeRoll = rng();
-  const minCount = archetypeRoll < 0.3 ? 5 : archetypeRoll < 0.75 ? 7 : 9;
-  const maxCount = Math.min(
-    towerSpots.length + trailSpots.length,
-    Math.max(minCount + 1, Math.min(14, Math.round(estBudget / 160)))
-  );
-  const desiredTowers = randInt(rng, minCount, Math.max(minCount, maxCount));
+  const levelThreats: WaveThreatProfile[] = [];
+  for (let w = 1; w <= planHorizon; w++) {
+    levelThreats.push(analyzeWaveThreats(level, w));
+  }
 
-  // Estimate realistic Wave-1 crystal budget (startCrystals + expected pre-wave-1 reading)
-  const realCleanPay = readMode === 'speak' ? FORGE_CONFIG.speak : FORGE_CONFIG.real;
-  const realHelpPay = Math.round(FORGE_CONFIG.real * FORGE_CONFIG.helpShare);
-  const runeHelpPay = Math.round(FORGE_CONFIG.rune * FORGE_CONFIG.helpShare);
-  const avgClean = (1 - level.runeRate) * realCleanPay + level.runeRate * FORGE_CONFIG.rune;
-  const avgMiss = (1 - level.runeRate) * realHelpPay + level.runeRate * runeHelpPay;
-  const expectedWave1Read =
-    level.waveEvery * (accuracy * avgClean + (1 - accuracy) * avgMiss) +
-    (accuracy >= 0.8 ? Math.pow(accuracy, FORGE_CONFIG.megaPips) * FORGE_CONFIG.mega : 0);
-  const startCrystals = startCrystalsOverride ?? level.startCrystals;
-  const wave1Budget = Math.round(startCrystals + expectedWave1Read * (0.85 + rng() * 0.25));
-
-  // Choose 1 or 2 high-coverage choke anchors for clustered killbox placement (75% of plans)
-  const useKillbox = rng() < 0.78;
+  // Choose 1 or 2 high-coverage choke anchors for clustered killbox placement (85% of plans)
+  const useKillbox = rng() < 0.85;
   const allSpotsSorted = [...towerSpots, ...trailSpots].sort((a, b) => b.coverage - a.coverage);
-  const topAnchorCutoff = Math.max(1, Math.ceil(allSpotsSorted.length * 0.45));
+  const topAnchorCutoff = Math.max(1, Math.ceil(allSpotsSorted.length * 0.4));
   const anchor1 = allSpotsSorted[Math.floor(rng() * topAnchorCutoff)] || allSpotsSorted[0];
   let anchor2: PlacementSpot | null = null;
-  if (useKillbox && rng() < 0.4 && allSpotsSorted.length > 4) {
+  if (useKillbox && rng() < 0.38 && allSpotsSorted.length > 4) {
     const farCandidates = allSpotsSorted
       .slice(0, Math.max(4, Math.ceil(allSpotsSorted.length * 0.7)))
       .filter((s) => Math.hypot(s.x - anchor1.x, s.y - anchor1.y) > 180);
@@ -688,93 +910,254 @@ function generateRandomGenes(
     if (pool.length === 0) return null;
 
     if (useKillbox && anchor1) {
-      const targetAnchor = anchor2 && rng() < 0.35 ? anchor2 : anchor1;
+      const targetAnchor = anchor2 && rng() < 0.3 ? anchor2 : anchor1;
       const byNear = [...pool].sort((a, b) => {
-        const da = Math.hypot(a.x - targetAnchor.x, a.y - targetAnchor.y) - a.coverage * 2.2;
-        const db = Math.hypot(b.x - targetAnchor.x, b.y - targetAnchor.y) - b.coverage * 2.2;
+        const da = Math.hypot(a.x - targetAnchor.x, a.y - targetAnchor.y) - a.coverage * 2.4;
+        const db = Math.hypot(b.x - targetAnchor.x, b.y - targetAnchor.y) - b.coverage * 2.4;
         return da - db;
       });
       const cutoff = Math.max(1, Math.min(byNear.length, randInt(rng, 2, 5)));
       return byNear[Math.floor(rng() * cutoff)];
     }
 
-    if (rng() < 0.7) {
+    if (rng() < 0.75) {
       const ranked = [...pool].sort((a, b) => b.coverage - a.coverage);
-      const cutoff = Math.max(1, Math.ceil(ranked.length * 0.5));
+      const cutoff = Math.max(1, Math.ceil(ranked.length * 0.45));
       return ranked[Math.floor(rng() * cutoff)];
     }
     return pick(rng, pool);
   };
 
-  const trailShare = availableTrails.length > 0 ? 0.28 + rng() * 0.18 : 0;
-  const planHorizon = Math.max(2, Math.min(maxPlanWave, level.waves.length));
-  let wave1Spent = 0;
+  // Strategy archetype: tall (fewer towers, heavier upgrades) vs balanced vs wide
+  const archetypeRoll = rng();
+  const maxTowers = Math.min(
+    towerSpots.length + trailSpots.length,
+    archetypeRoll < 0.35 ? 8 : archetypeRoll < 0.78 ? 10 : 12
+  );
 
-  for (let i = 0; i < desiredTowers; i++) {
-    let type: DefenderType;
-    const wantTrail = availableTrails.length > 0 && trailSpots.length > 0 && rng() < trailShare;
-    if (wantTrail) {
-      type = pick(rng, availableTrails);
-    } else if (availableTowers.length > 0 && towerSpots.length > 0) {
-      type = pick(rng, availableTowers);
-    } else {
-      type = pick(rng, allTypes);
-    }
+  let plannedSpent = 0;
 
-    const kind = DEFENDERS[type].kind;
-    let spot = pickSpot(kind);
-    if (!spot) {
-      const altTypes = kind === 'trail' ? availableTowers : availableTrails;
-      if (altTypes.length === 0) break;
-      type = pick(rng, altTypes);
-      spot = pickSpot(DEFENDERS[type].kind);
-      if (!spot) break;
-    }
-
-    const cost = DEFENDERS[type].cost;
-    let buyBeforeWave: number;
-    if (i === 0 || (wave1Spent + cost <= wave1Budget && i < 6 && rng() < 0.9)) {
-      buyBeforeWave = 1;
-      wave1Spent += cost;
-    } else {
-      buyBeforeWave = randInt(rng, 2, planHorizon);
-    }
-
-    // Decide upgrade path depth based on archetype and wave horizon
-    const upRoll = rng();
-    const tallBias = archetypeRoll < 0.3 ? 0.24 : archetypeRoll < 0.75 ? 0.1 : -0.06;
-    let lv2Wave: number | null = null;
-    let lv3Wave: number | null = null;
-    let spec: 'a' | 'b' | null = null;
-    let specWave: number | null = null;
-
-    if (upRoll < 0.86 + tallBias) {
-      lv2Wave = Math.min(planHorizon, buyBeforeWave + randInt(rng, 0, 1));
-      if (upRoll < 0.65 + tallBias) {
-        lv3Wave = Math.min(planHorizon, lv2Wave + randInt(rng, 1, 2));
-        if (upRoll < 0.48 + tallBias) {
-          spec = rng() < 0.5 ? 'a' : 'b';
-          specWave = Math.min(planHorizon, lv3Wave + randInt(rng, 0, 2));
-        }
-      }
-    }
-
+  const addTower = (
+    type: DefenderType,
+    buyBeforeWave: number,
+    forcedSpec?: 'a' | 'b'
+  ): InternalTowerGene | null => {
+    if (genes.length >= maxTowers) return null;
+    const spot = pickSpot(DEFENDERS[type].kind);
+    if (!spot) return null;
     const defaultMode: TargetPriority = type === 'rail' ? 'strong' : 'first';
     const targetMode: TargetPriority =
-      rng() < 0.88 ? defaultMode : pick(rng, ['first', 'strong', 'last'] as const);
-
+      rng() < 0.9 ? defaultMode : pick(rng, ['first', 'strong', 'last'] as const);
     const gene: InternalTowerGene = {
       type,
       spot,
       buyBeforeWave,
-      lv2Wave,
-      lv3Wave,
-      spec,
-      specWave,
+      lv2Wave: null,
+      lv3Wave: null,
+      spec: forcedSpec ?? null,
+      specWave: null,
       targetMode,
     };
+    if (forcedSpec) {
+      gene.lv2Wave = Math.min(planHorizon, buyBeforeWave + 1);
+      gene.lv3Wave = Math.min(planHorizon, gene.lv2Wave + 1);
+      gene.specWave = Math.min(planHorizon, gene.lv3Wave + 1);
+    }
     normalizeGeneTiming(gene, maxPlanWave);
     genes.push(gene);
+    plannedSpent += DEFENDERS[type].cost;
+    return gene;
+  };
+
+  // Walk wave by wave: buy missing counters FIRST, then spend remaining budget on upgrades & support
+  for (let w = 1; w <= planHorizon; w++) {
+    const threat = levelThreats[w - 1];
+    const waveBudget = Math.round(
+      estimateCumulativeBudgetAtWave(level, accuracy, w, readMode, startCrystalsOverride) *
+        (0.92 + rng() * 0.16)
+    );
+    const waveCreatureTypes = threat.entries.map((e) => e.type);
+
+    const ownedByWave = () => genes.filter((g) => g.buyBeforeWave <= w);
+
+    // 1. Air-capable counter if any creature flies in this wave
+    if (threat.hasFlying) {
+      const hasAirAnswer = ownedByWave().some(
+        (g) =>
+          canTowerDamageAir(g.type) &&
+          threat.flyingTypes.some((f) => getTowerResistAgainst(g.type, f) < 0.35)
+      );
+      if (!hasAirAnswer) {
+        const airPool = availableTowers.filter((t) => canTowerDamageAir(t));
+        const chosen = pickWeightedCounterType(rng, airPool, threat.flyingTypes, false);
+        if (chosen) addTower(chosen, w);
+      }
+    }
+
+    // 2. Armor answer (Rail Turret or Gravity armorShred) if armored creatures come
+    if (threat.hasArmored) {
+      const hasArmorAnswer = ownedByWave().some((g) => isArmorAnswerGene(g));
+      if (!hasArmorAnswer) {
+        if (allAvailable.includes('rail')) {
+          addTower('rail', w);
+        } else if (allAvailable.includes('gravity')) {
+          addTower('gravity', w, 'a');
+        } else {
+          // Before Rail/Gravity unlock, ensure at least one unresisted high-DPS tower
+          const dpsPool = availableTowers.filter((t) => t !== 'frost');
+          const chosen = pickWeightedCounterType(rng, dpsPool, threat.armoredTypes, false);
+          if (chosen && ownedByWave().filter((g) => g.type === chosen).length === 0) {
+            addTower(chosen, w);
+          }
+        }
+      }
+    }
+
+    // 3. Multi-target tower (Tesla chain, Ember splash, Volley archer, Spike Pit) for swarms
+    if (threat.hasSwarm) {
+      const hasSwarmAnswer = ownedByWave().some(
+        (g) =>
+          isMultiTargetGene(g) &&
+          threat.swarmTypes.some((s) => getTowerResistAgainst(g.type, s) < 0.35)
+      );
+      if (!hasSwarmAnswer) {
+        const multiPool = allAvailable.filter(
+          (t) => t === 'tesla' || t === 'ember' || t === 'spike' || t === 'archer'
+        );
+        const chosen = pickWeightedCounterType(rng, multiPool, threat.swarmTypes, true);
+        if (chosen) {
+          addTower(chosen, w, chosen === 'archer' ? 'b' : undefined);
+        }
+      }
+    }
+
+    // 4. Resistance coverage: ensure at least one owned DPS tower is NOT resisted by each resisted creature
+    for (const resCr of threat.resistedTypes) {
+      const hasUnresisted = ownedByWave().some(
+        (g) =>
+          g.type !== 'frost' &&
+          g.type !== 'gravity' &&
+          getTowerResistAgainst(g.type, resCr) <= 0.15
+      );
+      if (!hasUnresisted) {
+        const unresistedPool = allAvailable.filter(
+          (t) =>
+            t !== 'frost' &&
+            t !== 'gravity' &&
+            getTowerResistAgainst(t, resCr) <= 0.15
+        );
+        const chosen = pickWeightedCounterType(rng, unresistedPool, [resCr], false);
+        if (chosen) {
+          addTower(chosen, w);
+        }
+      }
+    }
+
+    // Guarantee at least one opening DPS tower on Wave 1 even if Wave 1 has no special traits
+    if (w === 1 && genes.length === 0) {
+      const dpsPool = allAvailable.filter((t) => t !== 'frost');
+      const chosen = pickWeightedCounterType(rng, dpsPool, waveCreatureTypes, threat.hasSwarm);
+      if (chosen) addTower(chosen, 1);
+    }
+
+    // 5. After missing counters are owned, spend remaining wave budget on upgrades first,
+    //    then complementary towers (more DPS counters or non-resisted slow/hold support).
+    let safety = 0;
+    while (plannedSpent < waveBudget - 45 && safety < 6) {
+      safety += 1;
+      const upgradeable = ownedByWave().filter((g) => {
+        if (g.lv2Wave === null) return true;
+        if (g.lv3Wave === null && w >= 2) return true;
+        if (g.spec === null && w >= 3) return true;
+        return false;
+      });
+
+      const wantUpgrade =
+        upgradeable.length > 0 &&
+        (w >= 2
+          ? rng() < (archetypeRoll < 0.35 ? 0.78 : archetypeRoll < 0.78 ? 0.62 : 0.45)
+          : genes.length >= 2 && rng() < 0.35);
+
+      if (wantUpgrade) {
+        // Prefer upgrading high-effectiveness DPS counters for this wave
+        const rankedUp = [...upgradeable].sort((a, b) => {
+          const ea = getTowerEffectiveness(a.type, waveCreatureTypes, threat.hasSwarm);
+          const eb = getTowerEffectiveness(b.type, waveCreatureTypes, threat.hasSwarm);
+          return eb - ea;
+        });
+        const pickIdx = Math.min(rankedUp.length - 1, Math.floor(rng() * Math.min(3, rankedUp.length)));
+        const g = rankedUp[pickIdx];
+        const cfg = DEFENDERS[g.type];
+
+        if (g.lv2Wave === null) {
+          g.lv2Wave = w;
+          plannedSpent += cfg.up[0];
+        } else if (g.lv3Wave === null) {
+          g.lv3Wave = w;
+          plannedSpent += cfg.up[1];
+        } else if (g.spec === null) {
+          g.spec = chooseSmartSpec(rng, g.type, levelThreats);
+          g.specWave = w;
+          plannedSpent += cfg.spec[g.spec].cost;
+        }
+        normalizeGeneTiming(g, maxPlanWave);
+      } else if (genes.length < maxTowers) {
+        // Add a complementary counter or support tower (avoid slow/gravity if heavily resisted)
+        const pool = allAvailable.filter((t) => {
+          if (t === 'frost' && threat.highSlowResist) return false;
+          if (t === 'gravity' && threat.highGravityResist && !threat.hasArmored) return false;
+          if (t === 'spike' && threat.hasFlying && threat.entries.every((e) => CREATURES[e.type].flying)) {
+            return false;
+          }
+          return true;
+        });
+        const effectivePool = pool.length > 0 ? pool : allAvailable;
+        const includeSupport =
+          genes.length >= 2 &&
+          rng() < 0.28 &&
+          effectivePool.some((t) => t === 'frost' || t === 'gravity' || t === 'golem');
+
+        let chosen: DefenderType | null = null;
+        if (includeSupport) {
+          const supPool = effectivePool.filter(
+            (t) =>
+              (t === 'frost' && !threat.highSlowResist) ||
+              (t === 'gravity' && (!threat.highGravityResist || threat.hasArmored)) ||
+              (t === 'golem' && !threat.entries.every((e) => CREATURES[e.type].flying))
+          );
+          if (supPool.length > 0) chosen = pick(rng, supPool);
+        }
+        if (!chosen) {
+          const dpsPool = effectivePool.filter((t) => t !== 'frost');
+          chosen = pickWeightedCounterType(
+            rng,
+            dpsPool.length > 0 ? dpsPool : effectivePool,
+            waveCreatureTypes,
+            threat.hasSwarm
+          );
+        }
+        if (!chosen) break;
+        const added = addTower(chosen, w);
+        if (!added) break;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Ensure late-game upgrades/specs exist so excess endgame crystals are always spent
+  for (const g of genes) {
+    if (g.lv2Wave === null && rng() < 0.8) {
+      g.lv2Wave = Math.min(maxPlanWave, g.buyBeforeWave + randInt(rng, 1, 2));
+    }
+    if (g.lv2Wave !== null && g.lv3Wave === null && rng() < 0.65) {
+      g.lv3Wave = Math.min(maxPlanWave, g.lv2Wave + randInt(rng, 1, 2));
+    }
+    if (g.lv3Wave !== null && g.spec === null && rng() < 0.55) {
+      g.spec = chooseSmartSpec(rng, g.type, levelThreats);
+      g.specWave = Math.min(maxPlanWave, g.lv3Wave + randInt(rng, 0, 2));
+    }
+    normalizeGeneTiming(g, maxPlanWave);
   }
 
   return genes;
@@ -793,6 +1176,14 @@ function mutateGenes(
 
   const availableTowers = level.defenders.filter((t) => DEFENDERS[t].kind === 'tower');
   const availableTrails = level.defenders.filter((t) => DEFENDERS[t].kind === 'trail');
+  const planHorizon = Math.max(2, Math.min(maxPlanWave, level.waves.length));
+  const levelThreats: WaveThreatProfile[] = [];
+  for (let w = 1; w <= planHorizon; w++) {
+    levelThreats.push(analyzeWaveThreats(level, w));
+  }
+  const allLevelCreatures = Array.from(
+    new Set(levelThreats.flatMap((t) => t.entries.map((e) => e.type)))
+  );
 
   // Apply 1 or 2 small mutations
   const numMutations = rng() < 0.7 ? 1 : 2;
@@ -801,16 +1192,23 @@ function mutateGenes(
     const op = rng();
 
     if (op < 0.28) {
-      // 1. Swap a tower type (same kind or cross-kind with compatible legal spot)
+      // 1. Swap a tower type (counter-biased so swaps favor unresisted counters)
       const idx = Math.floor(rng() * child.length);
       const g = child[idx];
       const sameKindPool = (DEFENDERS[g.type].kind === 'trail' ? availableTrails : availableTowers).filter(
         (t) => t !== g.type
       );
       if (sameKindPool.length > 0 && rng() < 0.8) {
-        g.type = pick(rng, sameKindPool);
-        if (g.spec !== null && rng() < 0.5) {
-          g.spec = g.spec === 'a' ? 'b' : 'a';
+        const waveCreatures =
+          levelThreats[Math.min(g.buyBeforeWave - 1, levelThreats.length - 1)]?.entries.map(
+            (e) => e.type
+          ) || allLevelCreatures;
+        g.type =
+          rng() < 0.7
+            ? pickWeightedCounterType(rng, sameKindPool, waveCreatures, false) || pick(rng, sameKindPool)
+            : pick(rng, sameKindPool);
+        if (g.spec !== null) {
+          g.spec = chooseSmartSpec(rng, g.type, levelThreats);
         }
         g.targetMode = g.type === 'rail' ? 'strong' : g.targetMode;
       } else {
@@ -826,13 +1224,13 @@ function mutateGenes(
               Math.hypot(a.x - g.spot.x, a.y - g.spot.y) -
               Math.hypot(b.x - g.spot.x, b.y - g.spot.y)
           );
-          g.type = pick(rng, otherTypes);
+          g.type = pickWeightedCounterType(rng, otherTypes, allLevelCreatures, false) || pick(rng, otherTypes);
           g.spot = otherSpots[Math.floor(rng() * Math.min(4, otherSpots.length))];
           g.targetMode = g.type === 'rail' ? 'strong' : 'first';
         }
       }
     } else if (op < 0.56) {
-      // 2. Move a tower to another legal spot (60% clustered near an existing tower or high-coverage bend)
+      // 2. Move a tower to another legal spot (65% clustered near an existing tower)
       const idx = Math.floor(rng() * child.length);
       const g = child[idx];
       const kind = DEFENDERS[g.type].kind;
@@ -840,7 +1238,7 @@ function mutateGenes(
         (s) => s.id !== g.spot.id && canPlaceAtSpot(s, child, idx)
       );
       if (legalSpots.length > 0) {
-        if (rng() < 0.6 && child.length > 1) {
+        if (rng() < 0.65 && child.length > 1) {
           const ref = child[(idx + 1 + Math.floor(rng() * (child.length - 1))) % child.length].spot;
           legalSpots.sort(
             (a, b) =>
@@ -855,7 +1253,6 @@ function mutateGenes(
       // 3. Change upgrade order / timing or spec branch
       const subOp = rng();
       if (subOp < 0.35 && child.length >= 2) {
-        // Swap order of two towers in the plan (changes priority when crystals are tight)
         const a = Math.floor(rng() * child.length);
         let b = Math.floor(rng() * child.length);
         if (b === a) b = (a + 1) % child.length;
@@ -866,7 +1263,6 @@ function mutateGenes(
         normalizeGeneTiming(child[a], maxPlanWave);
         normalizeGeneTiming(child[b], maxPlanWave);
       } else if (subOp < 0.72) {
-        // Shift a tower's build or upgrade wave earlier/later by 1-2 waves
         const idx = Math.floor(rng() * child.length);
         const g = child[idx];
         const delta = rng() < 0.5 ? -1 : 1;
@@ -885,19 +1281,21 @@ function mutateGenes(
           }
         } else {
           if (g.spec === null) {
-            g.spec = rng() < 0.5 ? 'a' : 'b';
+            g.spec = chooseSmartSpec(rng, g.type, levelThreats);
             g.lv2Wave = g.lv2Wave ?? g.buyBeforeWave;
             g.lv3Wave = g.lv3Wave ?? g.lv2Wave;
             g.specWave = Math.min(maxPlanWave, g.lv3Wave + 1);
           } else if (rng() < 0.6) {
             g.spec = g.spec === 'a' ? 'b' : 'a';
           } else {
-            g.specWave = Math.max(g.lv3Wave ?? g.buyBeforeWave, Math.min(maxPlanWave, (g.specWave ?? maxPlanWave) + delta));
+            g.specWave = Math.max(
+              g.lv3Wave ?? g.buyBeforeWave,
+              Math.min(maxPlanWave, (g.specWave ?? maxPlanWave) + delta)
+            );
           }
         }
         normalizeGeneTiming(g, maxPlanWave);
       } else {
-        // Trim or deepen a tower's upgrade tier
         const idx = Math.floor(rng() * child.length);
         const g = child[idx];
         if (g.spec !== null && rng() < 0.5) {
@@ -910,21 +1308,26 @@ function mutateGenes(
         } else if (g.lv3Wave === null) {
           g.lv3Wave = Math.min(maxPlanWave, g.lv2Wave + 1);
         } else if (g.spec === null) {
-          g.spec = rng() < 0.5 ? 'a' : 'b';
+          g.spec = chooseSmartSpec(rng, g.type, levelThreats);
           g.specWave = Math.min(maxPlanWave, g.lv3Wave + 1);
         }
         normalizeGeneTiming(g, maxPlanWave);
       }
     } else if (op < 0.94 && child.length < 14) {
-      // 4. Add one new tower on an unoccupied legal spot
-      const type = pick(rng, level.defenders);
+      // 4. Add one new counter-aligned tower on an unoccupied legal spot
+      const buyWave = randInt(rng, 1, Math.min(maxPlanWave, level.waves.length));
+      const waveCreatures =
+        levelThreats[Math.min(buyWave - 1, levelThreats.length - 1)]?.entries.map((e) => e.type) ||
+        allLevelCreatures;
+      const type =
+        pickWeightedCounterType(rng, level.defenders, waveCreatures, false) ||
+        pick(rng, level.defenders);
       const kind = DEFENDERS[type].kind;
       const legalSpots = (kind === 'trail' ? trailSpots : towerSpots).filter((s) =>
         canPlaceAtSpot(s, child)
       );
       if (legalSpots.length > 0) {
         const spot = pick(rng, legalSpots);
-        const buyWave = randInt(rng, 1, Math.min(maxPlanWave, level.waves.length + 1));
         const gene: InternalTowerGene = {
           type,
           spot,
@@ -948,7 +1351,38 @@ function mutateGenes(
   return child;
 }
 
-// --- 3 & 5. Main Bot Search & Report ---
+function aggregateMostLeaked(results: SimResult[]): MostLeakedInfo | undefined {
+  const totals = new Map<CreatureType, { count: number; anchorDmg: number }>();
+  for (const r of results) {
+    for (const [k, v] of Object.entries(r.leakedByType) as Array<
+      [CreatureType, { count: number; anchorDmg: number } | undefined]
+    >) {
+      if (!v || v.count <= 0) continue;
+      const prev = totals.get(k) || { count: 0, anchorDmg: 0 };
+      prev.count += v.count;
+      prev.anchorDmg += v.anchorDmg;
+      totals.set(k, prev);
+    }
+  }
+  let best: MostLeakedInfo | undefined;
+  for (const [type, stats] of totals.entries()) {
+    if (
+      !best ||
+      stats.anchorDmg > best.anchorDmg ||
+      (stats.anchorDmg === best.anchorDmg && stats.count > best.count)
+    ) {
+      best = {
+        type,
+        name: CREATURES[type]?.name || type,
+        count: stats.count,
+        anchorDmg: stats.anchorDmg,
+      };
+    }
+  }
+  return best;
+}
+
+// --- 3 & 5. Main Bot Search & Multi-Seed Report ---
 
 export function runBalanceBot(input: BotSearchInput): BotSearchReport {
   const t0 = performance.now();
@@ -964,6 +1398,8 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
   const mutationsPerPlan = Math.max(1, Math.round(input.mutationsPerPlan ?? 3));
   const targetSpots = input.targetSpots ?? 50;
   const seed = input.seed ?? 1;
+  const wordRollSeeds = Math.max(1, Math.round(input.wordRollSeeds ?? 5));
+  const useHeroPowers = input.useHeroPowers ?? true;
   const dt = input.dt ?? 0.05;
   const readMode = input.readMode ?? 'speak';
   const playBonusSurge = Boolean(input.playBonusSurge);
@@ -972,8 +1408,6 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
     maxWaves,
     Math.max(level.waves.length, level.minWaves) + (playBonusSurge ? level.bonusSurgeWaves : 0) + 2
   );
-  const totalPlannedEvals = randomPlans + refineRounds * topK * mutationsPerPlan;
-  let completedEvals = 0;
 
   // Sample 40 to 60 legal placement spots along the path
   const spots = samplePlacementSpots(input.levelId, targetSpots);
@@ -981,16 +1415,23 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
   const trailSpots = spots.filter((s) => s.kind === 'trail');
 
   const rng = createRng(seed);
-  // Use a fixed simulation seed within this test so plans are compared fairly on identical word rolls
-  const simSeed = (seed * 2654435761) >>> 0 || 1;
+  // Distinct deterministic word-roll seeds for multi-seed evaluation
+  const simSeeds: number[] = Array.from(
+    { length: wordRollSeeds },
+    (_, idx) => ((seed * 2654435761 + idx * 1013904223) >>> 0) || idx + 1
+  );
+  const primarySimSeed = simSeeds[0];
   const freePlacement = Boolean(level.freePlacement);
 
-  const evaluateGenes = (
-    genes: InternalTowerGene[],
-    origin: 'random' | 'refined'
-  ): { genes: InternalTowerGene[]; evalPlan: EvaluatedPlan } => {
-    const plan = genesToTowerPlan(genes, freePlacement);
-    const result = simulateBattle({
+  const multiVerifyCount = wordRollSeeds > 1 ? Math.min(6, topK) + 1 : 0;
+  const totalPlannedEvals =
+    randomPlans +
+    refineRounds * topK * mutationsPerPlan +
+    multiVerifyCount * Math.max(0, wordRollSeeds - 1);
+  let completedEvals = 0;
+
+  const runSimWithSeed = (plan: TowerPlanItem[], simSeed: number): SimResult =>
+    simulateBattle({
       levelId: input.levelId,
       difficulty: input.difficulty,
       towerPlan: plan,
@@ -1005,7 +1446,15 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
       dials: input.dials,
       overrideStartCrystals: input.overrideStartCrystals,
       overrideBalanceScale: input.overrideBalanceScale,
+      useHeroPowers,
     });
+
+  const evaluateGenes = (
+    genes: InternalTowerGene[],
+    origin: 'random' | 'refined'
+  ): { genes: InternalTowerGene[]; evalPlan: EvaluatedPlan } => {
+    const plan = genesToTowerPlan(genes, freePlacement);
+    const result = runSimWithSeed(plan, primarySimSeed);
     const score = scorePlan(result);
     completedEvals += 1;
     if (input.onProgress && (completedEvals % 20 === 0 || completedEvals === totalPlannedEvals)) {
@@ -1020,8 +1469,8 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
   const allEvaluated: EvaluatedPlan[] = [];
   let randomWins = 0;
 
-  // Phase 1: Evaluate at least 200 random plans
-  let candidates: Array<{ genes: InternalTowerGene[]; evalPlan: EvaluatedPlan }> = [];
+  // Phase 1: Evaluate counter-aware random plans
+  const candidates: Array<{ genes: InternalTowerGene[]; evalPlan: EvaluatedPlan }> = [];
   for (let i = 0; i < randomPlans; i++) {
     const genes = generateRandomGenes(
       rng,
@@ -1066,23 +1515,72 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
     elite = nextPool.slice(0, topK);
   }
 
-  // Sort all evaluated plans ascending to compute exact 75th percentile ("good") and best ("optimal")
+  // Sort all evaluated plans ascending to locate 75th percentile ("good") and top candidates
   const sortedAsc = [...allEvaluated].sort((a, b) => a.score - b.score);
-  const optimal = sortedAsc[sortedAsc.length - 1];
   const p75Idx = Math.floor(0.75 * (sortedAsc.length - 1));
   const good = sortedAsc[p75Idx];
 
+  // Phase 3: Evaluate top elite plans + good (75th pct) across all wordRollSeeds (default 5)
+  const evalMultiSeed = (ep: EvaluatedPlan) => {
+    const results: SimResult[] = [ep.result];
+    let scoreSum = ep.score;
+    for (let s = 1; s < simSeeds.length; s++) {
+      const r = runSimWithSeed(ep.plan, simSeeds[s]);
+      results.push(r);
+      scoreSum += scorePlan(r);
+      completedEvals += 1;
+      if (input.onProgress && (completedEvals % 10 === 0 || completedEvals === totalPlannedEvals)) {
+        input.onProgress(completedEvals, totalPlannedEvals);
+      }
+    }
+    const n = results.length;
+    const winRate = results.filter((r) => r.win).length / n;
+    const avgAnchorLeft = results.reduce((acc, r) => acc + r.finalAnchor, 0) / n;
+    const avgAnchorPct = level.anchor > 0 ? avgAnchorLeft / level.anchor : 0;
+    const avgWavesCleared = results.reduce((acc, r) => acc + r.wavesCleared, 0) / n;
+    return {
+      ep,
+      results,
+      avgScore: scoreSum / n,
+      winRate,
+      avgAnchorLeft,
+      avgAnchorPct,
+      avgWavesCleared,
+    };
+  };
+
+  const eliteToVerify = elite.slice(0, Math.min(6, elite.length)).map((e) => e.evalPlan);
+  let bestOptMulti = evalMultiSeed(eliteToVerify[0] || sortedAsc[sortedAsc.length - 1]);
+  for (let i = 1; i < eliteToVerify.length; i++) {
+    const cand = evalMultiSeed(eliteToVerify[i]);
+    if (cand.avgScore > bestOptMulti.avgScore) {
+      bestOptMulti = cand;
+    }
+  }
+
+  const goodMulti = evalMultiSeed(good);
+  const optimal = bestOptMulti.ep;
+
   const totalWins = allEvaluated.filter((e) => e.result.win).length;
   const maxAnchor = level.anchor;
-  const avgAnchorLeft = (optimal.result.finalAnchor + good.result.finalAnchor) / 2;
+  const avgAnchorLeft = (bestOptMulti.avgAnchorLeft + goodMulti.avgAnchorLeft) / 2;
 
   const balanceTarget: BalanceTargetSummary = {
-    winRate: ((optimal.result.win ? 1 : 0) + (good.result.win ? 1 : 0)) / 2,
+    winRate: (bestOptMulti.winRate + goodMulti.winRate) / 2,
     anchorLeft: avgAnchorLeft,
     anchorPct: maxAnchor > 0 ? avgAnchorLeft / maxAnchor : 0,
-    wavesCleared: (optimal.result.wavesCleared + good.result.wavesCleared) / 2,
-    score: (optimal.score + good.score) / 2,
+    wavesCleared: (bestOptMulti.avgWavesCleared + goodMulti.avgWavesCleared) / 2,
+    score: (bestOptMulti.avgScore + goodMulti.avgScore) / 2,
   };
+
+  // Identify most-leaked creature across the multi-seed runs of optimal + good
+  let mostLeakedCreature = aggregateMostLeaked([
+    ...bestOptMulti.results,
+    ...goodMulti.results,
+  ]);
+  if (!mostLeakedCreature) {
+    mostLeakedCreature = aggregateMostLeaked(allEvaluated.slice(0, 40).map((e) => e.result));
+  }
 
   return {
     levelId: input.levelId,
@@ -1095,10 +1593,16 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
     evaluatedCount: allEvaluated.length,
     randomCount: randomPlans,
     refinedCount,
+    wordRollSeeds,
     winRateAll: allEvaluated.length > 0 ? totalWins / allEvaluated.length : 0,
     winRateRandom: randomPlans > 0 ? randomWins / randomPlans : 0,
     optimal,
     good,
+    optimalWinRate: bestOptMulti.winRate,
+    optimalAnchorPct: bestOptMulti.avgAnchorPct,
+    goodWinRate: goodMulti.winRate,
+    goodAnchorPct: goodMulti.avgAnchorPct,
+    mostLeakedCreature,
     balanceTarget,
     top20: elite.map((e) => e.evalPlan),
     durationMs: Math.round((performance.now() - t0) * 10) / 10,
