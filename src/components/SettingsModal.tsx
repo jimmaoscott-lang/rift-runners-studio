@@ -63,6 +63,7 @@ interface SettingsModalProps {
   onClearAllLocks: () => void;
   onClearPlacement?: () => void;
   onOpenEll: () => void;
+  onOpenBalanceLab?: () => void;
   onClose: () => void;
 }
 
@@ -85,6 +86,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClearAllLocks,
   onClearPlacement,
   onOpenEll,
+  onOpenBalanceLab,
   onClose,
 }) => {
   const ellActiveCount = countActiveEllSupports(settings);
@@ -1046,6 +1048,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {onOpenBalanceLab && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.sfx('tap');
+                        onClose();
+                        onOpenBalanceLab();
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/75 bg-amber-400/15 px-3 py-1.5 text-xs font-bold text-amber-200 hover:bg-amber-400/25 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      Open Balance Lab
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={async () => {

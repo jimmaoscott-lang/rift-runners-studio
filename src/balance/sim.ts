@@ -87,6 +87,10 @@ export interface SimInput {
   validatePlacement?: boolean;
   /** Optional builder difficulty dials (defaults to 100/100/100/0). */
   dials?: SimDials;
+  /** Optional override for level.startCrystals (used by Balance Lab what-if probes). */
+  overrideStartCrystals?: number;
+  /** Optional override for level.balance[difficulty] (used by Balance Lab what-if probes). */
+  overrideBalanceScale?: number;
 }
 
 export interface WaveSnapshot {
@@ -353,6 +357,26 @@ function getWordPattern(entry: WordEntry, fallback: PatternKey): PatternKey {
 
 // --- Headless Battle Simulator ---
 
+// Immutable per-level path cache for fast repeated simulations
+const PATH_CACHE = new Map<string, SmoothPath>();
+const RIVER_PATH_CACHE = new Map<string, SmoothPath | null>();
+
+function getCachedPath(level: LevelConfig): SmoothPath {
+  let cached = PATH_CACHE.get(level.id);
+  if (!cached) {
+    cached = new SmoothPath(level.pathUv);
+    PATH_CACHE.set(level.id, cached);
+  }
+  return cached;
+}
+
+function getCachedRiverPath(level: LevelConfig): SmoothPath | null {
+  if (!RIVER_PATH_CACHE.has(level.id)) {
+    RIVER_PATH_CACHE.set(level.id, level.riverUv.length >= 2 ? new SmoothPath(level.riverUv) : null);
+  }
+  return RIVER_PATH_CACHE.get(level.id) ?? null;
+}
+
 class HeadlessBattleSim {
   private readonly level: LevelConfig;
   private readonly difficulty: DifficultyId;
@@ -365,6 +389,7 @@ class HeadlessBattleSim {
   private readonly strictBuildOrder: boolean;
   private readonly validatePlacement: boolean;
   private readonly dial: { healthPct: number; speedPct: number; countPct: number; extraWords: number };
+  private readonly overrideBalanceScale?: number;
   private readonly rng: () => number;
 
   private readonly path: SmoothPath;
@@ -442,13 +467,14 @@ class HeadlessBattleSim {
       countPct: input.dials?.countPct ?? 100,
       extraWords: input.dials?.extraWords ?? 0,
     };
+    this.overrideBalanceScale = input.overrideBalanceScale;
     this.rng = createRng(input.seed ?? 1);
 
-    this.crystals = level.startCrystals;
+    this.crystals = input.overrideStartCrystals ?? level.startCrystals;
     this.anchor = level.anchor;
 
-    this.path = new SmoothPath(level.pathUv);
-    this.riverPath = level.riverUv.length >= 2 ? new SmoothPath(level.riverUv) : null;
+    this.path = getCachedPath(level);
+    this.riverPath = getCachedRiverPath(level);
     this.riftPos = { x: level.riftUv[0] * MAP_W, y: level.riftUv[1] * MAP_H };
     this.campPos = { x: level.campUv[0] * MAP_W, y: level.campUv[1] * MAP_H };
     this.wardenPos = { x: level.wardenUv[0] * MAP_W, y: level.wardenUv[1] * MAP_H };
@@ -1128,7 +1154,7 @@ class HeadlessBattleSim {
     // CanvasBattleEngine.ts lines 1700-1750
     const cfg = CREATURES[type];
     const diffCfg = DIFFICULTIES[this.difficulty] || DIFFICULTIES.normal;
-    const levelScale = this.level.balance?.[this.difficulty] ?? 1;
+    const levelScale = this.overrideBalanceScale ?? (this.level.balance?.[this.difficulty] ?? 1);
     const scaledHp = Math.max(
       1,
       Math.round(cfg.hp * hpMult * diffCfg.hpMult * levelScale * (this.dial.healthPct / 100))

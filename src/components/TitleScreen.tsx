@@ -49,6 +49,7 @@ interface TitleScreenProps {
   onOpenCutscene: (id: CutsceneId) => void;
   onOpenSettings: () => void;
   onOpenEll: () => void;
+  onOpenBalanceLab?: () => void;
   onClearLocks: (pattern?: PatternKey) => void;
 }
 
@@ -68,6 +69,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onOpenCutscene,
   onOpenSettings,
   onOpenEll,
+  onOpenBalanceLab,
   onClearLocks,
 }) => {
   const ellActiveCount = countActiveEllSupports(progress.settings);
@@ -139,6 +141,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           {teacherMode && (
             <div className="inline-flex items-center gap-2 rounded-lg border border-amber-400/80 bg-amber-950/85 px-2.5 py-1.5 text-xs font-bold text-amber-200 whitespace-nowrap shrink-0">
               <span>{builderMode ? 'Builder Mode on' : 'Teacher Mode on'}</span>
+              {builderMode && onOpenBalanceLab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.sfx('tap');
+                    onOpenBalanceLab();
+                  }}
+                  className="rounded-md border border-cyan-400/70 bg-cyan-500/20 px-2 py-0.5 text-[11px] font-extrabold text-cyan-100 hover:bg-cyan-500/35 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Balance Lab
+                </button>
+              )}
               {onTurnOffTeacherMode && (
                 <button
                   type="button"

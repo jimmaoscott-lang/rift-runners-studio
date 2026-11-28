@@ -47,6 +47,7 @@ import { BattleHUD, WalkthroughInfo, WaveBannerInfo } from './components/BattleH
 import { CutscenePlayer } from './components/CutscenePlayer';
 import { IntroVideoPlayer } from './components/IntroVideoPlayer';
 import { EllSupportModal } from './components/EllSupportModal';
+import { BalanceLabScreen } from './components/BalanceLabScreen';
 import { BattleEndData, ResultsScreen } from './components/ResultsScreen';
 import {
   ForgeStats,
@@ -290,6 +291,7 @@ export default function App() {
   const [lastPlacementReport, setLastPlacementReport] = useState<PlacementReport | null>(null);
   const [teacherMode, setTeacherMode] = useState(false);
   const [builderMode, setBuilderMode] = useState(false);
+  const [balanceLabOpen, setBalanceLabOpen] = useState(false);
   const [difficultyDials, setDifficultyDials] = useState<DifficultyDials>(() =>
     createDefaultDifficultyDials()
   );
@@ -313,6 +315,7 @@ export default function App() {
   const handleTurnOffTeacherAndBuilderMode = useCallback(() => {
     setTeacherMode(false);
     setBuilderMode(false);
+    setBalanceLabOpen(false);
   }, []);
 
   useEffect(() => {
@@ -332,10 +335,25 @@ export default function App() {
 
   const closeEllModal = useCallback(() => {
     setEllOpen(false);
-    if (state.scene === 'battle' && !state.settingsOpen && !loadoutOpen) {
+    if (state.scene === 'battle' && !state.settingsOpen && !loadoutOpen && !balanceLabOpen) {
       engineRef.current?.setExternalHold(false);
     }
-  }, [state.scene, state.settingsOpen, loadoutOpen]);
+  }, [state.scene, state.settingsOpen, loadoutOpen, balanceLabOpen]);
+
+  const openBalanceLab = useCallback(() => {
+    if (!builderMode) return;
+    if (state.scene === 'battle') {
+      engineRef.current?.setExternalHold(true);
+    }
+    setBalanceLabOpen(true);
+  }, [builderMode, state.scene]);
+
+  const closeBalanceLab = useCallback(() => {
+    setBalanceLabOpen(false);
+    if (state.scene === 'battle' && !state.settingsOpen && !ellOpen && !loadoutOpen) {
+      engineRef.current?.setExternalHold(false);
+    }
+  }, [state.scene, state.settingsOpen, ellOpen, loadoutOpen]);
 
   const openLoadoutModal = useCallback(() => {
     sound.sfx('tap');
@@ -347,10 +365,10 @@ export default function App() {
 
   const closeLoadoutModal = useCallback(() => {
     setLoadoutOpen(false);
-    if (state.scene === 'battle' && !state.settingsOpen && !ellOpen) {
+    if (state.scene === 'battle' && !state.settingsOpen && !ellOpen && !balanceLabOpen) {
       engineRef.current?.setExternalHold(false);
     }
-  }, [state.scene, state.settingsOpen, ellOpen]);
+  }, [state.scene, state.settingsOpen, ellOpen, balanceLabOpen]);
 
   // Track most-recently-used defenders so the bottom bar always shows the 6 most recent weapons
   // and Loadout holds all the others ready for one-tap selection.
@@ -1093,6 +1111,7 @@ export default function App() {
           onOpenCutscene={(id) => dispatch({ type: 'PREVIEW_CUTSCENE', id, returnTo: 'title' })}
           onOpenSettings={() => dispatch({ type: 'SET_SETTINGS_OPEN', open: true })}
           onOpenEll={openEllModal}
+          onOpenBalanceLab={builderMode ? openBalanceLab : undefined}
           onClearLocks={(pattern) => handleClearLocks(false, pattern)}
         />
       )}
@@ -1416,12 +1435,21 @@ export default function App() {
           onClearAllLocks={() => handleClearLocks(true)}
           onClearPlacement={handleClearPlacement}
           onOpenEll={openEllModal}
+          onOpenBalanceLab={builderMode ? openBalanceLab : undefined}
           onClose={() => {
             dispatch({ type: 'SET_SETTINGS_OPEN', open: false });
-            if (state.scene === 'battle' && !ellOpen && !loadoutOpen) {
+            if (state.scene === 'battle' && !ellOpen && !loadoutOpen && !balanceLabOpen) {
               engineRef.current?.setExternalHold(false);
             }
           }}
+        />
+      )}
+
+      {builderMode && balanceLabOpen && (
+        <BalanceLabScreen
+          defaultLevelId={activeLevel.isPlacement ? 'w1-l1' : activeLevel.id}
+          difficultyDials={difficultyDials}
+          onClose={closeBalanceLab}
         />
       )}
 

@@ -81,6 +81,14 @@ export interface BotSearchInput {
   maxWaves?: number;
   /** Optional builder difficulty dials. */
   dials?: SimDials;
+  /** Optional override for level.startCrystals during Balance Lab verification probes. */
+  overrideStartCrystals?: number;
+  /** Optional override for level.balance[difficulty] during Balance Lab verification probes. */
+  overrideBalanceScale?: number;
+  /** Allow smaller plan counts strictly for fast suggestion-verification probes. */
+  allowFastProbe?: boolean;
+  /** Optional progress callback invoked periodically as plans finish evaluating. */
+  onProgress?: (completedPlans: number, totalPlans: number) => void;
 }
 
 export interface BotSearchReport {
@@ -597,7 +605,8 @@ function estimateTotalBudget(
   level: LevelConfig,
   accuracy: number,
   planWaves: number,
-  readMode: 'speak' | 'tap'
+  readMode: 'speak' | 'tap',
+  startCrystalsOverride?: number
 ): number {
   const realCleanPay = readMode === 'speak' ? FORGE_CONFIG.speak : FORGE_CONFIG.real;
   const realHelpPay = Math.round(FORGE_CONFIG.real * FORGE_CONFIG.helpShare);
@@ -612,7 +621,7 @@ function estimateTotalBudget(
   let waveBonusTotal = 0;
   for (let w = 1; w <= planWaves; w++) waveBonusTotal += 15 + w * 5;
   const killEstimate = planWaves * 85;
-  return level.startCrystals + readTotal + lockTotal + waveBonusTotal + killEstimate;
+  return (startCrystalsOverride ?? level.startCrystals) + readTotal + lockTotal + waveBonusTotal + killEstimate;
 }
 
 function generateRandomGenes(
@@ -622,13 +631,14 @@ function generateRandomGenes(
   trailSpots: PlacementSpot[],
   accuracy: number,
   maxPlanWave: number,
-  readMode: 'speak' | 'tap'
+  readMode: 'speak' | 'tap',
+  startCrystalsOverride?: number
 ): InternalTowerGene[] {
   const availableTowers = level.defenders.filter((t) => DEFENDERS[t].kind === 'tower');
   const availableTrails = level.defenders.filter((t) => DEFENDERS[t].kind === 'trail');
   const allTypes = level.defenders;
 
-  const estBudget = estimateTotalBudget(level, accuracy, maxPlanWave, readMode);
+  const estBudget = estimateTotalBudget(level, accuracy, maxPlanWave, readMode, startCrystalsOverride);
   // Vary strategy archetype across random plans: wide (more towers) vs tall (fewer towers, heavy specs)
   const archetypeRoll = rng();
   const minCount = archetypeRoll < 0.35 ? 4 : archetypeRoll < 0.75 ? 6 : 8;
@@ -640,7 +650,8 @@ function generateRandomGenes(
 
   // Estimate Wave 1 affordable budget so first 1-3 towers actually build before Wave 1
   const wave1ReadMin = level.waveEvery * Math.round(FORGE_CONFIG.real * FORGE_CONFIG.helpShare);
-  const wave1Budget = level.startCrystals + wave1ReadMin + Math.round(level.waveEvery * accuracy * 14);
+  const startCrystals = startCrystalsOverride ?? level.startCrystals;
+  const wave1Budget = startCrystals + wave1ReadMin + Math.round(level.waveEvery * accuracy * 14);
 
   const genes: InternalTowerGene[] = [];
 
@@ -896,9 +907,10 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
     throw new Error(`Unknown levelId "${input.levelId}".`);
   }
 
-  const randomPlans = Math.max(200, Math.round(input.randomPlans ?? 200));
-  const topK = Math.max(1, Math.round(input.topK ?? 20));
-  const refineRounds = Math.max(1, Math.round(input.refineRounds ?? 4));
+  const minRandom = input.allowFastProbe ? 12 : 200;
+  const randomPlans = Math.max(minRandom, Math.round(input.randomPlans ?? 200));
+  const topK = Math.max(1, Math.min(randomPlans, Math.round(input.topK ?? 20)));
+  const refineRounds = Math.max(0, Math.round(input.refineRounds ?? 4));
   const mutationsPerPlan = Math.max(1, Math.round(input.mutationsPerPlan ?? 3));
   const targetSpots = input.targetSpots ?? 50;
   const seed = input.seed ?? 1;
@@ -910,6 +922,8 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
     maxWaves,
     Math.max(level.waves.length, level.minWaves) + (playBonusSurge ? level.bonusSurgeWaves : 0) + 2
   );
+  const totalPlannedEvals = randomPlans + refineRounds * topK * mutationsPerPlan;
+  let completedEvals = 0;
 
   // Sample 40 to 60 legal placement spots along the path
   const spots = samplePlacementSpots(input.levelId, targetSpots);
@@ -939,8 +953,14 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
       strictBuildOrder: false,
       validatePlacement: true,
       dials: input.dials,
+      overrideStartCrystals: input.overrideStartCrystals,
+      overrideBalanceScale: input.overrideBalanceScale,
     });
     const score = scorePlan(result);
+    completedEvals += 1;
+    if (input.onProgress && (completedEvals % 20 === 0 || completedEvals === totalPlannedEvals)) {
+      input.onProgress(completedEvals, totalPlannedEvals);
+    }
     return {
       genes,
       evalPlan: { plan, result, score, origin },
@@ -960,7 +980,8 @@ export function runBalanceBot(input: BotSearchInput): BotSearchReport {
       trailSpots,
       input.readingAccuracy,
       maxPlanWave,
-      readMode
+      readMode,
+      input.overrideStartCrystals
     );
     const entry = evaluateGenes(genes, 'random');
     allEvaluated.push(entry.evalPlan);
