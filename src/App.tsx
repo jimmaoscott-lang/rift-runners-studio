@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Check, Gem, SlidersHorizontal, X } from 'lucide-react';
+import { Gem, SlidersHorizontal, X } from 'lucide-react';
 import {
   CutsceneId,
   DEFENDERS,
@@ -285,7 +285,7 @@ export default function App() {
   const [showHalfSpeedTip, setShowHalfSpeedTip] = useState(false);
   const [ellOpen, setEllOpen] = useState(false);
   const [loadoutOpen, setLoadoutOpen] = useState(false);
-  const [activeLoadout, setActiveLoadout] = useState<DefenderType[]>([]);
+  const [recentDefenders, setRecentDefenders] = useState<DefenderType[]>([]);
   const [placementRun, setPlacementRun] = useState<PlacementRunState | null>(null);
   const [lastPlacementReport, setLastPlacementReport] = useState<PlacementReport | null>(null);
   const [teacherMode, setTeacherMode] = useState(false);
@@ -352,63 +352,58 @@ export default function App() {
     }
   }, [state.scene, state.settingsOpen, ellOpen]);
 
-  // Keep a default 6-slot loadout whenever a level unlocks more than 6 defenders
-  // (prioritizes the newest unlocked tower at the right end of the bar so it is immediately ready)
+  // Track most-recently-used defenders so the bottom bar always shows the 6 most recent weapons
+  // and Loadout holds all the others ready for one-tap selection.
   useEffect(() => {
     const unlocked = activeLevel.defenders;
-    if (unlocked.length <= 6) {
-      setActiveLoadout(unlocked);
-      return;
-    }
-    setActiveLoadout((prev) => {
+    setRecentDefenders((prev) => {
       const validPrev = prev.filter((id) => unlocked.includes(id));
-      const newest = unlocked[unlocked.length - 1];
-      if (validPrev.length === 6 && validPrev.includes(newest)) {
-        return validPrev;
-      }
-      // Smart default: keep archer, frost, ember, tesla, rail + newest unlocked tower(s)
-      const preferred: DefenderType[] = ['archer', 'frost', 'ember', 'tesla', 'rail', newest, 'spike'];
-      const next: DefenderType[] = [];
-      for (const id of preferred) {
-        if (unlocked.includes(id) && !next.includes(id) && next.length < 6) {
-          next.push(id);
-        }
-      }
-      for (const id of unlocked) {
-        if (!next.includes(id) && next.length < 6) {
-          next.push(id);
-        }
-      }
-      return next;
+      const newlyUnlocked = [...unlocked].reverse().filter((id) => !validPrev.includes(id));
+      return [...newlyUnlocked, ...validPrev];
     });
   }, [activeLevel]);
 
-  const toggleLoadoutDefender = useCallback(
+  const handleSelectQuickPick = useCallback(
     (id: DefenderType) => {
-      sound.sfx('tap');
-      setActiveLoadout((prev) => {
-        if (prev.includes(id)) {
-          if (prev.length <= 1) return prev;
-          if (snap.buildSel === id) {
-            engineRef.current?.selectBuild(null);
-          }
-          return prev.filter((d) => d !== id);
-        }
-        if (prev.length >= 6) {
-          return prev;
-        }
-        const combined = [...prev, id];
-        // Keep canonical level order so positions stay predictable
-        return activeLevel.defenders.filter((d) => combined.includes(d));
-      });
+      const selecting = snap.buildSel !== id;
+      engineRef.current?.selectBuild(id);
+      if (selecting) {
+        setRecentDefenders((prev) => [id, ...prev.filter((d) => d !== id)]);
+      }
     },
-    [activeLevel.defenders, snap.buildSel]
+    [snap.buildSel]
   );
 
-  const visibleDefenders =
-    activeLevel.defenders.length > 6 && activeLoadout.length > 0
-      ? activeLoadout
+  const handleSelectFromLoadout = useCallback(
+    (id: DefenderType) => {
+      setRecentDefenders((prev) => [id, ...prev.filter((d) => d !== id)]);
+      setLoadoutOpen(false);
+      if (state.scene === 'battle' && !state.settingsOpen && !ellOpen) {
+        engineRef.current?.setExternalHold(false);
+      }
+      if (snap.buildSel !== id) {
+        engineRef.current?.selectBuild(id);
+      } else {
+        sound.sfx('tap');
+      }
+    },
+    [ellOpen, snap.buildSel, state.scene, state.settingsOpen]
+  );
+
+  const quickPickIds =
+    activeLevel.defenders.length > 6
+      ? recentDefenders.filter((id) => activeLevel.defenders.includes(id)).slice(0, 6)
       : activeLevel.defenders;
+
+  const visibleDefenders =
+    activeLevel.defenders.length > 6 && quickPickIds.length > 0
+      ? activeLevel.defenders.filter((id) => quickPickIds.includes(id))
+      : activeLevel.defenders;
+
+  const otherDefenders =
+    activeLevel.defenders.length > 6
+      ? activeLevel.defenders.filter((id) => !visibleDefenders.includes(id))
+      : [];
 
   const locks = getPatternLocks(
     progress,
@@ -698,6 +693,10 @@ export default function App() {
         if (ev.key === 'Escape') dispatch({ type: 'SET_SETTINGS_OPEN', open: false });
         return;
       }
+      if (loadoutOpen) {
+        if (ev.key === 'Escape') closeLoadoutModal();
+        return;
+      }
       if (ev.key === 'Escape') {
         if (snap.buildSel || snap.selectedDef) {
           engineRef.current?.clearSelection();
@@ -712,7 +711,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [state.scene, state.settingsOpen, snap.buildSel, snap.selectedDef, snap.paused]);
+  }, [state.scene, state.settingsOpen, loadoutOpen, closeLoadoutModal, snap.buildSel, snap.selectedDef, snap.paused]);
 
   const handleSettingsChange = (next: GameSettings) => {
     setProgress((prev) => {
@@ -1241,7 +1240,7 @@ export default function App() {
                     <button
                       key={id}
                       type="button"
-                      onClick={() => engineRef.current?.selectBuild(id)}
+                      onClick={() => handleSelectQuickPick(id)}
                       title={
                         settings.spanishCaptions
                           ? `${def.name}: ${def.desc} | ${SPANISH_DEFENDERS[id].nameEs}: ${SPANISH_DEFENDERS[id].descEs}`
@@ -1285,11 +1284,11 @@ export default function App() {
                     </button>
                   );
                 })}
-                {activeLevel.defenders.length > 6 && (
+                {otherDefenders.length > 0 && (
                   <button
                     type="button"
                     onClick={openLoadoutModal}
-                    title="Swap which 6 defenders appear on your battle bar"
+                    title="Pick from your other unlocked defenders"
                     className="flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-amber-400/75 bg-amber-950/55 px-2.5 py-1.5 text-amber-200 hover:border-amber-300 hover:bg-amber-500/25 hover:text-white transition-colors cursor-pointer"
                   >
                     <SlidersHorizontal className="h-4 w-4 text-amber-300" />
@@ -1297,7 +1296,7 @@ export default function App() {
                       Loadout
                     </span>
                     <span className="font-tabular text-[10px] font-bold text-amber-300/90 leading-none">
-                      {visibleDefenders.length}/{activeLevel.defenders.length}
+                      +{otherDefenders.length} more
                     </span>
                   </button>
                 )}
@@ -1434,7 +1433,7 @@ export default function App() {
         />
       )}
 
-      {loadoutOpen && activeLevel.defenders.length > 6 && (
+      {loadoutOpen && otherDefenders.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
           onClick={closeLoadoutModal}
@@ -1446,17 +1445,17 @@ export default function App() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
-                  Battle Loadout ({visibleDefenders.length} / 6 Active)
+                  Loadout ({otherDefenders.length} Ready)
                 </div>
                 <h2 className="mt-0.5 font-display text-xl font-extrabold text-white">
-                  Choose Your 6 Active Defenders
+                  Pick a Defender to Place
                 </h2>
                 <p className="mt-1 text-xs text-slate-300">
-                  Tap any defender to bench or activate it. Battle pauses automatically while you swap.
+                  Tap any defender below to select it right away. It moves onto your bottom quick-pick bar automatically.
                 </p>
                 {settings.spanishCaptions && (
                   <p className="mt-0.5 text-xs text-cyan-200/90">
-                    Toca cualquier defensor para activarlo o guardarlo. La batalla se pausa mientras eliges tus 6 defensores.
+                    Toca cualquier defensor para seleccionarlo al instante. Pasará automáticamente a tu barra rápida inferior.
                   </p>
                 )}
               </div>
@@ -1471,25 +1470,21 @@ export default function App() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {activeLevel.defenders.map((id) => {
+              {otherDefenders.map((id) => {
                 const def = DEFENDERS[id];
                 const esDef = SPANISH_DEFENDERS[id];
-                const isSelected = visibleDefenders.includes(id);
-                const fullAndBench = !isSelected && visibleDefenders.length >= 6;
+                const canAfford = snap.crystals >= def.cost;
                 const thumb = defenderThumbs[id];
 
                 return (
                   <button
                     key={id}
                     type="button"
-                    disabled={fullAndBench}
-                    onClick={() => toggleLoadoutDefender(id)}
-                    className={`flex items-start gap-3 rounded-xl border-2 p-2.5 text-left transition-all ${
-                      isSelected
-                        ? 'border-cyan-400/85 bg-[#1e1a4a] text-white cursor-pointer hover:brightness-110'
-                        : fullAndBench
-                        ? 'border-slate-800 bg-slate-900/55 text-slate-500 cursor-not-allowed opacity-70'
-                        : 'border-purple-500/45 bg-[#110d27] text-slate-200 cursor-pointer hover:border-amber-300/75 hover:bg-[#1a153a]'
+                    onClick={() => handleSelectFromLoadout(id)}
+                    className={`flex items-start gap-3 rounded-xl border-2 p-2.5 text-left transition-all cursor-pointer ${
+                      canAfford
+                        ? 'border-cyan-400/75 bg-[#1b1642] text-white hover:border-amber-300 hover:bg-[#241d58]'
+                        : 'border-purple-500/45 bg-[#120e2b] text-slate-200 opacity-80 hover:opacity-100 hover:border-amber-300/75'
                     }`}
                   >
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#0c091d] border border-purple-500/30">
@@ -1504,21 +1499,8 @@ export default function App() {
                         <span className="text-sm font-extrabold text-white truncate">
                           {def.name}
                         </span>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold shrink-0 ${
-                            isSelected
-                              ? 'bg-cyan-400 text-slate-950'
-                              : 'bg-slate-800 text-slate-300'
-                          }`}
-                        >
-                          {isSelected ? (
-                            <>
-                              <Check className="h-3 w-3" />
-                              Active
-                            </>
-                          ) : (
-                            'Benched'
-                          )}
+                        <span className="inline-flex items-center rounded-md bg-cyan-400 px-2 py-0.5 text-[10px] font-extrabold text-slate-950 shrink-0">
+                          Select
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-[11px] font-bold">
@@ -1546,16 +1528,14 @@ export default function App() {
 
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-purple-500/30 pt-3">
               <span className="text-xs text-slate-400">
-                {visibleDefenders.length >= 6
-                  ? 'All 6 slots filled. Tap an active defender first to swap another in.'
-                  : `Pick ${6 - visibleDefenders.length} more defender${6 - visibleDefenders.length === 1 ? '' : 's'} to fill your bar.`}
+                Your bottom bar always keeps your 6 most recent defenders.
               </span>
               <button
                 type="button"
                 onClick={closeLoadoutModal}
-                className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-extrabold text-slate-950 hover:bg-cyan-300 cursor-pointer shrink-0"
+                className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2 text-xs font-extrabold text-slate-100 hover:border-cyan-400 hover:text-white cursor-pointer shrink-0"
               >
-                Done
+                Close
               </button>
             </div>
           </div>

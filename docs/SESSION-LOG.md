@@ -2,6 +2,35 @@
 
 Chronological log of major milestones, design decisions, bug fixes, speech calibrations, and next steps. Add a new entry at the top after every major build or change.
 
+## 2026-11-28: World 3 Level 1 Per-Level Health Balance Scale
+
+### Completed
+- **Per-Level Health Scale (`src/data/level1.ts`, `src/game/CanvasBattleEngine.ts`)**:
+  - Added optional `balance?: { easy: number; normal: number; hard: number; expert: number }` to `LevelConfig` (`src/data/level1.ts`).
+  - Added `balance: { easy: 0.58, normal: 0.54, hard: 0.49, expert: 0.43 }` to `W3_LEVEL1` (`w3-l1`) only.
+  - Updated `spawnCreature()` in `src/game/CanvasBattleEngine.ts` to multiply `scaledHp` by `const levelScale = this.level.balance?.[this.difficulty] ?? 1` inside the existing `Math.round(...)`, covering normal waves, final wave, extra endless waves, bonus surge waves, and splitter spawns without modifying any other level, preset, dial, stat, wave, crystal reward, art, audio, cutscene, or text.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the W3-L1 balance test decision line under `"Mr. Scott's decisions"`.
+
+### Next Up
+1. Playtest World 3 Level 1 across difficulties to verify the new health scale, then sync to GitHub.
+
+## 2026-11-28: Most-Recent 6 Quick-Pick Bar & One-Tap Loadout
+
+### Completed
+- **Auto-Tracked 6 Most Recent Quick-Pick Bar (`src/App.tsx`)**:
+  - Replaced manual `activeLoadout` on/off toggling with MRU `recentDefenders` tracking whenever a level unlocks more than 6 defenders.
+  - Kept the 6 most recent defenders displayed along the bottom quick-pick bar in stable left-to-right order (updating recency whenever a defender is picked from the bar or from Loadout, and prioritizing newly unlocked defenders first).
+- **One-Tap Loadout Menu (`src/App.tsx`)**:
+  - Updated the Loadout button badge to show `+{count} more` and updated the Loadout modal to list only the remaining unlocked defenders, each ready to select with a single tap.
+  - Clicking any defender in Loadout immediately selects it for placement on the battlefield, closes Loadout, resumes the battle, adds that defender to the 6 quick-pick slots, and rotates the least-recently-used defender into Loadout.
+  - Added Escape key handling to close Loadout cleanly without triggering battle shortcuts underneath.
+- **Housekeeping (`BUILD.md`)**:
+  - Added the Nov 28 Loadout quick-pick decision under `"Mr. Scott's decisions"`.
+
+### Next Up
+1. Play a level with 7 or 8 defenders (such as World 2 Level 2 or Level 4) to test one-tap selection from Loadout, then sync to GitHub.
+
 ## 2026-11-27: Moved Guided Walkthrough Tutorial to Runner Basic Training
 
 ### Completed

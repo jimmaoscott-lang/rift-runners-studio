@@ -1701,9 +1701,10 @@ export class BattleEngine {
     const cfg = CREATURES[type];
     const diffCfg = DIFFICULTIES[this.difficulty] || DIFFICULTIES.normal;
     const dial = this.difficultyDials[this.difficulty] || DEFAULT_DIFFICULTY_DIAL_ROW;
+    const levelScale = this.level.balance?.[this.difficulty] ?? 1;
     const scaledHp = Math.max(
       1,
-      Math.round(cfg.hp * hpMult * diffCfg.hpMult * (dial.healthPct / 100))
+      Math.round(cfg.hp * hpMult * diffCfg.hpMult * levelScale * (dial.healthPct / 100))
     );
     const startPt = this.path.pointAt(startS);
     const lane = startLane !== undefined ? startLane : (Math.random() - 0.5) * 20;

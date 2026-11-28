@@ -24,6 +24,8 @@ Settled. Do not change them unless Mr. Scott says so.
 - Nov 27: word list rules (Claude): tap choices are heard, so a choice never sounds like its word, never sounds like a crude or hurtful word, and never pairs short i with short e before m or n (pin and pen sound alike for many Gulf Coast students). Words on screen use only patterns taught so far. Claude checks every word list before a level ships. Use only words that already have a clip in public/assets/audio/words, or record new ones in Leda's voice.
 - Nov 27: one approved exception to the cutscene pause: the finished intro video at public/assets/video/rift-intro.mp4 plays in place of the Basic Training opening scene when a student presses Start Basic Training or Retake Basic Training. The cutscene pause still applies to all other cutscenes, images, narration and scripts.
 - Nov 27: the guided walkthrough tutorial now runs inside Runner Basic Training as students find their skill level, instead of World 1 Level 1. Students may still skip the walkthrough.
+- Nov 28: when a level has more than 6 unlocked defenders, the bottom quick-pick bar automatically shows the 6 most recent weapons, and the Loadout menu shows all remaining weapons ready to select and place with one click (no manual toggling on or off).
+- W3-L1 balance test: per-level health scale Easy 0.58, Normal 0.54, Hard 0.49, Expert 0.43 (formula test, Nov 28).
 
 ## 1. Mandatory Pre-Build and Post-Build Workflow
 

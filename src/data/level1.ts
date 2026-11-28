@@ -247,6 +247,8 @@ export interface LevelConfig {
     countStep: number;
   };
   finalBoost: number;
+  // Per-level creature health scale from the balance formula. 1.0 = no change.
+  balance?: { easy: number; normal: number; hard: number; expert: number };
   hasWalkthrough: boolean;
   isPlacement?: boolean;
   comingSoon?: boolean;
@@ -4106,7 +4108,7 @@ export const W3_LEVEL1: LevelConfig = {
   vowels: ['a_e', 'i_e'],
   defenders: ['archer', 'spike', 'golem', 'frost', 'ember', 'tesla', 'rail', 'gravity'],
   runeRate: 0.25,
-  startCrystals: 260,
+  startCrystals: 520,
   waveEvery: 7,
   anchor: 20,
   minWaves: 7,
@@ -4120,6 +4122,7 @@ export const W3_LEVEL1: LevelConfig = {
     countStep: 0.14,
   },
   finalBoost: 1.25,
+  balance: { easy: 0.58, normal: 0.54, hard: 0.49, expert: 0.43 },
   hasWalkthrough: false,
   freePlacement: true,
   noBuildZones: [],
@@ -4163,7 +4166,7 @@ export const W3_LEVEL1: LevelConfig = {
       groups: [
         { type: 'galewraith', count: 6, gap: 2.1 },
         { type: 'shieldbearer', count: 5, gap: 2.7, delay: 3.5 },
-        { type: 'cinderimp', count: 10, gap: 0.72, delay: 7.5 },
+        { type: 'cinderimp', count: 4, gap: 0.72, delay: 7.5 },
       ],
     },
     {
